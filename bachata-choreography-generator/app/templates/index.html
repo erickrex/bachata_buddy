@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+
+{% block title %}Bachata Choreography Generator{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center p-2 sm:p-4" x-data="choreographyGenerator()">
+    <div class="bg-white/95 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-2xl p-3 sm:p-6 lg:p-8 max-w-2xl w-full animate-fade-in">
+        <!-- Header -->
+        <div class="text-center mb-6 sm:mb-8">
+            <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
+                Create Your Choreography
+            </h2>
+            <p class="text-gray-600 text-base sm:text-lg">
+                Generate personalized dance sequences from your favorite Bachata songs
+            </p>
+        </div>
+        
+        <!-- Main Form -->
+        <div x-show="!isGenerating && !result && !error" x-transition:enter="transition ease-out duration-300">
+            <form hx-post="/api/choreography"
+                  hx-trigger="submit"
+                  hx-target="this"
+                  hx-swap="none"
+                  hx-indicator="#loading-spinner"
+                  @htmx:before-request="startGeneration(); prepareFormSubmission()"
+                  @htmx:after-request="handleGenerationResponse($event)"
+                  @htmx:response-error="handleGenerationError({message: 'Server error occurred'})"
+                  @htmx:send-error="handleGenerationError({message: 'Failed to connect to server. Please try again.'})"
+                  class="space-y-4 sm:space-y-6">
+                
+                <!-- Song Selection -->
+                <div>
+                    <label for="song_selection" class="block text-sm font-semibold text-gray-700 mb-3">
+                        Select Song
+                    </label>
+                    <select id="song_selection" 
+                            name="song_selection"
+                            x-model="selectedSong"
+                            @change="toggleYouTubeInput(); updateHiddenField()"
+                            class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-gray-900 text-sm sm:text-base">
+                        <option value="">Choose a song...</option>
+                        <option value="data/songs/Amor.mp3">Amor</option>
+                        <option value="data/songs/Angel.mp3">Angel</option>
+                        <option value="data/songs/Aventura.mp3">Aventura</option>
+                        <option value="data/songs/Besito.mp3">Besito</option>
+                        <option value="data/songs/Bubalu.mp3">Bubalu</option>
+                        <option value="data/songs/Chayanne.mp3">Chayanne</option>
+                        <option value="data/songs/Corazoncandado.mp3">Corazón Candado</option>
+                        <option value="data/songs/Delmar.mp3">Del Mar</option>
+                        <option value="data/songs/Desnudate.mp3">Desnúdate</option>
+                        <option value="data/songs/Emborrachare.mp3">Me Emborracharé</option>
+                        <option value="data/songs/Nas.mp3">Old Town Road (Bachata)</option>
+                        <option value="data/songs/Secreto.mp3">Este Secreto</option>
+                        <option value="data/songs/Suegra.mp3">Suegra</option>
+                        <option value="data/songs/Temevas.mp3">Te Me Vas</option>
+                        <option value="data/songs/Veneno.mp3">Veneno</option>
+                        <option value="new_song">New song (YouTube URL)</option>
+                    </select>
+                </div>
+                
+                <!-- YouTube URL Input -->
+                <div x-show="selectedSong === 'new_song'" 
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0 transform -translate-y-2"
+                     x-transition:enter-end="opacity-100 transform translate-y-0">
+                    <label for="youtube_url" class="block text-sm font-semibold text-gray-700 mb-3">
+                        YouTube URL
+                    </label>
+                    <input type="url" 
+                           id="youtube_url_input" 
+                           x-model="youtubeUrl"
+                           @input="updateHiddenField()"
+                           placeholder="https://www.youtube.com/watch?v=..."
+                           class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm sm:text-base">
+                </div>
+                
+                <!-- Difficulty Selection -->
+                <div>
+                    <label for="difficulty" class="block text-sm font-semibold text-gray-700 mb-3">
+                        Difficulty Level
+                    </label>
+                    <select id="difficulty" 
+                            name="difficulty"
+                            x-model="difficulty"
+                            class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-gray-900 text-sm sm:text-base">
+                        <option value="beginner">🌱 Beginner - Basic steps and simple patterns</option>
+                        <option value="intermediate" selected>🌿 Intermediate - Mixed complexity with turns</option>
+                        <option value="advanced">🌳 Advanced - Complex moves and styling</option>
+                    </select>
+                </div>
+                
+                <!-- Hidden field for song selection - this will be set by JavaScript -->
+                <input type="hidden" name="youtube_url" id="hidden_youtube_url" value="">
+                
+                <!-- Hidden fields for API compatibility -->
+                <input type="hidden" name="quality_mode" value="balanced">
+                <input type="hidden" name="energy_level" value="medium">
+                
+                <!-- Generate Button -->
+                <button type="submit"
+                        :disabled="!canGenerate() || isGenerating"
+                        class="w-full bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                    <span x-show="!isGenerating">🎭 Create Choreography</span>
+                    <span x-show="isGenerating" class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                    </span>
+                </button>
+            </form>
+        </div>
+        
+        <!-- Progress Display -->
+        <div x-show="isGenerating" 
+             x-transition:enter="transition ease-out duration-300"
+             class="space-y-6"
+             id="progress-container">
+            
+            <div class="text-center">
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">🎵 Generating Your Choreography</h3>
+                <p class="text-gray-600" x-text="progressMessage">Starting...</p>
+                <p class="text-sm text-gray-500 mt-2">This usually takes 20-30 seconds</p>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
+                <div class="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 h-6 rounded-full transition-all duration-500 ease-out relative"
+                     :style="`width: ${progress}%`">
+                    <div class="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <span class="text-3xl font-bold text-primary-600" x-text="`${progress}%`"></span>
+                <div class="mt-2 text-sm text-gray-500">
+                    <span x-text="getStageEmoji()"></span>
+                    <span x-text="currentStage"></span>
+                </div>
+            </div>
+            
+            <!-- Progress polling using HTMX -->
+            <div hx-get="/api/task/progress"
+                 hx-trigger="every 2s"
+                 hx-target="this"
+                 hx-swap="none"
+                 @htmx:after-request="handleProgressUpdate($event)"
+                 x-show="isGenerating && currentTaskId"
+                 style="display: none;">
+            </div>
+            
+            <!-- Manual refresh button for connection issues -->
+            <div class="text-center">
+                <button @click="manualProgressCheck()"
+                        :disabled="isCheckingProgress"
+                        class="text-sm text-gray-500 hover:text-gray-700 underline disabled:opacity-50">
+                    <span x-show="!isCheckingProgress">🔄 Check Status Manually</span>
+                    <span x-show="isCheckingProgress">Checking...</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Results Display -->
+        <div x-show="result" 
+             x-transition:enter="transition ease-out duration-300"
+             class="space-y-6">
+            
+            <div class="text-center">
+                <h3 class="text-2xl font-bold text-green-600 mb-4">🎉 Choreography Complete!</h3>
+            </div>
+            
+            <!-- Video Player -->
+            <div class="text-center">
+                <video x-show="result" 
+                       :src="result ? `/api/video/${result.video_filename}` : ''"
+                       controls
+                       preload="metadata"
+                       class="w-full max-w-lg mx-auto rounded-xl shadow-lg bg-black">
+                    <p class="text-gray-500">Your browser does not support the video tag.</p>
+                </video>
+            </div>
+            
+            <!-- Result Info -->
+            <div class="bg-gray-50 rounded-xl p-6 space-y-3">
+                <h4 class="font-bold text-gray-900 text-lg">Generation Details</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="text-center">
+                        <p class="text-gray-600">Processing Time</p>
+                        <p class="font-semibold text-gray-900" x-text="result ? `${result.processing_time.toFixed(1)}s` : ''"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-gray-600">Sequence Duration</p>
+                        <p class="font-semibold text-gray-900" x-text="result ? `${result.sequence_duration.toFixed(1)}s` : ''"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-gray-600">Moves Analyzed</p>
+                        <p class="font-semibold text-gray-900" x-text="result ? result.moves_analyzed : ''"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4">
+                <template x-if="$root.user.isAuthenticated">
+                    <form hx-post="/api/collection/save"
+                          hx-trigger="submit"
+                          hx-target="#save-response"
+                          hx-swap="innerHTML"
+                          @htmx:before-request="startSaving()"
+                          @htmx:after-request="handleSaveResponse($event)"
+                          class="flex-1">
+                        <input type="hidden" name="title" :value="`Choreography - ${new Date().toLocaleDateString()}`">
+                        <input type="hidden" name="video_filename" :value="result ? result.video_filename : ''">
+                        <input type="hidden" name="metadata" :value="result ? JSON.stringify({
+                            song: selectedSong === 'new_song' ? youtubeUrl : selectedSong,
+                            processing_time: result.processing_time,
+                            sequence_duration: result.sequence_duration,
+                            moves_analyzed: result.moves_analyzed,
+                            difficulty: difficulty
+                        }) : ''">
+                        
+                        <button type="submit"
+                                :disabled="isSaving"
+                                class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                            <span x-show="!isSaving">💾 Save to Collection</span>
+                            <span x-show="isSaving" class="flex items-center justify-center">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Saving...
+                            </span>
+                        </button>
+                    </form>
+                </template>
+                
+                <template x-if="!$root.user.isAuthenticated">
+                    <div class="flex-1 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+                        <p class="text-blue-700 text-sm mb-2">💡 Want to save your choreographies?</p>
+                        <button @click="$root.showLogin = true" 
+                                class="text-blue-600 hover:text-blue-800 font-semibold underline">
+                            Login or Register
+                        </button>
+                    </div>
+                </template>
+                
+                <button @click="resetForm()" 
+                        class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105">
+                    🔄 Generate Another
+                </button>
+            </div>
+            
+            <div id="save-response" class="mt-4"></div>
+        </div>
+        
+        <!-- Error Display -->
+        <div x-show="error" 
+             x-transition:enter="transition ease-out duration-300"
+             class="space-y-6">
+            
+            <div class="bg-red-50 border-2 border-red-200 rounded-xl p-6 text-center">
+                <div class="text-red-600 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-red-800 mb-2">Generation Failed</h3>
+                <p class="text-red-700" x-text="errorMessage"></p>
+            </div>
+            
+            <button @click="resetForm()" 
+                    class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-semibold transition-colors duration-200">
+                Try Again
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function choreographyGenerator() {
+        return {
+            // Form state
+            selectedSong: '',
+            youtubeUrl: '',
+            difficulty: 'intermediate',
+            
+            // Generation state
+            isGenerating: false,
+            currentTaskId: null,
+            progress: 0,
+            progressMessage: 'Starting...',
+            currentStage: 'initializing',
+            isCheckingProgress: false,
+            
+            // Save state
+            isSaving: false,
+            
+            // Results
+            result: null,
+            error: false,
+            errorMessage: '',
+            
+            // Form validation
+            canGenerate() {
+                if (this.selectedSong === 'new_song') {
+                    return this.youtubeUrl.trim() !== '' && this.isValidYouTubeUrl(this.youtubeUrl);
+                }
+                return this.selectedSong !== '';
+            },
+            
+            // Validate YouTube URL format
+            isValidYouTubeUrl(url) {
+                const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/;
+                return youtubeRegex.test(url);
+            },
+            
+            // Toggle YouTube input visibility
+            toggleYouTubeInput() {
+                if (this.selectedSong !== 'new_song') {
+                    this.youtubeUrl = '';
+                }
+            },
+            
+            // Update hidden field immediately when selection changes
+            updateHiddenField() {
+                const hiddenField = document.querySelector('#hidden_youtube_url');
+                if (hiddenField) {
+                    hiddenField.value = this.getYoutubeUrl();
+                }
+            },
+            
+            // Prepare form submission
+            prepareFormSubmission() {
+                const hiddenField = document.querySelector('#hidden_youtube_url');
+                const youtubeUrl = this.getYoutubeUrl();
+                
+                if (hiddenField) {
+                    hiddenField.value = youtubeUrl;
+                }
+            },
+            
+            // Get the YouTube URL for the API
+            getYoutubeUrl() {
+                if (this.selectedSong === 'new_song') {
+                    return this.youtubeUrl;
+                }
+                return this.selectedSong;
+            },
+            
+            // Get stage emoji for progress display
+            getStageEmoji() {
+                const stageEmojis = {
+                    'initializing': '🚀',
+                    'downloading': '⬇️',
+                    'analyzing': '🎵',
+                    'selecting': '💃',
+                    'generating': '🎬',
+                    'finalizing': '✨',
+                    'completed': '🎉',
+                    'failed': '❌'
+                };
+                return stageEmojis[this.currentStage] || '⏳';
+            },
+            
+            // Start generation process
+            startGeneration() {
+                this.isGenerating = true;
+                this.result = null;
+                this.error = false;
+                this.progress = 5;
+                this.progressMessage = 'Starting generation...';
+                this.currentStage = 'initializing';
+                this.currentTaskId = null;
+            },
+            
+            // Handle generation response from HTMX
+            handleGenerationResponse(event) {
+                if (event.detail.xhr.status === 0) {
+                    this.handleGenerationError({ message: 'Failed to connect to server. Please try again.' });
+                    return;
+                }
+                
+                const response = event.detail.xhr.response;
+                try {
+                    const data = JSON.parse(response);
+                    if (event.detail.xhr.status === 200) {
+                        this.currentTaskId = data.task_id;
+                        this.progress = 10;
+                        this.progressMessage = 'Generation started, analyzing music...';
+                        this.currentStage = 'downloading';
+                        this.startProgressPolling();
+                    } else {
+                        this.handleGenerationError(data);
+                    }
+                } catch (e) {
+                    this.handleGenerationError({ message: 'Failed to parse server response' });
+                }
+            },
+            
+            // Start progress polling with HTMX
+            startProgressPolling() {
+                if (this.currentTaskId) {
+                    // Update the HTMX polling element
+                    const progressElement = document.querySelector('[hx-get="/api/task/progress"]');
+                    if (progressElement) {
+                        progressElement.setAttribute('hx-get', `/api/task/${this.currentTaskId}`);
+                        progressElement.setAttribute('hx-trigger', 'every 2s');
+                        htmx.process(progressElement);
+                    }
+                    
+                    // Start manual polling as backup
+                    this.pollTaskStatus();
+                }
+            },
+            
+            // Handle HTMX progress updates
+            handleProgressUpdate(event) {
+                if (event.detail.xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(event.detail.xhr.response);
+                        this.updateProgressFromData(data);
+                    } catch (e) {
+                        console.error('Failed to parse progress response:', e);
+                    }
+                }
+            },
+            
+            // Update progress from data
+            updateProgressFromData(data) {
+                this.progress = data.progress || 0;
+                this.progressMessage = data.message || 'Processing...';
+                this.currentStage = data.stage || 'processing';
+                
+                if (data.status === 'completed') {
+                    this.showResult(data.result);
+                } else if (data.status === 'failed') {
+                    this.showError(data.error || 'Generation failed');
+                }
+            },
+            
+            // Manual polling as backup
+            async pollTaskStatus() {
+                if (!this.currentTaskId || !this.isGenerating) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/task/${this.currentTaskId}`);
+                    const data = await response.json();
+                    
+                    this.updateProgressFromData(data);
+                    
+                    // Continue polling if still running
+                    if (data.status === 'running' || data.status === 'started') {
+                        setTimeout(() => this.pollTaskStatus(), 2000);
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    setTimeout(() => this.pollTaskStatus(), 3000);
+                }
+            },
+            
+            // Manual progress check
+            async manualProgressCheck() {
+                if (!this.currentTaskId) return;
+                
+                this.isCheckingProgress = true;
+                try {
+                    const response = await fetch(`/api/task/${this.currentTaskId}`);
+                    const data = await response.json();
+                    this.updateProgressFromData(data);
+                } catch (error) {
+                    this.$root.showNotification('Failed to check progress', 'error');
+                } finally {
+                    this.isCheckingProgress = false;
+                }
+            },
+            
+            // Handle generation errors
+            handleGenerationError(errorData) {
+                this.isGenerating = false;
+                this.error = true;
+                this.errorMessage = errorData.message || errorData.detail || 'Generation failed';
+                this.currentStage = 'failed';
+                this.$root.showNotification(this.errorMessage, 'error');
+            },
+            
+            // Start saving process
+            startSaving() {
+                this.isSaving = true;
+            },
+            
+            // Handle save response from HTMX
+            handleSaveResponse(event) {
+                this.isSaving = false;
+                if (event.detail.xhr.status === 200) {
+                    this.$root.showNotification('💾 Choreography saved to your collection!', 'success');
+                } else {
+                    try {
+                        const errorData = JSON.parse(event.detail.xhr.response);
+                        this.$root.showNotification(errorData.message || 'Failed to save choreography', 'error');
+                    } catch (e) {
+                        this.$root.showNotification('Failed to save choreography', 'error');
+                    }
+                }
+            },
+            
+            // Show results
+            showResult(resultData) {
+                this.isGenerating = false;
+                this.result = resultData;
+                this.error = false;
+                this.progress = 100;
+                this.currentStage = 'completed';
+                
+                // Show success notification
+                if (this.$root && this.$root.showNotification) {
+                    this.$root.showNotification('🎉 Choreography generated successfully!', 'success');
+                }
+            },
+            
+            // Show error
+            showError(message) {
+                this.isGenerating = false;
+                this.error = true;
+                this.errorMessage = message;
+                this.result = null;
+                this.currentStage = 'failed';
+                
+                // Show error notification
+                this.$root.showNotification(message, 'error');
+            },
+            
+            // Reset form
+            resetForm() {
+                this.selectedSong = '';
+                this.youtubeUrl = '';
+                this.difficulty = 'intermediate';
+                this.isGenerating = false;
+                this.result = null;
+                this.error = false;
+                this.progress = 0;
+                this.progressMessage = 'Starting...';
+                this.currentStage = 'initializing';
+                this.currentTaskId = null;
+                this.isSaving = false;
+                this.isCheckingProgress = false;
+            }
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Bachata Choreography Generator{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+    
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f4ff',
+                            100: '#e0e7ff',
+                            200: '#c7d2fe',
+                            300: '#a5b4fc',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                        },
+                        secondary: {
+                            50: '#fdf4ff',
+                            100: '#fae8ff',
+                            200: '#f5d0fe',
+                            300: '#f0abfc',
+                            400: '#e879f9',
+                            500: '#d946ef',
+                            600: '#c026d3',
+                            700: '#a21caf',
+                            800: '#86198f',
+                            900: '#701a75',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-gentle': 'bounceGentle 2s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        bounceGentle: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-5px)' },
+                        }
+                    }
+                }
+            },
+            plugins: [
+                function({ addUtilities }) {
+                    addUtilities({
+                        '.line-clamp-1': {
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            '-webkit-box-orient': 'vertical',
+                            '-webkit-line-clamp': '1',
+                        },
+                        '.line-clamp-2': {
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            '-webkit-box-orient': 'vertical',
+                            '-webkit-line-clamp': '2',
+                        },
+                        '.line-clamp-3': {
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            '-webkit-box-orient': 'vertical',
+                            '-webkit-line-clamp': '3',
+                        }
+                    })
+                }
+            ]
+        }
+    </script>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600" 
+      x-data="appState()" 
+      x-init="initApp()">
+    
+    <!-- Navigation -->
+    <nav class="bg-white/10 backdrop-blur-md border-b border-white/20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-white">
+                        🕺 Bachata Choreography Generator
+                    </h1>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    <template x-if="user.isAuthenticated">
+                        <div class="flex items-center space-x-4">
+                            <!-- User Profile Dropdown -->
+                            <div class="relative" x-data="{ showProfile: false }">
+                                <button @click="showProfile = !showProfile" 
+                                        class="flex items-center space-x-2 text-white/90 hover:text-white transition-colors duration-200">
+                                    <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-semibold" x-text="user.displayName.charAt(0).toUpperCase()"></span>
+                                    </div>
+                                    <span x-text="user.displayName"></span>
+                                    <svg class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': showProfile }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                
+                                <!-- Dropdown Menu -->
+                                <div x-show="showProfile" 
+                                     x-transition:enter="transition ease-out duration-200"
+                                     x-transition:enter-start="opacity-0 transform scale-95"
+                                     x-transition:enter-end="opacity-100 transform scale-100"
+                                     x-transition:leave="transition ease-in duration-150"
+                                     x-transition:leave-start="opacity-100 transform scale-100"
+                                     x-transition:leave-end="opacity-0 transform scale-95"
+                                     @click.away="showProfile = false"
+                                     class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                                    
+                                    <!-- User Info -->
+                                    <div class="px-4 py-3 border-b border-gray-100">
+                                        <p class="text-sm font-medium text-gray-900" x-text="user.displayName"></p>
+                                        <p class="text-sm text-gray-500" x-text="user.email"></p>
+                                        <template x-if="user.isInstructor">
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800 mt-1">
+                                                Instructor
+                                            </span>
+                                        </template>
+                                    </div>
+                                    
+                                    <!-- Navigation Links -->
+                                    <div class="py-1">
+                                        <template x-if="user.isInstructor">
+                                            <a href="/instructor" 
+                                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
+                                                📊 Instructor Dashboard
+                                            </a>
+                                        </template>
+                                        <a href="/collection" 
+                                           class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
+                                            💃 My Collection
+                                        </a>
+                                        <button @click="showProfileSettings = true; showProfile = false" 
+                                                class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
+                                            ⚙️ Profile Settings
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Logout -->
+                                    <div class="border-t border-gray-100 py-1">
+                                        <button @click="logout(); showProfile = false" 
+                                                class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200">
+                                            🚪 Logout
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="!user.isAuthenticated">
+                        <div class="flex items-center space-x-4">
+                            <button @click="showLogin = true" 
+                                    class="text-white/90 hover:text-white transition-colors duration-200">
+                                Login
+                            </button>
+                            <button @click="showRegister = true" 
+                                    class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors duration-200">
+                                Register
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Login Modal -->
+    <div x-show="showLogin" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="showLogin = false">
+        
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 animate-slide-up">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Login</h2>
+                <button @click="showLogin = false" 
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form hx-post="/api/auth/login" 
+                  hx-trigger="submit"
+                  hx-target="#login-response"
+                  hx-swap="innerHTML"
+                  @htmx:before-request="startLogin()"
+                  @htmx:after-request="handleLoginResponse($event)"
+                  x-data="{ 
+                      email: '', 
+                      password: '',
+                      isValidEmail() { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email); },
+                      canSubmit() { return this.isValidEmail() && this.password.length > 0; }
+                  }">
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="login-email" class="block text-sm font-medium text-gray-700 mb-2">
+                            Email
+                        </label>
+                        <input type="email" 
+                               id="login-email" 
+                               name="email" 
+                               x-model="email"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                               :class="{ 'border-red-300': email && !isValidEmail() }">
+                        <p x-show="email && !isValidEmail()" class="mt-1 text-sm text-red-600">
+                            Please enter a valid email address
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label for="login-password" class="block text-sm font-medium text-gray-700 mb-2">
+                            Password
+                        </label>
+                        <input type="password" 
+                               id="login-password" 
+                               name="password" 
+                               x-model="password"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors">
+                    </div>
+                </div>
+                
+                <div id="login-response" class="mt-4"></div>
+                
+                <button type="submit" 
+                        :disabled="!canSubmit() || isLoggingIn"
+                        class="w-full mt-6 bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                    <span x-show="!isLoggingIn">Login</span>
+                    <span x-show="isLoggingIn" class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Logging in...
+                    </span>
+                </button>
+            </form>
+            
+            <p class="mt-4 text-center text-gray-600">
+                Don't have an account? 
+                <button @click="showLogin = false; showRegister = true" 
+                        class="text-primary-600 hover:text-primary-700 font-semibold">
+                    Register here
+                </button>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Register Modal -->
+    <div x-show="showRegister" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="showRegister = false">
+        
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 animate-slide-up">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Register</h2>
+                <button @click="showRegister = false" 
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form hx-post="/api/auth/register" 
+                  hx-trigger="submit"
+                  hx-target="#register-response"
+                  hx-swap="innerHTML"
+                  @htmx:before-request="startRegistration()"
+                  @htmx:after-request="handleRegisterResponse($event)"
+                  x-data="{ 
+                      email: '', 
+                      displayName: '', 
+                      password: '', 
+                      confirmPassword: '', 
+                      isInstructor: false,
+                      passwordsMatch() { return this.password === this.confirmPassword; },
+                      isValidEmail() { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email); },
+                      isValidPassword() { return this.password.length >= 8; },
+                      canSubmit() { return this.isValidEmail() && this.isValidPassword() && this.passwordsMatch() && this.displayName.trim().length > 0; }
+                  }">
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="register-email" class="block text-sm font-medium text-gray-700 mb-2">
+                            Email
+                        </label>
+                        <input type="email" 
+                               id="register-email" 
+                               name="email" 
+                               x-model="email"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                               :class="{ 'border-red-300': email && !isValidEmail() }">
+                        <p x-show="email && !isValidEmail()" class="mt-1 text-sm text-red-600">
+                            Please enter a valid email address
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label for="register-display-name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Display Name
+                        </label>
+                        <input type="text" 
+                               id="register-display-name" 
+                               name="display_name" 
+                               x-model="displayName"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                               :class="{ 'border-red-300': displayName && displayName.trim().length === 0 }">
+                        <p x-show="displayName && displayName.trim().length === 0" class="mt-1 text-sm text-red-600">
+                            Display name is required
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label for="register-password" class="block text-sm font-medium text-gray-700 mb-2">
+                            Password
+                        </label>
+                        <input type="password" 
+                               id="register-password" 
+                               name="password" 
+                               x-model="password"
+                               required
+                               minlength="8"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                               :class="{ 'border-red-300': password && !isValidPassword() }">
+                        <p x-show="password && !isValidPassword()" class="mt-1 text-sm text-red-600">
+                            Password must be at least 8 characters long
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label for="register-confirm-password" class="block text-sm font-medium text-gray-700 mb-2">
+                            Confirm Password
+                        </label>
+                        <input type="password" 
+                               id="register-confirm-password" 
+                               x-model="confirmPassword"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                               :class="{ 'border-red-300': confirmPassword && !passwordsMatch() }">
+                        <p x-show="confirmPassword && !passwordsMatch()" class="mt-1 text-sm text-red-600">
+                            Passwords do not match
+                        </p>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" 
+                               id="register-instructor" 
+                               name="is_instructor" 
+                               x-model="isInstructor"
+                               class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                        <label for="register-instructor" class="ml-2 block text-sm text-gray-700">
+                            I am a dance instructor
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="register-response" class="mt-4"></div>
+                
+                <button type="submit" 
+                        :disabled="!canSubmit() || isRegistering"
+                        class="w-full mt-6 bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                    <span x-show="!isRegistering">Register</span>
+                    <span x-show="isRegistering" class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Registering...
+                    </span>
+                </button>
+            </form>
+            
+            <p class="mt-4 text-center text-gray-600">
+                Already have an account? 
+                <button @click="showRegister = false; showLogin = true" 
+                        class="text-primary-600 hover:text-primary-700 font-semibold">
+                    Login here
+                </button>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Profile Settings Modal -->
+    <div x-show="showProfileSettings" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="showProfileSettings = false">
+        
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 animate-slide-up">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Profile Settings</h2>
+                <button @click="showProfileSettings = false" 
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form hx-put="/api/auth/profile" 
+                  hx-trigger="submit"
+                  hx-target="#profile-response"
+                  hx-swap="innerHTML"
+                  @htmx:before-request="startProfileUpdate()"
+                  @htmx:after-request="handleProfileUpdateResponse($event)"
+                  x-data="{ 
+                      displayName: user.displayName, 
+                      newPassword: '', 
+                      confirmPassword: '',
+                      passwordsMatch() { return this.newPassword === this.confirmPassword; },
+                      isValidPassword() { return this.newPassword.length === 0 || this.newPassword.length >= 8; },
+                      canSubmit() { return this.displayName.trim().length > 0 && this.isValidPassword() && (this.newPassword.length === 0 || this.passwordsMatch()); }
+                  }">
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="profile-display-name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Display Name
+                        </label>
+                        <input type="text" 
+                               id="profile-display-name" 
+                               name="display_name" 
+                               x-model="displayName"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                               :class="{ 'border-red-300': displayName && displayName.trim().length === 0 }">
+                        <p x-show="displayName && displayName.trim().length === 0" class="mt-1 text-sm text-red-600">
+                            Display name is required
+                        </p>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 pt-4">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+                        <p class="text-sm text-gray-600 mb-4">Leave blank to keep current password</p>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label for="profile-new-password" class="block text-sm font-medium text-gray-700 mb-2">
+                                    New Password
+                                </label>
+                                <input type="password" 
+                                       id="profile-new-password" 
+                                       name="new_password" 
+                                       x-model="newPassword"
+                                       minlength="8"
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                                       :class="{ 'border-red-300': newPassword && !isValidPassword() }">
+                                <p x-show="newPassword && !isValidPassword()" class="mt-1 text-sm text-red-600">
+                                    Password must be at least 8 characters long
+                                </p>
+                            </div>
+                            
+                            <div x-show="newPassword.length > 0">
+                                <label for="profile-confirm-password" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Confirm New Password
+                                </label>
+                                <input type="password" 
+                                       id="profile-confirm-password" 
+                                       x-model="confirmPassword"
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                                       :class="{ 'border-red-300': confirmPassword && !passwordsMatch() }">
+                                <p x-show="confirmPassword && !passwordsMatch()" class="mt-1 text-sm text-red-600">
+                                    Passwords do not match
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="profile-response" class="mt-4"></div>
+                
+                <div class="flex space-x-4 mt-6">
+                    <button type="button" 
+                            @click="showProfileSettings = false"
+                            class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 rounded-lg font-semibold transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            :disabled="!canSubmit() || isUpdatingProfile"
+                            class="flex-1 bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                        <span x-show="!isUpdatingProfile">Update Profile</span>
+                        <span x-show="isUpdatingProfile" class="flex items-center justify-center">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Updating...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notification System -->
+    <div x-show="notification.show" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 transform translate-y-2"
+         x-transition:enter-end="opacity-100 transform translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 transform translate-y-0"
+         x-transition:leave-end="opacity-0 transform translate-y-2"
+         class="fixed top-4 right-4 z-50 max-w-sm w-full">
+        
+        <div class="rounded-lg shadow-lg p-4"
+             :class="{
+                'bg-green-500 text-white': notification.type === 'success',
+                'bg-red-500 text-white': notification.type === 'error',
+                'bg-blue-500 text-white': notification.type === 'info',
+                'bg-yellow-500 text-black': notification.type === 'warning'
+             }">
+            
+            <div class="flex items-center justify-between">
+                <p x-text="notification.message" class="font-medium"></p>
+                <button @click="hideNotification()" 
+                        class="ml-4 text-current hover:opacity-75">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Alpine.js Global State -->
+    <script>
+        function appState() {
+            return {
+                // User authentication state
+                user: {
+                    isAuthenticated: false,
+                    email: '',
+                    displayName: '',
+                    isInstructor: false,
+                    token: ''
+                },
+                
+                // UI state
+                showLogin: false,
+                showRegister: false,
+                showProfileSettings: false,
+                isLoggingIn: false,
+                isRegistering: false,
+                isUpdatingProfile: false,
+                
+                // Notification system
+                notification: {
+                    show: false,
+                    message: '',
+                    type: 'info' // success, error, info, warning
+                },
+                
+                // Initialize app
+                initApp() {
+                    this.checkAuthStatus();
+                    this.setupHTMXHeaders();
+                },
+                
+                // Check if user is authenticated
+                checkAuthStatus() {
+                    const token = localStorage.getItem('auth_token');
+                    const userData = localStorage.getItem('user_data');
+                    
+                    if (token && userData) {
+                        try {
+                            this.user = {
+                                ...JSON.parse(userData),
+                                isAuthenticated: true,
+                                token: token
+                            };
+                        } catch (e) {
+                            console.error('Error parsing user data:', e);
+                            this.clearAuthData();
+                        }
+                    }
+                },
+                
+                // Set up HTMX headers for authentication
+                setupHTMXHeaders() {
+                    document.body.addEventListener('htmx:configRequest', (event) => {
+                        if (this.user.isAuthenticated) {
+                            event.detail.headers['Authorization'] = `Bearer ${this.user.token}`;
+                        }
+                    });
+                },
+                
+                // Handle login response
+                handleLoginResponse(event) {
+                    this.isLoggingIn = false;
+                    const xhr = event.detail.xhr;
+                    
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            this.user = {
+                                isAuthenticated: true,
+                                email: response.user.email,
+                                displayName: response.user.display_name,
+                                isInstructor: response.user.is_instructor,
+                                token: response.tokens.access_token
+                            };
+                            
+                            // Store in localStorage
+                            localStorage.setItem('auth_token', response.tokens.access_token);
+                            localStorage.setItem('user_data', JSON.stringify({
+                                email: response.user.email,
+                                displayName: response.user.display_name,
+                                isInstructor: response.user.is_instructor
+                            }));
+                            
+                            this.showLogin = false;
+                            this.showNotification('Login successful!', 'success');
+                            
+                            // Refresh page to update UI
+                            setTimeout(() => window.location.reload(), 1000);
+                            
+                        } catch (e) {
+                            console.error('Error parsing login response:', e);
+                            this.showNotification('Login failed. Please try again.', 'error');
+                        }
+                    } else {
+                        let errorMsg = 'Login failed. Please check your credentials.';
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            errorMsg = errorData.detail || errorMsg;
+                        } catch (e) {
+                            // Use default error message
+                        }
+                        this.showNotification(errorMsg, 'error');
+                    }
+                },
+                
+                // Handle register response
+                handleRegisterResponse(event) {
+                    this.isRegistering = false;
+                    const xhr = event.detail.xhr;
+                    
+                    if (xhr.status === 201) {
+                        this.showRegister = false;
+                        this.showLogin = true;
+                        this.showNotification('Registration successful! Please login.', 'success');
+                    } else {
+                        let errorMsg = 'Registration failed. Please try again.';
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            errorMsg = errorData.detail || errorMsg;
+                        } catch (e) {
+                            // Use default error message
+                        }
+                        this.showNotification(errorMsg, 'error');
+                    }
+                },
+                
+                // Start login process
+                startLogin() {
+                    this.isLoggingIn = true;
+                },
+                
+                // Start registration process
+                startRegistration() {
+                    this.isRegistering = true;
+                },
+                
+                // Start profile update process
+                startProfileUpdate() {
+                    this.isUpdatingProfile = true;
+                },
+                
+                // Handle profile update response
+                handleProfileUpdateResponse(event) {
+                    this.isUpdatingProfile = false;
+                    const xhr = event.detail.xhr;
+                    
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            
+                            // Update user data
+                            this.user.displayName = response.display_name;
+                            
+                            // Update localStorage
+                            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                            userData.displayName = response.display_name;
+                            localStorage.setItem('user_data', JSON.stringify(userData));
+                            
+                            this.showProfileSettings = false;
+                            this.showNotification('Profile updated successfully!', 'success');
+                            
+                        } catch (e) {
+                            console.error('Error parsing profile update response:', e);
+                            this.showNotification('Profile update failed. Please try again.', 'error');
+                        }
+                    } else {
+                        let errorMsg = 'Profile update failed. Please try again.';
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            errorMsg = errorData.detail || errorMsg;
+                        } catch (e) {
+                            // Use default error message
+                        }
+                        this.showNotification(errorMsg, 'error');
+                    }
+                },
+                
+                // Logout user
+                logout() {
+                    this.clearAuthData();
+                    this.showNotification('Logged out successfully', 'info');
+                    setTimeout(() => window.location.reload(), 1000);
+                },
+                
+                // Clear authentication data
+                clearAuthData() {
+                    this.user = {
+                        isAuthenticated: false,
+                        email: '',
+                        displayName: '',
+                        isInstructor: false,
+                        token: ''
+                    };
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                },
+                
+                // Show notification
+                showNotification(message, type = 'info') {
+                    this.notification = {
+                        show: true,
+                        message: message,
+                        type: type
+                    };
+                    
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        this.hideNotification();
+                    }, 5000);
+                },
+                
+                // Hide notification
+                hideNotification() {
+                    this.notification.show = false;
+                }
+            }
+        }
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

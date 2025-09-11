@@ -1,0 +1,768 @@
+{% extends "base.html" %}
+
+{% block title %}Instructor Dashboard - Bachata Choreography Generator{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-4" x-data="instructorDashboard()">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h2 class="text-4xl font-bold text-white mb-4">
+                Instructor Dashboard
+            </h2>
+            <p class="text-white/80 text-lg">
+                Manage your class plans and choreography sequences
+            </p>
+        </div>
+        
+        <!-- Action Bar -->
+        <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+                <h3 class="text-2xl font-bold text-gray-900">Class Plans</h3>
+                <div class="flex space-x-3">
+                    <button @click="showAnalytics = !showAnalytics" 
+                            class="bg-blue-500 hover:bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-colors duration-200">
+                        <span x-text="showAnalytics ? 'Hide Analytics' : 'Show Analytics'"></span>
+                    </button>
+                    <button @click="showCreatePlan = true" 
+                            class="bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200">
+                        Create New Class Plan
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Analytics Dashboard -->
+        <div x-show="showAnalytics && dashboardStats" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 transform -translate-y-4"
+             x-transition:enter-end="opacity-100 transform translate-y-0"
+             class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8">
+            <h4 class="text-xl font-bold text-gray-900 mb-6">Instructor Analytics</h4>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-primary-600" x-text="dashboardStats?.total_class_plans || 0"></div>
+                    <div class="text-gray-600">Total Class Plans</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-secondary-600" x-text="dashboardStats?.total_choreographies || 0"></div>
+                    <div class="text-gray-600">Choreographies Used</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-green-600" x-text="formatDuration(dashboardStats?.avg_class_duration)"></div>
+                    <div class="text-gray-600">Avg Class Duration</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-purple-600" x-text="dashboardStats?.most_used_difficulty || 'N/A'"></div>
+                    <div class="text-gray-600">Most Used Difficulty</div>
+                </div>
+            </div>
+            
+            <div x-show="dashboardStats?.difficulty_distribution" class="mt-6">
+                <h5 class="font-semibold text-gray-700 mb-3">Difficulty Distribution</h5>
+                <div class="flex space-x-4">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 bg-green-500 rounded mr-2"></div>
+                        <span class="text-sm text-gray-600">Beginner: <span x-text="dashboardStats?.difficulty_distribution?.beginner || 0"></span></span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 bg-yellow-500 rounded mr-2"></div>
+                        <span class="text-sm text-gray-600">Intermediate: <span x-text="dashboardStats?.difficulty_distribution?.intermediate || 0"></span></span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 bg-red-500 rounded mr-2"></div>
+                        <span class="text-sm text-gray-600">Advanced: <span x-text="dashboardStats?.difficulty_distribution?.advanced || 0"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Class Plans Grid -->
+        <div x-show="!loading && classPlans.length > 0" 
+             class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <template x-for="plan in classPlans" :key="plan.id">
+                <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6">
+                    <!-- Plan Header -->
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="text-xl font-bold text-gray-900" x-text="plan.title"></h4>
+                            <p class="text-gray-600" x-text="plan.description"></p>
+                            <div class="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                                <span x-text="`Difficulty: ${plan.difficulty_level}`"></span>
+                                <span x-text="`Created: ${formatDate(plan.created_at)}`"></span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button @click="editPlan(plan)" 
+                                    class="text-primary-600 hover:text-primary-700">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button @click="deletePlan(plan.id)" 
+                                    class="text-red-600 hover:text-red-700">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Choreography Sequence -->
+                    <div class="space-y-2 mb-4">
+                        <h5 class="font-semibold text-gray-700">Choreography Sequence:</h5>
+                        <div x-show="plan.sequences && plan.sequences.length > 0" 
+                             class="space-y-1">
+                            <template x-for="(sequence, index) in plan.sequences.sort((a, b) => a.sequence_order - b.sequence_order)" :key="sequence.id">
+                                <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 cursor-move hover:bg-gray-100 transition-colors"
+                                     draggable="true"
+                                     @dragstart="startDrag($event, sequence)"
+                                     @dragover="allowDrop($event)"
+                                     @drop="drop($event, sequence, plan)">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="flex items-center space-x-2">
+                                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                                            </svg>
+                                            <span class="bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-1 rounded" 
+                                                  x-text="sequence.sequence_order"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-900 font-medium" x-text="sequence.choreography_title"></span>
+                                            <div x-show="sequence.notes" class="sequence-notes text-xs text-gray-500 mt-1" x-text="sequence.notes"></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <div class="text-sm text-gray-500">
+                                            <span x-show="sequence.estimated_time" x-text="`${sequence.estimated_time}min`"></span>
+                                            <span x-show="!sequence.estimated_time">-</span>
+                                        </div>
+                                        <button @click="removeChoreographyFromPlan(plan.id, sequence.choreography_id)" 
+                                                class="text-red-500 hover:text-red-700 transition-colors">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="!plan.sequences || plan.sequences.length === 0" 
+                             class="text-gray-500 text-sm italic">
+                            No choreographies added yet
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <button @click="addChoreographyToPlan(plan)" 
+                                class="bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg font-semibold transition-colors duration-200 text-sm">
+                            Add Choreography
+                        </button>
+                        <button @click="duplicatePlan(plan)" 
+                                class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-3 rounded-lg font-semibold transition-colors duration-200 text-sm">
+                            Duplicate
+                        </button>
+                        <button @click="exportPlan(plan)" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg font-semibold transition-colors duration-200 text-sm">
+                            Export
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+        
+        <!-- Empty State -->
+        <div x-show="!loading && classPlans.length === 0" 
+             class="text-center py-16">
+            <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-12 max-w-md mx-auto">
+                <div class="text-gray-400 mb-6">
+                    <svg class="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-900 mb-4">No Class Plans Yet</h3>
+                <p class="text-gray-600 mb-6">Create your first class plan to get started!</p>
+                <button @click="showCreatePlan = true" 
+                        class="bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200">
+                    Create Class Plan
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loading State -->
+        <div x-show="loading" 
+             class="text-center py-16">
+            <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-12 max-w-md mx-auto">
+                <div class="animate-spin w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p class="text-gray-600">Loading your class plans...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create/Edit Plan Modal -->
+    <div x-show="showCreatePlan || editingPlan" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="closeModal()">
+        
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-slide-up">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900" 
+                    x-text="editingPlan ? 'Edit Class Plan' : 'Create New Class Plan'"></h3>
+                <button @click="closeModal()" 
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form @submit.prevent="savePlan()">
+                <div class="space-y-4">
+                    <div>
+                        <label for="plan-title" class="block text-sm font-medium text-gray-700 mb-2">
+                            Class Title
+                        </label>
+                        <input type="text" 
+                               id="plan-title" 
+                               x-model="planForm.title" 
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label for="plan-description" class="block text-sm font-medium text-gray-700 mb-2">
+                            Description
+                        </label>
+                        <textarea id="plan-description" 
+                                  x-model="planForm.description" 
+                                  rows="3"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label for="plan-difficulty" class="block text-sm font-medium text-gray-700 mb-2">
+                            Difficulty Level
+                        </label>
+                        <select id="plan-difficulty" 
+                                x-model="planForm.difficulty_level" 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors">
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="plan-duration" class="block text-sm font-medium text-gray-700 mb-2">
+                            Estimated Duration (minutes)
+                        </label>
+                        <input type="number" 
+                               id="plan-duration" 
+                               x-model="planForm.estimated_duration" 
+                               min="15"
+                               max="180"
+                               step="15"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label for="plan-notes" class="block text-sm font-medium text-gray-700 mb-2">
+                            Instructor Notes
+                        </label>
+                        <textarea id="plan-notes" 
+                                  x-model="planForm.instructor_notes" 
+                                  rows="3"
+                                  placeholder="Teaching tips, objectives, special considerations..."
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-4 mt-6">
+                    <button type="button" 
+                            @click="closeModal()" 
+                            class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="flex-1 bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200">
+                        <span x-text="editingPlan ? 'Update Plan' : 'Create Plan'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Choreography Selector Modal -->
+    <div x-show="showChoreographySelector" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="closeModal()">
+        
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden animate-slide-up">
+            <div class="flex justify-between items-center p-6 border-b">
+                <h3 class="text-2xl font-bold text-gray-900">Add Choreography to Class Plan</h3>
+                <button @click="closeModal()" 
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <form @submit.prevent="addChoreographyToSelectedPlan()">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="choreography-select" class="block text-sm font-medium text-gray-700 mb-2">
+                                Select Choreography
+                            </label>
+                            <select id="choreography-select" 
+                                    x-model="choreographyForm.choreography_id" 
+                                    required
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors">
+                                <option value="">Choose a choreography...</option>
+                                <template x-for="choreography in userChoreographies" :key="choreography.id">
+                                    <option :value="choreography.id" x-text="`${choreography.title} (${choreography.difficulty})`"></option>
+                                </template>
+                            </select>
+                            <div x-show="loadingChoreographies" class="text-sm text-gray-500 mt-2">
+                                Loading choreographies...
+                            </div>
+                            <div x-show="!loadingChoreographies && userChoreographies.length === 0" class="text-sm text-gray-500 mt-2">
+                                No choreographies found. Create some choreographies first.
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="choreography-notes" class="block text-sm font-medium text-gray-700 mb-2">
+                                Teaching Notes (Optional)
+                            </label>
+                            <textarea id="choreography-notes" 
+                                      x-model="choreographyForm.notes" 
+                                      rows="3"
+                                      placeholder="Special instructions, focus points, modifications..."
+                                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label for="estimated-time" class="block text-sm font-medium text-gray-700 mb-2">
+                                Estimated Teaching Time (minutes)
+                            </label>
+                            <input type="number" 
+                                   id="estimated-time" 
+                                   x-model="choreographyForm.estimated_time" 
+                                   min="5"
+                                   max="60"
+                                   step="5"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors">
+                        </div>
+                    </div>
+                    
+                    <div class="flex space-x-4 mt-6">
+                        <button type="button" 
+                                @click="closeModal()" 
+                                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition-colors duration-200">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                :disabled="!choreographyForm.choreography_id"
+                                class="flex-1 bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                            Add to Class Plan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function instructorDashboard() {
+        return {
+            classPlans: [],
+            loading: true,
+            showCreatePlan: false,
+            editingPlan: null,
+            showChoreographySelector: false,
+            showAnalytics: false,
+            selectedPlan: null,
+            userChoreographies: [],
+            loadingChoreographies: false,
+            draggedSequence: null,
+            dashboardStats: null,
+            planForm: {
+                title: '',
+                description: '',
+                difficulty_level: 'intermediate',
+                estimated_duration: null,
+                instructor_notes: ''
+            },
+            choreographyForm: {
+                choreography_id: '',
+                notes: '',
+                estimated_time: 15
+            },
+            
+            async init() {
+                await this.loadClassPlans();
+                await this.loadDashboardStats();
+            },
+            
+            async loadClassPlans() {
+                try {
+                    this.loading = true;
+                    
+                    const response = await fetch('/api/instructor/class-plans', {
+                        headers: {
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.classPlans = data.class_plans || [];
+                    } else {
+                        throw new Error('Failed to load class plans');
+                    }
+                } catch (error) {
+                    console.error('Error loading class plans:', error);
+                    this.$root.showNotification('Failed to load class plans', 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            
+            editPlan(plan) {
+                this.editingPlan = plan;
+                this.planForm = {
+                    title: plan.title,
+                    description: plan.description || '',
+                    difficulty_level: plan.difficulty_level,
+                    estimated_duration: plan.estimated_duration,
+                    instructor_notes: plan.instructor_notes || ''
+                };
+            },
+            
+            closeModal() {
+                this.showCreatePlan = false;
+                this.editingPlan = null;
+                this.showChoreographySelector = false;
+                this.selectedPlan = null;
+                this.planForm = {
+                    title: '',
+                    description: '',
+                    difficulty_level: 'intermediate',
+                    estimated_duration: null,
+                    instructor_notes: ''
+                };
+                this.choreographyForm = {
+                    choreography_id: '',
+                    notes: '',
+                    estimated_time: 15
+                };
+            },
+            
+            async savePlan() {
+                try {
+                    const url = this.editingPlan 
+                        ? `/api/instructor/class-plans/${this.editingPlan.id}`
+                        : '/api/instructor/class-plans';
+                    
+                    const method = this.editingPlan ? 'PUT' : 'POST';
+                    
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        },
+                        body: JSON.stringify(this.planForm)
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadClassPlans();
+                        this.closeModal();
+                        this.$root.showNotification(
+                            this.editingPlan ? 'Class plan updated successfully' : 'Class plan created successfully', 
+                            'success'
+                        );
+                    } else {
+                        throw new Error('Failed to save class plan');
+                    }
+                } catch (error) {
+                    console.error('Error saving class plan:', error);
+                    this.$root.showNotification('Failed to save class plan', 'error');
+                }
+            },
+            
+            async deletePlan(planId) {
+                if (!confirm('Are you sure you want to delete this class plan?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${planId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        this.classPlans = this.classPlans.filter(p => p.id !== planId);
+                        this.$root.showNotification('Class plan deleted successfully', 'success');
+                    } else {
+                        throw new Error('Failed to delete class plan');
+                    }
+                } catch (error) {
+                    console.error('Error deleting class plan:', error);
+                    this.$root.showNotification('Failed to delete class plan', 'error');
+                }
+            },
+            
+            async addChoreographyToPlan(plan) {
+                this.selectedPlan = plan;
+                this.showChoreographySelector = true;
+                await this.loadUserChoreographies();
+            },
+            
+            async exportPlan(plan) {
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/export`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const htmlContent = await response.text();
+                        const printWindow = window.open('', '_blank');
+                        printWindow.document.write(htmlContent);
+                        printWindow.document.close();
+                        printWindow.focus();
+                        printWindow.print();
+                    } else {
+                        throw new Error('Failed to export class plan');
+                    }
+                } catch (error) {
+                    console.error('Error exporting class plan:', error);
+                    this.$root.showNotification('Failed to export class plan', 'error');
+                }
+            },
+            
+            async loadUserChoreographies() {
+                try {
+                    this.loadingChoreographies = true;
+                    
+                    const response = await fetch('/api/collection/list', {
+                        headers: {
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.userChoreographies = data.choreographies || [];
+                    } else {
+                        throw new Error('Failed to load choreographies');
+                    }
+                } catch (error) {
+                    console.error('Error loading choreographies:', error);
+                    this.$root.showNotification('Failed to load choreographies', 'error');
+                } finally {
+                    this.loadingChoreographies = false;
+                }
+            },
+            
+            async addChoreographyToSelectedPlan() {
+                if (!this.choreographyForm.choreography_id || !this.selectedPlan) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${this.selectedPlan.id}/choreographies`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        },
+                        body: JSON.stringify(this.choreographyForm)
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadClassPlans();
+                        this.closeModal();
+                        this.$root.showNotification('Choreography added to class plan', 'success');
+                    } else {
+                        throw new Error('Failed to add choreography');
+                    }
+                } catch (error) {
+                    console.error('Error adding choreography:', error);
+                    this.$root.showNotification('Failed to add choreography', 'error');
+                }
+            },
+            
+            async removeChoreographyFromPlan(planId, choreographyId) {
+                if (!confirm('Remove this choreography from the class plan?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${planId}/choreographies/${choreographyId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadClassPlans();
+                        this.$root.showNotification('Choreography removed from class plan', 'success');
+                    } else {
+                        throw new Error('Failed to remove choreography');
+                    }
+                } catch (error) {
+                    console.error('Error removing choreography:', error);
+                    this.$root.showNotification('Failed to remove choreography', 'error');
+                }
+            },
+            
+            // Drag and drop functionality
+            startDrag(event, sequence) {
+                this.draggedSequence = sequence;
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/html', event.target);
+            },
+            
+            allowDrop(event) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+            },
+            
+            async drop(event, targetSequence, plan) {
+                event.preventDefault();
+                
+                if (!this.draggedSequence || this.draggedSequence.id === targetSequence.id) {
+                    return;
+                }
+                
+                // Calculate new sequence orders
+                const sequences = [...plan.sequences].sort((a, b) => a.sequence_order - b.sequence_order);
+                const draggedIndex = sequences.findIndex(s => s.id === this.draggedSequence.id);
+                const targetIndex = sequences.findIndex(s => s.id === targetSequence.id);
+                
+                // Remove dragged item and insert at new position
+                sequences.splice(draggedIndex, 1);
+                sequences.splice(targetIndex, 0, this.draggedSequence);
+                
+                // Update sequence orders
+                const sequenceUpdates = sequences.map((seq, index) => ({
+                    choreography_id: seq.choreography_id,
+                    sequence_order: index + 1
+                }));
+                
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/reorder`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        },
+                        body: JSON.stringify({ sequence_updates: sequenceUpdates })
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadClassPlans();
+                        this.$root.showNotification('Sequence reordered successfully', 'success');
+                    } else {
+                        throw new Error('Failed to reorder sequences');
+                    }
+                } catch (error) {
+                    console.error('Error reordering sequences:', error);
+                    this.$root.showNotification('Failed to reorder sequences', 'error');
+                } finally {
+                    this.draggedSequence = null;
+                }
+            },
+            
+            async loadDashboardStats() {
+                try {
+                    const response = await fetch('/api/instructor/dashboard/stats', {
+                        headers: {
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        this.dashboardStats = await response.json();
+                    } else {
+                        throw new Error('Failed to load dashboard stats');
+                    }
+                } catch (error) {
+                    console.error('Error loading dashboard stats:', error);
+                }
+            },
+            
+            async duplicatePlan(plan) {
+                const newTitle = prompt('Enter title for the duplicated class plan:', `${plan.title} (Copy)`);
+                if (!newTitle) return;
+                
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/duplicate`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        },
+                        body: JSON.stringify({
+                            new_title: newTitle,
+                            copy_sequences: true
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadClassPlans();
+                        this.$root.showNotification('Class plan duplicated successfully', 'success');
+                    } else {
+                        throw new Error('Failed to duplicate class plan');
+                    }
+                } catch (error) {
+                    console.error('Error duplicating class plan:', error);
+                    this.$root.showNotification('Failed to duplicate class plan', 'error');
+                }
+            },
+            
+            formatDate(dateString) {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            },
+            
+            formatDuration(minutes) {
+                if (!minutes) return 'N/A';
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+            }
+        }
+    }
+</script>
+{% endblock %}

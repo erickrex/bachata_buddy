@@ -31,6 +31,16 @@ class MediaController(BaseController):
             """Serve the main application page."""
             return self.templates.TemplateResponse("index.html", {"request": request})
         
+        @self.router.get("/collection", response_class=HTMLResponse)
+        async def collection_page(request: Request):
+            """Serve the collection management page."""
+            return self.templates.TemplateResponse("collection.html", {"request": request})
+        
+        @self.router.get("/instructor", response_class=HTMLResponse)
+        async def instructor_page(request: Request):
+            """Serve the instructor dashboard page."""
+            return self.templates.TemplateResponse("instructor.html", {"request": request})
+        
         @self.router.get("/health")
         async def health_check():
             """Comprehensive health check endpoint."""

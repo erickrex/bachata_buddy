@@ -1,467 +1,420 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bachata Choreography Generator</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-        
-        .header h1 {
-            color: #333;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
-        
-        .form-group {
-            margin-bottom: 25px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-        }
-        
-        input[type="url"], select {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-        
-        input[type="url"]:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .youtube-input {
-            display: none;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: transform 0.2s ease;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .progress-container {
-            display: none;
-            margin-top: 30px;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 20px;
-            background: #e1e5e9;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 15px;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        
-        .progress-text {
-            text-align: center;
-            color: #666;
-            font-weight: 600;
-        }
-        
-        .result-container {
-            display: none;
-            margin-top: 30px;
-        }
-        
-        .video-container {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        
-        video {
-            width: 100%;
-            max-width: 500px;
-            border-radius: 10px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        
-        .result-info {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-        
-        .result-info h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-        
-        .result-info p {
-            color: #666;
-            margin-bottom: 8px;
-        }
-        
-        .error-container {
-            display: none;
-            background: #fee;
-            border: 2px solid #fcc;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-            color: #c33;
-        }
-        
-        .new-generation-btn {
-            background: #28a745;
-            margin-top: 20px;
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: 20px;
-            }
-            
-            .header h1 {
-                font-size: 2em;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🕺 Bachata Choreography Generator</h1>
-            <p>Create personalized dance sequences from your favorite Bachata songs</p>
+{% extends "base.html" %}
+
+{% block title %}Bachata Choreography Generator{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center p-4" x-data="choreographyGenerator()">
+    <div class="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 max-w-2xl w-full animate-fade-in">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h2 class="text-4xl font-bold text-gray-900 mb-4">
+                Create Your Choreography
+            </h2>
+            <p class="text-gray-600 text-lg">
+                Generate personalized dance sequences from your favorite Bachata songs
+            </p>
         </div>
         
-        <form id="choreographyForm">
-            <div class="form-group">
-                <label for="song_selection">Select Song</label>
-                <select id="song_selection" name="song_selection" onchange="toggleYouTubeInput()">
-                    <option value="">Choose a song...</option>
-                    <option value="data/songs/Amor.mp3">Amor</option>
-                    <option value="data/songs/Angel.mp3">Angel</option>
-                    <option value="data/songs/Aventura.mp3">Aventura</option>
-                    <option value="data/songs/Besito.mp3">Besito</option>
-                    <option value="data/songs/Bubalu.mp3">Bubalu</option>
-                    <option value="data/songs/Chayanne.mp3">Chayanne</option>
-                    <option value="data/songs/Corazoncandado.mp3">Corazón Candado</option>
-                    <option value="data/songs/Delmar.mp3">Del Mar</option>
-                    <option value="data/songs/Desnudate.mp3">Desnúdate</option>
-                    <option value="data/songs/Emborrachare.mp3">Me Emborracharé</option>
-                    <option value="data/songs/Nas.mp3">Old Town Road (Bachata)</option>
-                    <option value="data/songs/Secreto.mp3">Este Secreto</option>
-                    <option value="data/songs/Suegra.mp3">Suegra</option>
-                    <option value="data/songs/Temevas.mp3">Te Me Vas</option>
-                    <option value="data/songs/Veneno.mp3">Veneno</option>
-                    <option value="new_song">New song (YouTube URL)</option>
-                </select>
-            </div>
-            
-            <div class="form-group youtube-input" id="youtubeInput">
-                <label for="youtube_url">YouTube URL</label>
-                <input 
-                    type="url" 
-                    id="youtube_url" 
-                    name="youtube_url" 
-                    placeholder="https://www.youtube.com/watch?v=..." 
-                >
-            </div>
-            
-            <button type="submit" class="btn" id="generateBtn">
-                Create Choreography
-            </button>
-        </form>
-        
-        <div class="progress-container" id="progressContainer">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-            <div class="progress-text" id="progressText">Starting...</div>
+        <!-- Main Form -->
+        <div x-show="!isGenerating && !result && !error" x-transition:enter="transition ease-out duration-300">
+            <form hx-post="/api/choreography" 
+                  hx-trigger="submit"
+                  hx-target="#generation-response"
+                  hx-swap="innerHTML"
+                  @htmx:before-request="startGeneration()"
+                  @htmx:after-request="handleGenerationResponse($event)"
+                  @submit="prepareFormData($event)"
+                  class="space-y-6">
+                
+                <!-- Song Selection -->
+                <div>
+                    <label for="song_selection" class="block text-sm font-semibold text-gray-700 mb-3">
+                        Select Song
+                    </label>
+                    <select id="song_selection" 
+                            x-model="selectedSong"
+                            @change="toggleYouTubeInput()"
+                            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-gray-900">
+                        <option value="">Choose a song...</option>
+                        <option value="data/songs/Amor.mp3">Amor</option>
+                        <option value="data/songs/Angel.mp3">Angel</option>
+                        <option value="data/songs/Aventura.mp3">Aventura</option>
+                        <option value="data/songs/Besito.mp3">Besito</option>
+                        <option value="data/songs/Bubalu.mp3">Bubalu</option>
+                        <option value="data/songs/Chayanne.mp3">Chayanne</option>
+                        <option value="data/songs/Corazoncandado.mp3">Corazón Candado</option>
+                        <option value="data/songs/Delmar.mp3">Del Mar</option>
+                        <option value="data/songs/Desnudate.mp3">Desnúdate</option>
+                        <option value="data/songs/Emborrachare.mp3">Me Emborracharé</option>
+                        <option value="data/songs/Nas.mp3">Old Town Road (Bachata)</option>
+                        <option value="data/songs/Secreto.mp3">Este Secreto</option>
+                        <option value="data/songs/Suegra.mp3">Suegra</option>
+                        <option value="data/songs/Temevas.mp3">Te Me Vas</option>
+                        <option value="data/songs/Veneno.mp3">Veneno</option>
+                        <option value="new_song">New song (YouTube URL)</option>
+                    </select>
+                </div>
+                
+                <!-- YouTube URL Input -->
+                <div x-show="selectedSong === 'new_song'" 
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0 transform -translate-y-2"
+                     x-transition:enter-end="opacity-100 transform translate-y-0">
+                    <label for="youtube_url" class="block text-sm font-semibold text-gray-700 mb-3">
+                        YouTube URL
+                    </label>
+                    <input type="url" 
+                           id="youtube_url" 
+                           x-model="youtubeUrl"
+                           placeholder="https://www.youtube.com/watch?v=..."
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200">
+                </div>
+                
+                <!-- Hidden fields that will be populated by JavaScript -->
+                <input type="hidden" name="youtube_url" x-model="getYoutubeUrl()">
+                <input type="hidden" name="difficulty" value="intermediate">
+                <input type="hidden" name="quality_mode" value="balanced">
+                
+                <div id="generation-response"></div>
+                
+                <!-- Generate Button -->
+                <button type="submit" 
+                        :disabled="!canGenerate()"
+                        class="w-full bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-4 rounded-xl font-bold text-lg hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                    <span x-show="!isGenerating">Create Choreography</span>
+                    <span x-show="isGenerating" class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                    </span>
+                </button>
+            </form>
         </div>
         
-        <div class="result-container" id="resultContainer">
-            <div class="video-container">
-                <video id="resultVideo" controls>
+        <!-- Progress Display -->
+        <div x-show="isGenerating" 
+             x-transition:enter="transition ease-out duration-300"
+             class="space-y-6">
+            
+            <div class="text-center">
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">Generating Your Choreography</h3>
+                <p class="text-gray-600" x-text="progressMessage">Starting...</p>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                <div class="bg-gradient-to-r from-primary-500 to-secondary-500 h-4 rounded-full transition-all duration-500 ease-out"
+                     :style="`width: ${progress}%`"></div>
+            </div>
+            
+            <div class="text-center">
+                <span class="text-2xl font-bold text-primary-600" x-text="`${progress}%`"></span>
+            </div>
+        </div>
+        
+        <!-- Results Display -->
+        <div x-show="result" 
+             x-transition:enter="transition ease-out duration-300"
+             class="space-y-6">
+            
+            <div class="text-center">
+                <h3 class="text-2xl font-bold text-green-600 mb-4">🎉 Choreography Complete!</h3>
+            </div>
+            
+            <!-- Video Player -->
+            <div class="text-center">
+                <video x-show="result" 
+                       :src="result ? `/api/video/${result.video_filename}` : ''"
+                       controls
+                       class="w-full max-w-lg mx-auto rounded-xl shadow-lg">
                     Your browser does not support the video tag.
                 </video>
             </div>
             
-            <div class="result-info" id="resultInfo">
-                <h3>Generation Complete!</h3>
-                <p id="processingTime"></p>
-                <p id="sequenceDuration"></p>
-                <p id="movesAnalyzed"></p>
+            <!-- Result Info -->
+            <div class="bg-gray-50 rounded-xl p-6 space-y-3">
+                <h4 class="font-bold text-gray-900 text-lg">Generation Details</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="text-center">
+                        <p class="text-gray-600">Processing Time</p>
+                        <p class="font-semibold text-gray-900" x-text="result ? `${result.processing_time.toFixed(1)}s` : ''"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-gray-600">Sequence Duration</p>
+                        <p class="font-semibold text-gray-900" x-text="result ? `${result.sequence_duration.toFixed(1)}s` : ''"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-gray-600">Moves Analyzed</p>
+                        <p class="font-semibold text-gray-900" x-text="result ? result.moves_analyzed : ''"></p>
+                    </div>
+                </div>
             </div>
             
-            <button type="button" class="btn new-generation-btn" onclick="resetForm()">
-                Generate Another Choreography
-            </button>
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4">
+                <template x-if="$root.user.isAuthenticated">
+                    <button @click="saveToCollection()" 
+                            class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-semibold transition-colors duration-200">
+                        Save to Collection
+                    </button>
+                </template>
+                
+                <button @click="resetForm()" 
+                        class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-xl font-semibold transition-colors duration-200">
+                    Generate Another
+                </button>
+            </div>
         </div>
         
-        <div class="error-container" id="errorContainer">
-            <h3>Generation Failed</h3>
-            <p id="errorMessage"></p>
-            <button type="button" class="btn new-generation-btn" onclick="resetForm()">
+        <!-- Error Display -->
+        <div x-show="error" 
+             x-transition:enter="transition ease-out duration-300"
+             class="space-y-6">
+            
+            <div class="bg-red-50 border-2 border-red-200 rounded-xl p-6 text-center">
+                <div class="text-red-600 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-red-800 mb-2">Generation Failed</h3>
+                <p class="text-red-700" x-text="errorMessage"></p>
+            </div>
+            
+            <button @click="resetForm()" 
+                    class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-semibold transition-colors duration-200">
                 Try Again
             </button>
         </div>
     </div>
+</div>
 
-    <script>
-        let currentTaskId = null;
-        let pollInterval = null;
-        
-        function toggleYouTubeInput() {
-            const songSelection = document.getElementById('song_selection');
-            const youtubeInput = document.getElementById('youtubeInput');
-            const youtubeUrl = document.getElementById('youtube_url');
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function choreographyGenerator() {
+        return {
+            // Form state
+            selectedSong: '',
+            youtubeUrl: '',
             
-            if (songSelection.value === 'new_song') {
-                youtubeInput.style.display = 'block';
-                youtubeUrl.required = true;
-            } else {
-                youtubeInput.style.display = 'none';
-                youtubeUrl.required = false;
-                youtubeUrl.value = '';
-            }
-        }
-        
-        document.getElementById('choreographyForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+            // Generation state
+            isGenerating: false,
+            currentTaskId: null,
+            pollInterval: null,
+            progress: 0,
+            progressMessage: 'Starting...',
             
-            const formData = new FormData(e.target);
-            const songSelection = formData.get('song_selection');
-            const youtubeUrl = formData.get('youtube_url');
+            // Results
+            result: null,
+            error: false,
+            errorMessage: '',
             
-            // Determine audio input
-            let audioInput;
-            if (songSelection === 'new_song') {
-                if (!youtubeUrl) {
-                    showError('Please enter a YouTube URL');
-                    return;
+            // Form validation
+            canGenerate() {
+                if (this.selectedSong === 'new_song') {
+                    return this.youtubeUrl.trim() !== '';
                 }
-                audioInput = youtubeUrl;
-            } else if (songSelection) {
-                audioInput = songSelection;
-            } else {
-                showError('Please select a song or enter a YouTube URL');
-                return;
-            }
+                return this.selectedSong !== '';
+            },
             
-            const data = {
-                youtube_url: audioInput,  // The API expects this field name
-                difficulty: 'intermediate',  // Default difficulty
-                quality_mode: 'balanced'     // Default quality mode
-            };
+            // Toggle YouTube input visibility
+            toggleYouTubeInput() {
+                if (this.selectedSong !== 'new_song') {
+                    this.youtubeUrl = '';
+                }
+            },
             
-            try {
-                // Show progress and disable form
-                showProgress();
+            // Get the YouTube URL for the API
+            getYoutubeUrl() {
+                if (this.selectedSong === 'new_song') {
+                    return this.youtubeUrl;
+                }
+                return this.selectedSong;
+            },
+            
+            // Prepare form data before submission
+            prepareFormData(event) {
+                // The hidden input will automatically get the value from getYoutubeUrl()
+                // No additional processing needed since Alpine.js handles x-model
+            },
+            
+            // Start generation process
+            startGeneration() {
+                this.isGenerating = true;
+                this.result = null;
+                this.error = false;
+                this.progress = 0;
+                this.progressMessage = 'Starting generation...';
+            },
+            
+            // Handle HTMX response
+            handleGenerationResponse(event) {
+                const xhr = event.detail.xhr;
                 
-                // Start choreography generation
-                const response = await fetch('/api/choreography', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        this.currentTaskId = response.task_id;
+                        this.startPolling();
+                    } catch (e) {
+                        console.error('Error parsing response:', e);
+                        this.showError('Failed to start generation. Please try again.');
+                    }
+                } else {
+                    let errorMsg = 'Failed to start generation. Please try again.';
+                    try {
+                        const errorData = JSON.parse(xhr.responseText);
+                        
+                        // Handle different error formats
+                        if (errorData.detail) {
+                            if (typeof errorData.detail === 'string') {
+                                errorMsg = errorData.detail;
+                            } else if (Array.isArray(errorData.detail)) {
+                                // Validation errors from FastAPI
+                                const validationErrors = errorData.detail.map(err => 
+                                    `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
+                                ).join(', ');
+                                errorMsg = `Validation error: ${validationErrors}`;
+                            } else if (errorData.detail.message) {
+                                errorMsg = errorData.detail.message;
+                            }
+                        } else if (errorData.message) {
+                            errorMsg = errorData.message;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing error response:', e);
+                        errorMsg = `Server error (${xhr.status}). Please try again.`;
+                    }
+                    this.showError(errorMsg);
+                }
+            },
+            
+            // Start polling for progress
+            startPolling() {
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
                 }
                 
-                const result = await response.json();
-                currentTaskId = result.task_id;
-                
-                // Start polling for progress
-                startPolling();
-                
-            } catch (error) {
-                console.error('Error starting generation:', error);
-                showError(error.message || 'Failed to start choreography generation. Please try again.');
-            }
-        });
-        
-        function showProgress() {
-            document.getElementById('choreographyForm').style.display = 'none';
-            document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('resultContainer').style.display = 'none';
-            document.getElementById('errorContainer').style.display = 'none';
-            
-            // Disable form controls
-            const formElements = document.querySelectorAll('#choreographyForm input, #choreographyForm select, #choreographyForm button');
-            formElements.forEach(element => element.disabled = true);
-        }
-        
-        function showResult(result) {
-            document.getElementById('progressContainer').style.display = 'none';
-            document.getElementById('resultContainer').style.display = 'block';
-            document.getElementById('errorContainer').style.display = 'none';
-            
-            // Set video source
-            const video = document.getElementById('resultVideo');
-            video.src = `/api/video/${result.video_filename}`;
-            
-            // Update result info
-            document.getElementById('processingTime').textContent = 
-                `Processing time: ${result.processing_time.toFixed(1)} seconds`;
-            document.getElementById('sequenceDuration').textContent = 
-                `Sequence duration: ${result.sequence_duration.toFixed(1)} seconds`;
-            document.getElementById('movesAnalyzed').textContent = 
-                `Moves analyzed: ${result.moves_analyzed}`;
-        }
-        
-        function showError(message) {
-            document.getElementById('progressContainer').style.display = 'none';
-            document.getElementById('resultContainer').style.display = 'none';
-            document.getElementById('errorContainer').style.display = 'block';
-            document.getElementById('errorMessage').textContent = message;
-            
-            // Re-enable form controls
-            const formElements = document.querySelectorAll('#choreographyForm input, #choreographyForm select, #choreographyForm button');
-            formElements.forEach(element => element.disabled = false);
-        }
-        
-        function resetForm() {
-            document.getElementById('choreographyForm').style.display = 'block';
-            document.getElementById('progressContainer').style.display = 'none';
-            document.getElementById('resultContainer').style.display = 'none';
-            document.getElementById('errorContainer').style.display = 'none';
-            
-            // Reset form values
-            document.getElementById('song_selection').value = '';
-            document.getElementById('youtube_url').value = '';
-            toggleYouTubeInput();
-            
-            // Reset progress
-            document.getElementById('progressFill').style.width = '0%';
-            document.getElementById('progressText').textContent = 'Starting...';
-            
-            // Re-enable form controls
-            const formElements = document.querySelectorAll('#choreographyForm input, #choreographyForm select, #choreographyForm button');
-            formElements.forEach(element => element.disabled = false);
+                this.pollInterval = setInterval(async () => {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/task/${this.currentTaskId}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const status = await response.json();
+                        
+                        // Update progress
+                        this.progress = status.progress || 0;
+                        this.progressMessage = status.message || 'Processing...';
+                        
+                        // Check if completed
+                        if (status.status === 'completed') {
+                            this.stopPolling();
+                            this.showResult(status.result);
+                        } else if (status.status === 'failed') {
+                            this.stopPolling();
+                            this.showError(status.error || status.message || 'Generation failed');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error polling status:', error);
+                        this.stopPolling();
+                        this.showError('Lost connection to server. Please try again.');
+                    }
+                }, 1000);
+            },
             
             // Stop polling
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
+            stopPolling() {
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                }
+            },
             
-            currentTaskId = null;
-        }
-        
-        function startPolling() {
-            if (pollInterval) {
-                clearInterval(pollInterval);
-            }
+            // Show results
+            showResult(resultData) {
+                this.isGenerating = false;
+                this.result = resultData;
+                this.error = false;
+                
+                // Show success notification
+                this.$root.showNotification('Choreography generated successfully!', 'success');
+            },
             
-            pollInterval = setInterval(async () => {
-                if (!currentTaskId) return;
+            // Show error
+            showError(message) {
+                this.isGenerating = false;
+                this.error = true;
+                this.errorMessage = message;
+                this.result = null;
+                
+                // Show error notification
+                this.$root.showNotification(message, 'error');
+            },
+            
+            // Reset form
+            resetForm() {
+                this.selectedSong = '';
+                this.youtubeUrl = '';
+                this.isGenerating = false;
+                this.result = null;
+                this.error = false;
+                this.progress = 0;
+                this.progressMessage = 'Starting...';
+                this.currentTaskId = null;
+                this.stopPolling();
+            },
+            
+            // Save to collection (requires authentication)
+            async saveToCollection() {
+                if (!this.result || !this.$root.user.isAuthenticated) {
+                    this.$root.showNotification('Please login to save choreographies', 'warning');
+                    return;
+                }
                 
                 try {
-                    const response = await fetch(`/api/task/${currentTaskId}`);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                    const response = await fetch('/api/collection/save', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        },
+                        body: JSON.stringify({
+                            title: `Choreography - ${new Date().toLocaleDateString()}`,
+                            video_filename: this.result.video_filename,
+                            metadata: {
+                                song: this.selectedSong === 'new_song' ? this.youtubeUrl : this.selectedSong,
+                                processing_time: this.result.processing_time,
+                                sequence_duration: this.result.sequence_duration,
+                                moves_analyzed: this.result.moves_analyzed
+                            }
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        this.$root.showNotification('Choreography saved to your collection!', 'success');
+                    } else {
+                        throw new Error('Failed to save choreography');
                     }
-                    
-                    const status = await response.json();
-                    
-                    // Update progress
-                    document.getElementById('progressFill').style.width = `${status.progress}%`;
-                    document.getElementById('progressText').textContent = status.message;
-                    
-                    // Check if completed
-                    if (status.status === 'completed') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        showResult(status.result);
-                    } else if (status.status === 'failed') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        showError(status.error || status.message || 'Generation failed');
-                    }
-                    
                 } catch (error) {
-                    console.error('Error polling status:', error);
-                    clearInterval(pollInterval);
-                    pollInterval = null;
-                    showError('Lost connection to server. Please try again.');
+                    console.error('Error saving to collection:', error);
+                    this.$root.showNotification('Failed to save choreography. Please try again.', 'error');
                 }
-            }, 1000); // Poll every 1 second for more responsive updates
-        }
-        
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (pollInterval) {
-                clearInterval(pollInterval);
+            },
+            
+            // Cleanup on destroy
+            destroy() {
+                this.stopPolling();
             }
-        });
-        
-        // Initialize the form state
-        document.addEventListener('DOMContentLoaded', () => {
-            toggleYouTubeInput();
-        });
-    </script>
-</body>
-</html>
+        }
+    }
+</script>
+{% endblock %}

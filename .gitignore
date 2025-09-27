@@ -2,7 +2,11 @@ __pycache__/
 bachata-coreography-generator/__pycache__/
 bachata-coreography-generator/.venv/
 bachata-coreography-generator/.env
+*.__pycache__/
+tests/__pycache__/
+data/Bachata_steps/
 
+data/choreography_metadata/
 data/songs/
 data/Bachata_steps/
 various/
@@ -20,6 +24,7 @@ bachata-choreography-generator/data/temp/
 bachata-choreography-generator/data/test_import.json
 bachata-choreography-generator/data/test_results/
 bachata-choreography-generator/data/choreography_metadata/
+data/choreography_metadata/
 .env
 .venv/
 

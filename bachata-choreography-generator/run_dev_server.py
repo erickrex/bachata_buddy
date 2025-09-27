@@ -1,10 +1,16 @@
+#!/usr/bin/env python3
 """
-Bachata Choreography Generator - Main FastAPI Application
+Development server that bypasses system requirements for testing authentication UI.
 """
+
 import logging
 import os
+import socket
 from pathlib import Path
 from contextlib import asynccontextmanager
+
+# Set environment variable to skip system validation
+os.environ["SKIP_SYSTEM_VALIDATION"] = "true"
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -31,8 +37,6 @@ from app.exceptions import (
     choreography_exception_handler, validation_exception_handler, 
     http_exception_handler, general_exception_handler
 )
-from app.validation import validate_system_requirements
-from app.services.resource_manager import resource_manager
 
 # Get application settings
 settings = get_settings()
@@ -44,43 +48,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Performance optimizations are now integrated directly into the services
-logger.info("🚀 Performance optimizations integrated - expect 20-40% faster generation")
+print("🚀 Starting Development Server (System validation bypassed)")
+
+def find_free_port(start_port=8000, max_attempts=10):
+    """Find a free port starting from start_port."""
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('localhost', port))
+                return port
+        except OSError:
+            continue
+    return None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
-    logger.info("Starting Bachata Choreography Generator API")
+    logger.info("Starting Bachata Choreography Generator API (Development Mode)")
     
     try:
         # Initialize database
         logger.info("Initializing database...")
         init_database()
         logger.info("Database initialized successfully")
-        
-        # Validate system requirements (can be skipped for development)
-        skip_validation = os.getenv("SKIP_SYSTEM_VALIDATION", "false").lower() == "true"
-        
-        if not skip_validation:
-            system_check = validate_system_requirements()
-            
-            if not system_check["valid"]:
-                logger.error("System requirements validation failed:")
-                for issue in system_check["issues"]:
-                    logger.error(f"  - {issue['type']}: {issue['message']}")
-                raise ServiceUnavailableError(
-                    message="System requirements not met",
-                    service_name="system",
-                    details=system_check
-                )
-        else:
-            logger.warning("⚠️  System requirements validation skipped (development mode)")
-            system_check = {"valid": True, "issues": [], "warnings": []}
-        
-        # Log warnings
-        for warning in system_check.get("warnings", []):
-            logger.warning(f"System warning - {warning['type']}: {warning['message']}")
         
         # Ensure required directories exist
         directories = [
@@ -94,13 +85,10 @@ async def lifespan(app: FastAPI):
         for directory in directories:
             Path(directory).mkdir(parents=True, exist_ok=True)
         
-        # Start resource management
-        await resource_manager.start_monitoring()
-        await resource_manager.schedule_cleanup(interval_hours=6)
-        
-        logger.info("API startup complete - all systems ready")
+        logger.info("Development server startup complete - authentication system ready")
         logger.info(f"Authentication service initialized with JWT algorithm: {settings.jwt_algorithm}")
         logger.info(f"Access token expiration: {settings.access_token_expire_minutes} minutes")
+        logger.info("⚠️  System validation bypassed for development")
         
     except Exception as e:
         logger.error(f"Startup failed: {e}")
@@ -109,22 +97,12 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    logger.info("Shutting down API")
-    
-    try:
-        # Shutdown resource manager (includes final cleanup)
-        await resource_manager.shutdown()
-        
-        # Cleanup will be handled by individual controllers
-        logger.info("API shutdown complete")
-        
-    except Exception as e:
-        logger.error(f"Error during shutdown: {e}")
+    logger.info("Shutting down development server")
 
 app = FastAPI(
-    title="Bachata Choreography Generator",
-    description="AI-powered Bachata choreography generator that creates dance sequences from YouTube music",
-    version="0.1.0",
+    title="Bachata Choreography Generator - Development",
+    description="AI-powered Bachata choreography generator (Development Mode)",
+    version="0.1.0-dev",
     lifespan=lifespan
 )
 
@@ -176,25 +154,19 @@ app.include_router(media_controller.get_router())
 
 
 
-def find_free_port(start_port=8000, max_attempts=10):
-    """Find a free port starting from start_port."""
-    import socket
-    for port in range(start_port, start_port + max_attempts):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('localhost', port))
-                return port
-        except OSError:
-            continue
-    return None
-
 if __name__ == "__main__":
+    # Find available port
     port = find_free_port()
     if port is None:
-        logger.error("Could not find an available port")
+        print("❌ Could not find an available port. Please check if other servers are running.")
         exit(1)
     
+    print("🎯 Development Server for Authentication UI Testing")
+    print("📝 This server bypasses system requirements validation")
+    print(f"🌐 Access the application at: http://localhost:{port}")
+    print("🔐 Test the authentication UI components")
     if port != 8000:
-        logger.info(f"Using port {port} instead of 8000 (port was busy)")
+        print(f"⚠️  Using port {port} instead of 8000 (port was busy)")
+    print("=" * 60)
     
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)

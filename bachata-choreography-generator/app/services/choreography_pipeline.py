@@ -895,27 +895,56 @@ class ChoreoGenerationPipeline:
     def _create_full_song_sequence(self, video_paths: List[str], target_duration: float) -> ChoreographySequence:
         """Create a sequence that fills the entire song duration by repeating moves as needed."""
         from ..models.video_models import ChoreographySequence, SelectedMove, TransitionType
+        import subprocess
+        import json
         
         moves = []
         current_time = 0.0
         move_index = 0
-        avg_move_duration = 8.0  # seconds per move
         
         logger.info(f"Creating full song sequence for {target_duration:.1f}s duration")
+        
+        # Get actual durations of video clips to create more accurate sequences
+        clip_durations = {}
+        for video_path in set(video_paths):  # Remove duplicates for efficiency
+            try:
+                cmd = [
+                    "ffprobe",
+                    "-v", "quiet",
+                    "-print_format", "json",
+                    "-show_format",
+                    video_path
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    info = json.loads(result.stdout)
+                    duration = float(info.get("format", {}).get("duration", 8.0))
+                    clip_durations[video_path] = min(duration, 12.0)  # Cap at 12 seconds
+                else:
+                    clip_durations[video_path] = 8.0  # Default fallback
+            except Exception as e:
+                logger.warning(f"Could not get duration for {video_path}: {e}")
+                clip_durations[video_path] = 8.0  # Default fallback
         
         # Keep adding moves until we reach the target duration
         while current_time < target_duration:
             # Cycle through available moves
             video_path = video_paths[move_index % len(video_paths)]
             
+            # Get the actual clip duration
+            clip_duration = clip_durations.get(video_path, 8.0)
+            
             # Calculate remaining time
             remaining_time = target_duration - current_time
             
-            # Use average move duration, but don't exceed remaining time
-            move_duration = min(avg_move_duration, remaining_time)
+            # Use actual clip duration, but don't exceed remaining time
+            move_duration = min(clip_duration, remaining_time)
             
-            # Don't create moves shorter than 4 seconds
-            if move_duration < 4.0:
+            # Don't create moves shorter than 3 seconds
+            if move_duration < 3.0:
+                # If remaining time is very small, extend the last move slightly
+                if moves and remaining_time > 0:
+                    moves[-1].duration += remaining_time
                 break
             
             move = SelectedMove(
@@ -923,7 +952,8 @@ class ChoreoGenerationPipeline:
                 video_path=video_path,
                 start_time=current_time,
                 duration=move_duration,
-                transition_type=TransitionType.CUT
+                transition_type=TransitionType.CUT,
+                original_duration=clip_duration
             )
             
             moves.append(move)
@@ -935,6 +965,15 @@ class ChoreoGenerationPipeline:
                 logger.warning("Reached maximum move limit, stopping sequence creation")
                 break
         
+        # Ensure we match the target duration exactly
+        if moves and abs(current_time - target_duration) > 0.5:
+            # Adjust the last move to match target duration exactly
+            duration_diff = target_duration - (current_time - moves[-1].duration)
+            if duration_diff > 2.0:  # Only adjust if reasonable
+                moves[-1].duration = duration_diff
+                current_time = target_duration
+                logger.info(f"Adjusted last move duration to match target: {duration_diff:.1f}s")
+        
         sequence = ChoreographySequence(
             moves=moves,
             total_duration=current_time,
@@ -944,7 +983,8 @@ class ChoreoGenerationPipeline:
                 "target_duration": target_duration,
                 "actual_duration": current_time,
                 "moves_used": len(moves),
-                "moves_repeated": move_index > len(video_paths)
+                "moves_repeated": move_index > len(video_paths),
+                "duration_matching": "improved_with_actual_clip_durations"
             }
         )
         

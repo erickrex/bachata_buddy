@@ -17,14 +17,7 @@
         
         <!-- Main Form -->
         <div x-show="!isGenerating && !result && !error" x-transition:enter="transition ease-out duration-300">
-            <form hx-post="/api/choreography" 
-                  hx-trigger="submit"
-                  hx-target="#generation-response"
-                  hx-swap="innerHTML"
-                  @htmx:before-request="startGeneration()"
-                  @htmx:after-request="handleGenerationResponse($event)"
-                  @submit="prepareFormData($event)"
-                  class="space-y-6">
+            <div class="space-y-6">
                 
                 <!-- Song Selection -->
                 <div>
@@ -70,15 +63,10 @@
                            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200">
                 </div>
                 
-                <!-- Hidden fields that will be populated by JavaScript -->
-                <input type="hidden" name="youtube_url" x-model="getYoutubeUrl()">
-                <input type="hidden" name="difficulty" value="intermediate">
-                <input type="hidden" name="quality_mode" value="balanced">
-                
                 <div id="generation-response"></div>
                 
                 <!-- Generate Button -->
-                <button type="submit" 
+                <button @click="submitChoreographyRequest()" 
                         :disabled="!canGenerate()"
                         class="w-full bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-4 rounded-xl font-bold text-lg hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
                     <span x-show="!isGenerating">Create Choreography</span>
@@ -90,7 +78,7 @@
                         Generating...
                     </span>
                 </button>
-            </form>
+            </div>
         </div>
         
         <!-- Progress Display -->
@@ -101,6 +89,7 @@
             <div class="text-center">
                 <h3 class="text-2xl font-bold text-gray-900 mb-2">Generating Your Choreography</h3>
                 <p class="text-gray-600" x-text="progressMessage">Starting...</p>
+                <p class="text-sm text-gray-500 mt-2">This usually takes 20-30 seconds</p>
             </div>
             
             <!-- Progress Bar -->
@@ -111,6 +100,14 @@
             
             <div class="text-center">
                 <span class="text-2xl font-bold text-primary-600" x-text="`${progress}%`"></span>
+            </div>
+            
+            <!-- Manual refresh button for connection issues -->
+            <div class="text-center">
+                <button @click="checkTaskStatus()" 
+                        class="text-sm text-gray-500 hover:text-gray-700 underline">
+                    Check Status Manually
+                </button>
             </div>
         </div>
         
@@ -236,10 +233,82 @@
                 return this.selectedSong;
             },
             
-            // Prepare form data before submission
-            prepareFormData(event) {
-                // The hidden input will automatically get the value from getYoutubeUrl()
-                // No additional processing needed since Alpine.js handles x-model
+            // Submit choreography request
+            async submitChoreographyRequest() {
+                if (!this.canGenerate()) {
+                    return;
+                }
+                
+                this.startGeneration();
+                
+                try {
+                    const requestData = {
+                        youtube_url: this.getYoutubeUrl(),
+                        difficulty: 'intermediate',
+                        quality_mode: 'balanced'
+                    };
+                    
+                    // Add timeout for initial request (10 seconds should be enough to start the task)
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000);
+                    
+                    const response = await fetch('/api/choreography', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestData),
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        this.currentTaskId = result.task_id;
+                        this.progressMessage = 'Generation started, analyzing music...';
+                        this.startPolling();
+                    } else {
+                        const errorData = await response.json();
+                        this.handleApiError(errorData, response.status);
+                    }
+                } catch (error) {
+                    console.error('Error submitting choreography request:', error);
+                    if (error.name === 'AbortError') {
+                        this.showError('Request timed out. Please try again.');
+                    } else {
+                        this.showError('Failed to connect to server. Please try again.');
+                    }
+                }
+            },
+            
+            // Handle API errors
+            handleApiError(errorData, status) {
+                let errorMsg = 'Failed to start generation. Please try again.';
+                
+                try {
+                    // Handle different error formats
+                    if (errorData.detail) {
+                        if (typeof errorData.detail === 'string') {
+                            errorMsg = errorData.detail;
+                        } else if (Array.isArray(errorData.detail)) {
+                            // Validation errors from FastAPI
+                            const validationErrors = errorData.detail.map(err => 
+                                `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
+                            ).join(', ');
+                            errorMsg = `Validation error: ${validationErrors}`;
+                        } else if (errorData.detail.message) {
+                            errorMsg = errorData.detail.message;
+                        }
+                    } else if (errorData.message) {
+                        errorMsg = errorData.message;
+                    }
+                } catch (e) {
+                    console.error('Error parsing error response:', e);
+                    errorMsg = `Server error (${status}). Please try again.`;
+                }
+                
+                this.showError(errorMsg);
             },
             
             // Start generation process
@@ -251,64 +320,38 @@
                 this.progressMessage = 'Starting generation...';
             },
             
-            // Handle HTMX response
-            handleGenerationResponse(event) {
-                const xhr = event.detail.xhr;
-                
-                if (xhr.status === 200) {
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        this.currentTaskId = response.task_id;
-                        this.startPolling();
-                    } catch (e) {
-                        console.error('Error parsing response:', e);
-                        this.showError('Failed to start generation. Please try again.');
-                    }
-                } else {
-                    let errorMsg = 'Failed to start generation. Please try again.';
-                    try {
-                        const errorData = JSON.parse(xhr.responseText);
-                        
-                        // Handle different error formats
-                        if (errorData.detail) {
-                            if (typeof errorData.detail === 'string') {
-                                errorMsg = errorData.detail;
-                            } else if (Array.isArray(errorData.detail)) {
-                                // Validation errors from FastAPI
-                                const validationErrors = errorData.detail.map(err => 
-                                    `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
-                                ).join(', ');
-                                errorMsg = `Validation error: ${validationErrors}`;
-                            } else if (errorData.detail.message) {
-                                errorMsg = errorData.detail.message;
-                            }
-                        } else if (errorData.message) {
-                            errorMsg = errorData.message;
-                        }
-                    } catch (e) {
-                        console.error('Error parsing error response:', e);
-                        errorMsg = `Server error (${xhr.status}). Please try again.`;
-                    }
-                    this.showError(errorMsg);
-                }
-            },
-            
             // Start polling for progress
             startPolling() {
                 if (this.pollInterval) {
                     clearInterval(this.pollInterval);
                 }
                 
+                let pollAttempts = 0;
+                const maxPollAttempts = 3; // Allow 3 consecutive failures before giving up
+                let consecutiveFailures = 0;
+                
                 this.pollInterval = setInterval(async () => {
                     if (!this.currentTaskId) return;
                     
                     try {
-                        const response = await fetch(`/api/task/${this.currentTaskId}`);
+                        // Increase timeout for fetch request to 30 seconds
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 30000);
+                        
+                        const response = await fetch(`/api/task/${this.currentTaskId}`, {
+                            signal: controller.signal
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
                         if (!response.ok) {
                             throw new Error(`HTTP error! status: ${response.status}`);
                         }
                         
                         const status = await response.json();
+                        
+                        // Reset failure counter on successful request
+                        consecutiveFailures = 0;
                         
                         // Update progress
                         this.progress = status.progress || 0;
@@ -324,11 +367,20 @@
                         }
                         
                     } catch (error) {
-                        console.error('Error polling status:', error);
-                        this.stopPolling();
-                        this.showError('Lost connection to server. Please try again.');
+                        consecutiveFailures++;
+                        console.warn(`Polling attempt ${consecutiveFailures} failed:`, error);
+                        
+                        // Only show error after multiple consecutive failures
+                        if (consecutiveFailures >= maxPollAttempts) {
+                            console.error('Max polling failures reached:', error);
+                            this.stopPolling();
+                            this.showError('Connection lost. The generation may still be running - please check back in a few minutes.');
+                        } else {
+                            // Update progress message to show we're retrying
+                            this.progressMessage = `Connection issue, retrying... (${consecutiveFailures}/${maxPollAttempts})`;
+                        }
                     }
-                }, 1000);
+                }, 2000); // Increased polling interval to 2 seconds to reduce server load
             },
             
             // Stop polling
@@ -336,6 +388,40 @@
                 if (this.pollInterval) {
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
+                }
+            },
+            
+            // Manual status check
+            async checkTaskStatus() {
+                if (!this.currentTaskId) return;
+                
+                try {
+                    const response = await fetch(`/api/task/${this.currentTaskId}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const status = await response.json();
+                    
+                    // Update progress
+                    this.progress = status.progress || 0;
+                    this.progressMessage = status.message || 'Processing...';
+                    
+                    // Check if completed
+                    if (status.status === 'completed') {
+                        this.stopPolling();
+                        this.showResult(status.result);
+                    } else if (status.status === 'failed') {
+                        this.stopPolling();
+                        this.showError(status.error || status.message || 'Generation failed');
+                    } else {
+                        // If still running, restart polling
+                        this.startPolling();
+                    }
+                    
+                } catch (error) {
+                    console.error('Error checking task status:', error);
+                    this.progressMessage = 'Connection issue - please try again';
                 }
             },
             

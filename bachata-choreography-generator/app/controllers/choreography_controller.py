@@ -2,11 +2,12 @@
 Choreography controller for dance sequence generation and task management.
 """
 import asyncio
+import json
 import uuid
 from typing import Dict, Optional
 from pathlib import Path
 
-from fastapi import HTTPException, BackgroundTasks
+from fastapi import HTTPException, BackgroundTasks, Form
 from pydantic import BaseModel
 
 from .base_controller import BaseController
@@ -65,8 +66,11 @@ class ChoreographyController(BaseController):
         
         @self.router.post("/choreography", response_model=ChoreographyResponse)
         async def create_choreography(
-            request: ChoreographyRequestValidator,
-            background_tasks: BackgroundTasks
+            background_tasks: BackgroundTasks,
+            youtube_url: str = Form(...),
+            difficulty: str = Form(default="intermediate"),
+            quality_mode: str = Form(default="balanced"),
+            energy_level: str = Form(default="medium")
         ):
             """
             Create a new choreography from a YouTube URL.
@@ -76,9 +80,9 @@ class ChoreographyController(BaseController):
             """
             try:
                 self.log_request("create_choreography", {
-                    "url": request.youtube_url,
-                    "difficulty": request.difficulty,
-                    "quality_mode": request.quality_mode
+                    "url": youtube_url,
+                    "difficulty": difficulty,
+                    "quality_mode": quality_mode
                 })
                 
                 # Pre-flight system checks
@@ -91,11 +95,11 @@ class ChoreographyController(BaseController):
                     )
                 
                 # Enhanced YouTube URL validation
-                url_validation = await validate_youtube_url_async(request.youtube_url)
+                url_validation = await validate_youtube_url_async(youtube_url)
                 if not url_validation["valid"]:
                     raise YouTubeDownloadError(
                         message=url_validation.get("message", "Invalid YouTube URL"),
-                        url=request.youtube_url,
+                        url=youtube_url,
                         details=url_validation
                     )
                 
@@ -121,9 +125,9 @@ class ChoreographyController(BaseController):
                     "error": None,
                     "created_at": asyncio.get_event_loop().time(),
                     "request_params": {
-                        "difficulty": request.difficulty,
-                        "quality_mode": request.quality_mode,
-                        "energy_level": request.energy_level
+                        "difficulty": difficulty,
+                        "quality_mode": quality_mode,
+                        "energy_level": energy_level
                     },
                     "video_info": url_validation.get("details", {})
                 }
@@ -132,13 +136,13 @@ class ChoreographyController(BaseController):
                 background_tasks.add_task(
                     self._generate_choreography_task_safe,
                     task_id,
-                    request.youtube_url,
-                    request.difficulty,
-                    request.energy_level,
-                    request.quality_mode
+                    youtube_url,
+                    difficulty,
+                    energy_level,
+                    quality_mode
                 )
                 
-                self.logger.info(f"Started choreography generation task {task_id} for URL: {request.youtube_url}")
+                self.logger.info(f"Started choreography generation task {task_id} for URL: {youtube_url}")
                 self.logger.info(f"Video info: {url_validation.get('details', {})}")
                 
                 return ChoreographyResponse(
@@ -259,6 +263,103 @@ class ChoreographyController(BaseController):
             except Exception as e:
                 self.log_error("validate_youtube_url", e)
                 raise HTTPException(status_code=500, detail="Error validating YouTube URL")
+        
+        @self.router.get("/video/{filename}")
+        async def serve_video(filename: str):
+            """Serve generated video files."""
+            from fastapi.responses import FileResponse
+            from pathlib import Path
+            import os
+            
+            try:
+                # Sanitize filename to prevent directory traversal
+                filename = os.path.basename(filename)
+                
+                # Check if file exists in output directory
+                video_path = Path("data/output") / filename
+                
+                if not video_path.exists() or not video_path.is_file():
+                    raise HTTPException(status_code=404, detail="Video file not found")
+                
+                # Verify it's a video file
+                if not filename.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                    raise HTTPException(status_code=400, detail="Invalid file type")
+                
+                return FileResponse(
+                    path=str(video_path),
+                    media_type="video/mp4",
+                    filename=filename
+                )
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                self.log_error("serve_video", e)
+                raise HTTPException(status_code=500, detail="Error serving video file")
+        
+        @self.router.get("/task/progress")
+        async def get_current_task_progress():
+            """Get progress for the most recent active task (for HTMX polling)."""
+            from fastapi.responses import HTMLResponse
+            
+            try:
+                # Find the most recent active task
+                active_tasks = [
+                    (task_id, task_data) for task_id, task_data in self.active_tasks.items()
+                    if task_data["status"] in ["started", "running"]
+                ]
+                
+                if not active_tasks:
+                    return HTMLResponse("""
+                    <script>
+                        const container = document.querySelector('[x-data*="choreographyGenerator"]');
+                        if (container && container._x_dataStack) {
+                            const data = container._x_dataStack[0];
+                            data.isGenerating = false;
+                        }
+                    </script>
+                    """)
+                
+                # Get the most recent task
+                task_id, task_data = max(active_tasks, key=lambda x: x[1].get("created_at", 0))
+                
+                # Escape quotes in messages
+                message = task_data['message'].replace("'", "\\'").replace('"', '\\"')
+                
+                # Update progress in the parent component
+                progress_script = f"""
+                <script>
+                    const container = document.querySelector('[x-data*="choreographyGenerator"]');
+                    if (container && container._x_dataStack) {{
+                        const data = container._x_dataStack[0];
+                        data.progress = {task_data['progress']};
+                        data.progressMessage = '{message}';
+                        data.currentTaskId = '{task_id}';
+                        
+                        // Check if completed
+                        if ('{task_data['status']}' === 'completed') {{
+                            data.showResult({json.dumps(task_data.get('result', {}))});
+                        }} else if ('{task_data['status']}' === 'failed') {{
+                            const errorMsg = '{task_data.get('error', 'Generation failed').replace("'", "\\'").replace('"', '\\"')}';
+                            data.showError(errorMsg);
+                        }}
+                    }}
+                </script>
+                """
+                
+                return HTMLResponse(progress_script)
+                
+            except Exception as e:
+                self.log_error("get_current_task_progress", e)
+                return HTMLResponse("""
+                <script>
+                    const container = document.querySelector('[x-data*="choreographyGenerator"]');
+                    if (container && container._x_dataStack) {
+                        const data = container._x_dataStack[0];
+                        data.showError('Error checking progress');
+                    }
+                </script>
+                """)
     
     async def _generate_choreography_task_safe(
         self,

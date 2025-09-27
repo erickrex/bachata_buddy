@@ -3,7 +3,7 @@ Authentication controller for user registration, login, and session management.
 """
 
 from typing import Annotated
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Form
 from sqlalchemy.orm import Session
 
 from .base_controller import BaseController
@@ -49,8 +49,11 @@ class AuthController(BaseController):
             }
         )
         async def register(
-            request: UserRegistrationRequest,
-            db: Annotated[Session, Depends(get_database_session)]
+            db: Annotated[Session, Depends(get_database_session)],
+            email: str = Form(...),
+            password: str = Form(...),
+            display_name: str = Form(...),
+            is_instructor: str = Form("false")
         ):
             """
             Register a new user account.
@@ -59,13 +62,30 @@ class AuthController(BaseController):
             Returns authentication tokens upon successful registration.
             """
             try:
+                # Convert string boolean to actual boolean
+                is_instructor_bool = is_instructor.lower() in ('true', 'on', '1', 'yes')
+                
+                # Validate input using Pydantic model
+                try:
+                    request_data = UserRegistrationRequest(
+                        email=email,
+                        password=password,
+                        display_name=display_name,
+                        is_instructor=is_instructor_bool
+                    )
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Validation error: {str(e)}"
+                    )
+                
                 # Register the user
                 user = await self.auth_service.register_user(
                     db=db,
-                    email=request.email,
-                    password=request.password,
-                    display_name=request.display_name,
-                    is_instructor=request.is_instructor
+                    email=request_data.email,
+                    password=request_data.password,
+                    display_name=request_data.display_name,
+                    is_instructor=request_data.is_instructor
                 )
                 
                 if not user:
@@ -119,8 +139,9 @@ class AuthController(BaseController):
             }
         )
         async def login(
-            request: UserLoginRequest,
-            db: Annotated[Session, Depends(get_database_session)]
+            db: Annotated[Session, Depends(get_database_session)],
+            email: str = Form(...),
+            password: str = Form(...)
         ):
             """
             Authenticate user and create session.
@@ -129,8 +150,20 @@ class AuthController(BaseController):
             Implements rate limiting to prevent brute force attacks.
             """
             try:
+                # Validate input using Pydantic model
+                try:
+                    request_data = UserLoginRequest(
+                        email=email,
+                        password=password
+                    )
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Validation error: {str(e)}"
+                    )
+                
                 # Check rate limiting first
-                if self.auth_service.is_rate_limited(request.email):
+                if self.auth_service.is_rate_limited(request_data.email):
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         detail="Too many login attempts. Please try again later.",
@@ -140,8 +173,8 @@ class AuthController(BaseController):
                 # Authenticate user
                 user = await self.auth_service.authenticate_user(
                     db=db,
-                    email=request.email,
-                    password=request.password
+                    email=request_data.email,
+                    password=request_data.password
                 )
                 
                 if not user:

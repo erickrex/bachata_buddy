@@ -84,14 +84,22 @@
             <template x-for="choreography in choreographies" :key="choreography.id">
                 <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden animate-fade-in">
                     <!-- Video Thumbnail/Player -->
-                    <div class="relative">
+                    <div class="relative cursor-pointer" @click="playChoreography(choreography)">
                         <video :src="getVideoUrl(choreography)" 
                                :poster="getThumbnailUrl(choreography)"
-                               controls
                                preload="metadata"
-                               class="w-full h-48 object-cover">
+                               class="w-full h-48 object-cover hover:opacity-90 transition-opacity duration-200">
                             Your browser does not support the video tag.
                         </video>
+                        
+                        <!-- Play Overlay -->
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity duration-200">
+                            <div class="bg-white/90 rounded-full p-4">
+                                <svg class="w-8 h-8 text-primary-600" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                            </div>
+                        </div>
                         
                         <!-- Difficulty Badge -->
                         <div class="absolute top-2 right-2">
@@ -237,6 +245,52 @@
         </div>
     </div>
     
+    <!-- Video Player Modal -->
+    <div x-show="showVideoModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+         @click.self="closeVideoModal()"
+         @keydown.escape.window="closeVideoModal()">
+        
+        <div class="relative max-w-6xl max-h-full w-full h-full flex items-center justify-center p-4">
+            <!-- Close Button -->
+            <button @click="closeVideoModal()" 
+                    class="absolute top-4 right-4 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-colors duration-200">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            
+            <!-- Video Player -->
+            <div class="w-full max-w-4xl">
+                <video x-show="currentVideo" 
+                       :src="currentVideo?.url"
+                       controls
+                       autoplay
+                       class="w-full h-auto max-h-[80vh] rounded-lg shadow-2xl"
+                       @loadedmetadata="onVideoLoaded()">
+                    Your browser does not support the video tag.
+                </video>
+                
+                <!-- Video Info -->
+                <div x-show="currentVideo" class="mt-4 text-white text-center">
+                    <h3 class="text-2xl font-bold mb-2" x-text="currentVideo?.title"></h3>
+                    <div class="flex items-center justify-center space-x-6 text-sm">
+                        <span x-text="'Difficulty: ' + (currentVideo?.difficulty || 'Unknown')"></span>
+                        <span x-text="'Duration: ' + formatDuration(currentVideo?.duration)"></span>
+                        <span x-show="currentVideo?.music_info?.title" 
+                              x-text="'Song: ' + currentVideo?.music_info?.title"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Delete Confirmation Modal -->
     <div x-show="showDeleteModal" 
          x-transition:enter="transition ease-out duration-300"
@@ -301,6 +355,8 @@ block extra_scripts %}
             limit: 12,
             showDeleteModal: false,
             choreographyToDelete: null,
+            showVideoModal: false,
+            currentVideo: null,
             
             async init() {
                 await this.loadCollection();
@@ -309,6 +365,14 @@ block extra_scripts %}
             async loadCollection() {
                 try {
                     this.loading = true;
+                    
+                    // Get token from localStorage directly
+                    const token = localStorage.getItem('auth_token');
+                    if (!token) {
+                        console.error('No authentication token found');
+                        this.$root?.showNotification?.('Please log in to view your collection', 'error');
+                        return;
+                    }
                     
                     const params = new URLSearchParams({
                         page: this.currentPage,
@@ -327,7 +391,7 @@ block extra_scripts %}
                     
                     const response = await fetch(`/api/collection/list?${params}`, {
                         headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
+                            'Authorization': `Bearer ${token}`
                         }
                     });
                     
@@ -342,7 +406,11 @@ block extra_scripts %}
                     }
                 } catch (error) {
                     console.error('Error loading collection:', error);
-                    this.$root.showNotification('Failed to load collection', 'error');
+                    if (this.$root?.showNotification) {
+                        this.$root.showNotification('Failed to load collection', 'error');
+                    } else {
+                        alert('Failed to load collection. Please refresh the page.');
+                    }
                 } finally {
                     this.loading = false;
                 }
@@ -401,15 +469,25 @@ block extra_scripts %}
                 try {
                     this.showDeleteModal = false;
                     
+                    // Get token from localStorage directly
+                    const token = localStorage.getItem('auth_token');
+                    if (!token) {
+                        console.error('No authentication token found');
+                        this.$root?.showNotification?.('Please log in to delete choreographies', 'error');
+                        return;
+                    }
+                    
                     const response = await fetch(`/api/collection/${choreographyId}`, {
                         method: 'DELETE',
                         headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
+                            'Authorization': `Bearer ${token}`
                         }
                     });
                     
                     if (response.ok) {
-                        this.$root.showNotification('Choreography deleted successfully', 'success');
+                        if (this.$root?.showNotification) {
+                            this.$root.showNotification('Choreography deleted successfully', 'success');
+                        }
                         
                         // If this was the last item on the current page and we're not on page 1,
                         // go to the previous page
@@ -423,7 +501,11 @@ block extra_scripts %}
                     }
                 } catch (error) {
                     console.error('Error deleting choreography:', error);
-                    this.$root.showNotification('Failed to delete choreography', 'error');
+                    if (this.$root?.showNotification) {
+                        this.$root.showNotification('Failed to delete choreography', 'error');
+                    } else {
+                        alert('Failed to delete choreography. Please try again.');
+                    }
                 } finally {
                     this.choreographyToDelete = null;
                 }
@@ -442,11 +524,44 @@ block extra_scripts %}
                     link.click();
                     document.body.removeChild(link);
                     
-                    this.$root.showNotification('Download started', 'info');
+                    if (this.$root?.showNotification) {
+                        this.$root.showNotification('Download started', 'info');
+                    }
                 } catch (error) {
                     console.error('Error downloading choreography:', error);
-                    this.$root.showNotification('Failed to start download', 'error');
+                    if (this.$root?.showNotification) {
+                        this.$root.showNotification('Failed to start download', 'error');
+                    } else {
+                        alert('Failed to start download. Please try again.');
+                    }
                 }
+            },
+            
+            playChoreography(choreography) {
+                this.currentVideo = {
+                    url: this.getVideoUrl(choreography),
+                    title: choreography.title,
+                    difficulty: choreography.difficulty,
+                    duration: choreography.duration,
+                    music_info: choreography.music_info
+                };
+                this.showVideoModal = true;
+                
+                // Prevent body scrolling when modal is open
+                document.body.style.overflow = 'hidden';
+            },
+            
+            closeVideoModal() {
+                this.showVideoModal = false;
+                this.currentVideo = null;
+                
+                // Restore body scrolling
+                document.body.style.overflow = '';
+            },
+            
+            onVideoLoaded() {
+                // Video has loaded and is ready to play
+                console.log('Video loaded successfully');
             },
             
             getVideoUrl(choreography) {

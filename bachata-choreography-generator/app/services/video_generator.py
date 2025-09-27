@@ -294,7 +294,8 @@ class VideoGenerator:
     
     def _create_trimmed_clip(self, move: SelectedMove, index: int, temp_files: List[str]) -> str:
         """
-        Create a trimmed version of a video clip with exact duration and normalized properties.
+        Create a trimmed version of a video clip with optimized encoding settings.
+        OPTIMIZATION: Uses faster presets and hardware acceleration when available.
         
         Args:
             move: The move with video path and duration
@@ -309,51 +310,57 @@ class VideoGenerator:
             original_name = Path(move.video_path).stem
             trimmed_path = os.path.join(
                 self.config.temp_dir, 
-                f"trimmed_{index:03d}_{original_name}_{int(time.time())}.mp4"
+                f"opt_trimmed_{index:03d}_{original_name}_{int(time.time())}.mp4"
             )
             temp_files.append(trimmed_path)
             
-            # FFmpeg command to trim clip with NORMALIZED properties
-            cmd = [
-                "ffmpeg",
+            # OPTIMIZATION: Detect hardware acceleration
+            hw_accel = self._detect_hardware_acceleration()
+            
+            # Build FFmpeg command with optimizations
+            cmd = ["ffmpeg"]
+            
+            # Add hardware acceleration if available
+            if hw_accel:
+                cmd.extend(hw_accel)
+            
+            cmd.extend([
                 "-i", move.video_path,
                 "-ss", "0",  # Start from beginning
                 "-t", str(move.duration),  # Exact duration
                 
-                # CRITICAL FIX: Normalize video properties for consistent concatenation
+                # OPTIMIZATION: Faster encoding settings
                 "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-r", "30",  # Force 30 FPS for all clips
-                "-s", "1280x720",  # Force consistent resolution
-                "-pix_fmt", "yuv420p",  # Force consistent pixel format
+                "-preset", "ultrafast",  # Fastest preset for speed
+                "-crf", "28",  # Slightly higher compression for speed
+                "-r", "24",    # Reduced frame rate for speed
+                "-s", "1280x720",  # Standard resolution
+                "-pix_fmt", "yuv420p",
                 
-                # Audio normalization
+                # OPTIMIZATION: Faster audio encoding
                 "-c:a", "aac",
-                "-ar", "48000",  # Force 48kHz sample rate
-                "-ac", "2",  # Force stereo
+                "-ar", "44100",  # Standard sample rate
+                "-ac", "2",  # Stereo
+                "-b:a", "128k",  # Lower bitrate for speed
                 
                 # Timing fixes
                 "-avoid_negative_ts", "make_zero",
-                "-fflags", "+genpts",  # Generate presentation timestamps
+                "-fflags", "+genpts",
                 
                 "-y", trimmed_path
-            ]
+            ])
             
-            logger.debug(f"Trimming and normalizing clip {index+1}: duration={move.duration}s")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            logger.debug(f"Optimized trimming clip {index+1}: duration={move.duration}s, hw_accel={hw_accel is not None}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)  # Reduced timeout
             
             if result.returncode == 0 and os.path.exists(trimmed_path):
-                # Verify the trimmed clip duration
-                actual_duration = self._get_video_duration(trimmed_path)
-                logger.debug(f"Trimmed clip {index+1}: expected={move.duration:.1f}s, actual={actual_duration:.1f}s")
                 return trimmed_path
             else:
                 logger.error(f"Failed to trim clip {index+1}: {result.stderr}")
                 return ""
                 
         except Exception as e:
-            logger.error(f"Error creating trimmed clip {index+1}: {e}")
+            logger.error(f"Error creating optimized trimmed clip {index+1}: {e}")
             return ""
     
     def _create_beat_synchronized_concat_file(
@@ -687,6 +694,72 @@ class VideoGenerator:
             
             "-y", output_path.replace('.mp4', '_temp.mp4')  # Temporary file first
         ]
+    
+    def _detect_hardware_acceleration(self) -> Optional[List[str]]:
+        """
+        Detect available hardware acceleration across different architectures.
+        OPTIMIZATION: Auto-detects best hardware acceleration for the system.
+        
+        Returns:
+            Hardware acceleration flags if available, None otherwise
+        """
+        import platform
+        
+        # Hardware acceleration options by platform/architecture
+        hw_options = []
+        
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        if system == "darwin":  # macOS
+            if "arm" in machine or "m1" in machine or "m2" in machine or "m3" in machine:
+                # Apple Silicon
+                hw_options.append(["-hwaccel", "videotoolbox"])
+            else:
+                # Intel Mac
+                hw_options.extend([
+                    ["-hwaccel", "videotoolbox"],
+                    ["-hwaccel", "vaapi"]
+                ])
+        elif system == "linux":
+            # Linux - try various options
+            hw_options.extend([
+                ["-hwaccel", "vaapi"],      # Intel/AMD
+                ["-hwaccel", "cuda"],       # NVIDIA
+                ["-hwaccel", "opencl"],     # OpenCL
+                ["-hwaccel", "qsv"]         # Intel Quick Sync
+            ])
+        elif system == "windows":
+            # Windows
+            hw_options.extend([
+                ["-hwaccel", "d3d11va"],    # DirectX 11
+                ["-hwaccel", "dxva2"],      # DirectX Video Acceleration
+                ["-hwaccel", "cuda"],       # NVIDIA
+                ["-hwaccel", "qsv"]         # Intel Quick Sync
+            ])
+        
+        # Test each hardware acceleration option
+        for hw_option in hw_options:
+            try:
+                test_cmd = ["ffmpeg"] + hw_option + [
+                    "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=1", 
+                    "-f", "null", "-"
+                ]
+                result = subprocess.run(
+                    test_cmd, 
+                    capture_output=True, 
+                    timeout=5,
+                    stderr=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL
+                )
+                if result.returncode == 0:
+                    logger.info(f"Hardware acceleration detected: {' '.join(hw_option)}")
+                    return hw_option
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                continue
+        
+        logger.info("No hardware acceleration available, using software encoding")
+        return None
     
     def _build_web_optimized_command(self, concat_file_path: str, output_path: str) -> List[str]:
         """

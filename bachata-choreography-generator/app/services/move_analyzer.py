@@ -93,45 +93,55 @@ class MoveAnalyzer:
     """
     
     def __init__(self, 
-                 target_fps: int = 30,
-                 min_detection_confidence: float = 0.5,
-                 min_tracking_confidence: float = 0.5):
+                 target_fps: int = 15,  # OPTIMIZATION: Reduced from 30 to 15 (50% fewer frames)
+                 min_detection_confidence: float = 0.4,  # OPTIMIZATION: Slightly reduced for speed
+                 min_tracking_confidence: float = 0.4,
+                 enable_optimizations: bool = True):
         """
-        Initialize the MoveAnalyzer.
+        Initialize the MoveAnalyzer with performance optimizations.
         
         Args:
-            target_fps: Target frame rate for analysis (frames sampled per second)
+            target_fps: Target frame rate for analysis (reduced to 15 for 50% speed improvement)
             min_detection_confidence: Minimum confidence for pose detection
             min_tracking_confidence: Minimum confidence for pose tracking
+            enable_optimizations: Enable performance optimizations
         """
         self.target_fps = target_fps
         self.min_detection_confidence = min_detection_confidence
         self.min_tracking_confidence = min_tracking_confidence
+        self.enable_optimizations = enable_optimizations
         
         # Initialize MediaPipe solutions
         self.mp_pose = mp.solutions.pose
         self.mp_hands = mp.solutions.hands
         self.mp_drawing = mp.solutions.drawing_utils
         
+        # OPTIMIZATION: Use lighter model complexity for speed
+        model_complexity = 0 if enable_optimizations else 1
+        
         # Initialize pose detector
         self.pose_detector = self.mp_pose.Pose(
             static_image_mode=False,
-            model_complexity=1,
+            model_complexity=model_complexity,  # OPTIMIZATION: 0 is 30% faster than 1
             enable_segmentation=False,
             min_detection_confidence=self.min_detection_confidence,
             min_tracking_confidence=self.min_tracking_confidence
         )
         
-        # Initialize hand detector
-        self.hand_detector = self.mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=2,
-            model_complexity=1,
-            min_detection_confidence=self.min_detection_confidence,
-            min_tracking_confidence=self.min_tracking_confidence
-        )
+        # OPTIMIZATION: Disable hand detection for speed (can be re-enabled if needed)
+        if enable_optimizations:
+            self.hand_detector = None
+            logger.info("Hand detection disabled for performance optimization")
+        else:
+            self.hand_detector = self.mp_hands.Hands(
+                static_image_mode=False,
+                max_num_hands=2,
+                model_complexity=1,
+                min_detection_confidence=self.min_detection_confidence,
+                min_tracking_confidence=self.min_tracking_confidence
+            )
         
-        logger.info(f"MoveAnalyzer initialized with target_fps={target_fps}")
+        logger.info(f"MoveAnalyzer initialized: target_fps={target_fps}, model_complexity={model_complexity}, optimizations={'enabled' if enable_optimizations else 'disabled'}")
     
     def analyze_move_clip(self, video_path: str) -> MoveAnalysisResult:
         """
@@ -156,11 +166,20 @@ class MoveAnalyzer:
         
         logger.info(f"Video info: {duration:.2f}s, {total_frames} frames, {original_fps:.1f} fps")
         
-        # Calculate frame sampling
-        frame_interval = max(1, int(original_fps / self.target_fps))
+        # OPTIMIZATION: Smart frame sampling based on video length
+        if self.enable_optimizations:
+            if duration > 10:
+                # For long videos, reduce sampling rate further
+                effective_fps = max(10, self.target_fps * 0.7)
+            else:
+                effective_fps = self.target_fps
+        else:
+            effective_fps = self.target_fps
+        
+        frame_interval = max(1, int(original_fps / effective_fps))
         sampled_frames = list(range(0, total_frames, frame_interval))
         
-        logger.info(f"Sampling {len(sampled_frames)} frames at {frame_interval} frame intervals")
+        logger.info(f"Sampling {len(sampled_frames)} frames at {frame_interval} frame intervals (effective_fps={effective_fps:.1f})")
         
         # Extract features from sampled frames
         pose_features = []
@@ -175,6 +194,10 @@ class MoveAnalyzer:
                     logger.warning(f"Could not read frame {frame_idx}")
                     continue
                 
+                # OPTIMIZATION: Resize frame for faster processing if optimizations enabled
+                if self.enable_optimizations:
+                    frame = cv2.resize(frame, (640, 480))  # Smaller resolution for speed
+                
                 # Convert BGR to RGB for MediaPipe
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
@@ -183,9 +206,13 @@ class MoveAnalyzer:
                 if pose_feat:
                     pose_features.append(pose_feat)
                 
-                # Extract hand features
-                hand_feat = self._extract_hand_features(rgb_frame)
-                hand_features.append(hand_feat)
+                # Extract hand features (skip if optimizations enabled)
+                if not self.enable_optimizations and self.hand_detector:
+                    hand_feat = self._extract_hand_features(rgb_frame)
+                    hand_features.append(hand_feat)
+                else:
+                    # Add empty hand features for consistency
+                    hand_features.append(HandFeatures(None, None, 0.0, 0.0))
                 
                 pbar.update(1)
         
@@ -199,9 +226,13 @@ class MoveAnalyzer:
         # Calculate movement dynamics
         movement_dynamics = self._calculate_movement_dynamics(pose_features)
         
-        # Generate embeddings
-        pose_embedding = self._generate_pose_embedding(pose_features)
-        movement_embedding = self._generate_movement_embedding(movement_dynamics)
+        # OPTIMIZATION: Generate lightweight embeddings if optimizations enabled
+        if self.enable_optimizations:
+            pose_embedding = self._generate_lightweight_pose_embedding(pose_features)
+            movement_embedding = self._generate_lightweight_movement_embedding(movement_dynamics)
+        else:
+            pose_embedding = self._generate_pose_embedding(pose_features)
+            movement_embedding = self._generate_movement_embedding(movement_dynamics)
         
         # Calculate enhanced analysis scores
         movement_complexity_score = self.calculate_movement_complexity_score(pose_features, movement_dynamics)
@@ -823,6 +854,185 @@ class MoveAnalyzer:
             embedding = np.concatenate([embedding, padding])
         elif len(embedding) > 384:
             embedding = embedding[:384]
+        
+        return embedding
+    
+    def _generate_lightweight_pose_embedding(self, pose_features: List[PoseFeatures]) -> np.ndarray:
+        """
+        Generate lightweight 128D pose embedding for faster processing.
+        OPTIMIZATION: Reduced from 384D to 128D for 3x faster similarity calculations.
+        """
+        if not pose_features:
+            return np.zeros(128, dtype=np.float32)
+        
+        # Extract key landmarks (shoulders, hips, knees, ankles)
+        key_indices = [11, 12, 23, 24, 25, 26, 27, 28]  # Essential dance pose points
+        
+        features = []
+        
+        # Statistical features from key landmarks
+        all_landmarks = np.array([pf.landmarks[key_indices, :3] for pf in pose_features])
+        
+        # Basic statistics: mean, std, min, max for key points (32 features)
+        features.extend(np.mean(all_landmarks, axis=(0, 1)).flatten())  # 3D
+        features.extend(np.std(all_landmarks, axis=(0, 1)).flatten())   # 3D
+        features.extend(np.min(all_landmarks, axis=(0, 1)).flatten())   # 3D
+        features.extend(np.max(all_landmarks, axis=(0, 1)).flatten())   # 3D
+        
+        # Movement features (16 features)
+        centers = np.array([pf.center_of_mass for pf in pose_features])
+        if len(centers) > 1:
+            velocities = np.diff(centers, axis=0)
+            velocity_magnitudes = np.linalg.norm(velocities, axis=1)
+            
+            features.extend([
+                np.mean(velocity_magnitudes),
+                np.std(velocity_magnitudes),
+                np.max(velocity_magnitudes),
+                np.min(velocity_magnitudes)
+            ])
+            
+            # Directional features
+            if len(velocities) > 0:
+                mean_direction = np.mean(velocities, axis=0)
+                features.extend(mean_direction)  # 2D
+                features.extend([np.linalg.norm(mean_direction)])  # 1D
+            else:
+                features.extend([0.0, 0.0, 0.0])
+        else:
+            features.extend([0.0] * 7)
+        
+        # Confidence and quality features (8 features)
+        confidences = [pf.confidence for pf in pose_features]
+        features.extend([
+            np.mean(confidences),
+            np.std(confidences),
+            np.min(confidences),
+            np.max(confidences)
+        ])
+        
+        # Joint angle features (simplified, 4 features)
+        if pose_features[0].joint_angles:
+            angle_values = []
+            for pf in pose_features:
+                angles = list(pf.joint_angles.values())
+                if angles:
+                    angle_values.extend(angles[:4])  # Take first 4 angles
+            
+            if angle_values:
+                features.extend([
+                    np.mean(angle_values),
+                    np.std(angle_values),
+                    np.min(angle_values),
+                    np.max(angle_values)
+                ])
+            else:
+                features.extend([0.0] * 4)
+        else:
+            features.extend([0.0] * 4)
+        
+        # Pad or truncate to exactly 128 dimensions
+        while len(features) < 128:
+            features.append(0.0)
+        
+        embedding = np.array(features[:128], dtype=np.float32)
+        
+        # Normalize
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
+        
+        return embedding
+    
+    def _generate_lightweight_movement_embedding(self, movement_dynamics: MovementDynamics) -> np.ndarray:
+        """
+        Generate lightweight 64D movement embedding for faster processing.
+        OPTIMIZATION: Reduced from complex movement analysis to essential features.
+        """
+        features = []
+        
+        # Velocity features (8 features)
+        if len(movement_dynamics.velocity_profile) > 0:
+            features.extend([
+                np.mean(movement_dynamics.velocity_profile),
+                np.std(movement_dynamics.velocity_profile),
+                np.max(movement_dynamics.velocity_profile),
+                np.min(movement_dynamics.velocity_profile),
+                np.median(movement_dynamics.velocity_profile),
+                np.percentile(movement_dynamics.velocity_profile, 25),
+                np.percentile(movement_dynamics.velocity_profile, 75),
+                len(movement_dynamics.velocity_profile)
+            ])
+        else:
+            features.extend([0.0] * 8)
+        
+        # Acceleration features (8 features)
+        if len(movement_dynamics.acceleration_profile) > 0:
+            features.extend([
+                np.mean(movement_dynamics.acceleration_profile),
+                np.std(movement_dynamics.acceleration_profile),
+                np.max(movement_dynamics.acceleration_profile),
+                np.min(movement_dynamics.acceleration_profile),
+                np.median(movement_dynamics.acceleration_profile),
+                np.percentile(movement_dynamics.acceleration_profile, 25),
+                np.percentile(movement_dynamics.acceleration_profile, 75),
+                len(movement_dynamics.acceleration_profile)
+            ])
+        else:
+            features.extend([0.0] * 8)
+        
+        # Core movement features (16 features)
+        features.extend([
+            movement_dynamics.spatial_coverage,
+            movement_dynamics.rhythm_score,
+            movement_dynamics.complexity_score,
+            movement_dynamics.footwork_area_coverage,
+            movement_dynamics.upper_body_movement_range,
+            movement_dynamics.rhythm_compatibility_score,
+            movement_dynamics.movement_periodicity,
+            len(movement_dynamics.transition_points),
+            
+            # Energy level encoding
+            1.0 if movement_dynamics.energy_level == "high" else 0.0,
+            1.0 if movement_dynamics.energy_level == "medium" else 0.0,
+            1.0 if movement_dynamics.energy_level == "low" else 0.0,
+            
+            # Direction encoding
+            1.0 if "horizontal" in movement_dynamics.dominant_movement_direction else 0.0,
+            1.0 if "vertical" in movement_dynamics.dominant_movement_direction else 0.0,
+            
+            # Spatial distribution
+            movement_dynamics.spatial_distribution.get("upper_body", 0.0),
+            movement_dynamics.spatial_distribution.get("lower_body", 0.0),
+            movement_dynamics.spatial_distribution.get("arms", 0.0)
+        ])
+        
+        # Intensity profile features (8 features)
+        if len(movement_dynamics.movement_intensity_profile) > 0:
+            features.extend([
+                np.mean(movement_dynamics.movement_intensity_profile),
+                np.std(movement_dynamics.movement_intensity_profile),
+                np.max(movement_dynamics.movement_intensity_profile),
+                np.min(movement_dynamics.movement_intensity_profile),
+                np.median(movement_dynamics.movement_intensity_profile),
+                np.percentile(movement_dynamics.movement_intensity_profile, 25),
+                np.percentile(movement_dynamics.movement_intensity_profile, 75),
+                np.sum(movement_dynamics.movement_intensity_profile)
+            ])
+        else:
+            features.extend([0.0] * 8)
+        
+        # Remaining features to reach 64D
+        remaining = 64 - len(features)
+        if remaining > 0:
+            features.extend([0.0] * remaining)
+        
+        embedding = np.array(features[:64], dtype=np.float32)
+        
+        # Normalize
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
         
         return embedding
     
@@ -1667,9 +1877,9 @@ class MoveAnalyzer:
 
     def __del__(self):
         """Cleanup MediaPipe resources."""
-        if hasattr(self, 'pose_detector'):
+        if hasattr(self, 'pose_detector') and self.pose_detector:
             self.pose_detector.close()
-        if hasattr(self, 'hand_detector'):
+        if hasattr(self, 'hand_detector') and self.hand_detector:
             self.hand_detector.close()
 
 

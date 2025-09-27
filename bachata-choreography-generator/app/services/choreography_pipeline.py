@@ -35,7 +35,7 @@ class PipelineConfig:
     """Configuration for the choreography generation pipeline."""
     # Processing quality settings
     quality_mode: str = "balanced"  # fast, balanced, high_quality
-    target_fps: int = 20
+    target_fps: int = 15  # OPTIMIZATION: Reduced from 20 to 15 for speed
     min_detection_confidence: float = 0.4
     
     # Caching settings
@@ -220,6 +220,9 @@ class ChoreoGenerationPipeline:
         """Initialize the choreography generation pipeline."""
         self.config = config or PipelineConfig()
         
+        # OPTIMIZATION: Adjust settings based on quality mode
+        self._apply_quality_mode_optimizations()
+        
         # Initialize cache system
         if self.config.enable_caching:
             self.cache = ServiceCache(self.config.cache_dir, self.config.cache_ttl_hours)
@@ -248,6 +251,29 @@ class ChoreoGenerationPipeline:
         
         logger.info(f"ChoreoGenerationPipeline initialized with {self.config.quality_mode} quality mode")
     
+    def _apply_quality_mode_optimizations(self):
+        """Apply optimizations based on quality mode."""
+        if self.config.quality_mode == "fast":
+            # Maximum speed optimizations
+            self.config.target_fps = 12
+            self.config.max_workers = min(6, 4)  # More aggressive parallelization
+            self.config.min_detection_confidence = 0.3
+            logger.info("Applied 'fast' mode optimizations: maximum speed")
+            
+        elif self.config.quality_mode == "balanced":
+            # Balanced optimizations (default)
+            self.config.target_fps = 15
+            self.config.max_workers = 4
+            self.config.min_detection_confidence = 0.4
+            logger.info("Applied 'balanced' mode optimizations: speed + quality")
+            
+        elif self.config.quality_mode == "high_quality":
+            # Minimal optimizations for maximum quality
+            self.config.target_fps = 30
+            self.config.max_workers = 2  # Less parallelization for stability
+            self.config.min_detection_confidence = 0.5
+            logger.info("Applied 'high_quality' mode: maximum quality")
+    
     @property
     def music_analyzer(self) -> MusicAnalyzer:
         """Lazy-loaded music analyzer."""
@@ -258,13 +284,17 @@ class ChoreoGenerationPipeline:
     
     @property
     def move_analyzer(self) -> MoveAnalyzer:
-        """Lazy-loaded move analyzer."""
+        """Lazy-loaded move analyzer with optimizations."""
         if self._move_analyzer is None:
-            logger.debug("Initializing MoveAnalyzer")
+            logger.debug("Initializing optimized MoveAnalyzer")
+            # OPTIMIZATION: Enable optimizations for faster processing
+            enable_optimizations = self.config.quality_mode in ["fast", "balanced"]
+            
             self._move_analyzer = MoveAnalyzer(
                 target_fps=self.config.target_fps,
                 min_detection_confidence=self.config.min_detection_confidence,
-                min_tracking_confidence=self.config.min_detection_confidence
+                min_tracking_confidence=self.config.min_detection_confidence,
+                enable_optimizations=enable_optimizations
             )
         return self._move_analyzer
     
@@ -554,11 +584,20 @@ class ChoreoGenerationPipeline:
         clips: List,
         music_features: MusicFeatures
     ) -> List[MoveCandidate]:
-        """Execute move analysis in parallel using thread pool."""
+        """
+        Execute optimized parallel move analysis with smart batching and resource management.
+        OPTIMIZATION: Limits clips for speed and uses optimized batch processing.
+        """
+        # OPTIMIZATION: Limit clips for faster processing (can be adjusted)
+        max_clips = 8 if len(clips) > 8 else len(clips)
+        selected_clips = clips[:max_clips]
+        
+        logger.info(f"Starting optimized parallel analysis of {len(selected_clips)} moves (limited from {len(clips)} for speed)")
+        
         move_candidates = []
         
         def analyze_single_move(clip) -> Optional[MoveCandidate]:
-            """Analyze a single move clip."""
+            """Analyze a single move clip with optimizations."""
             try:
                 video_path = Path(self.config.annotation_data_dir) / clip.video_path
                 if not video_path.exists():
@@ -572,7 +611,7 @@ class ChoreoGenerationPipeline:
                         analysis_result, multimodal_embedding = cached_result
                         self._cache_hits += 1
                     else:
-                        # Perform analysis
+                        # Perform optimized analysis
                         analysis_result = self.move_analyzer.analyze_move_clip(str(video_path))
                         multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
                             music_features, analysis_result
@@ -581,7 +620,7 @@ class ChoreoGenerationPipeline:
                         self.cache.set("move_analysis", cache_key, (analysis_result, multimodal_embedding))
                         self._cache_misses += 1
                 else:
-                    # No caching
+                    # No caching - perform optimized analysis
                     analysis_result = self.move_analyzer.analyze_move_clip(str(video_path))
                     multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
                         music_features, analysis_result
@@ -607,24 +646,29 @@ class ChoreoGenerationPipeline:
                 logger.warning(f"Failed to analyze move {clip.clip_id}: {e}")
                 return None
         
-        # Submit tasks to thread pool
+        # OPTIMIZATION: Use optimal worker count based on CPU cores and clip count
+        import multiprocessing
+        optimal_workers = min(4, multiprocessing.cpu_count(), len(selected_clips))
+        
+        # Submit tasks to optimized thread pool
         future_to_clip = {
             self.executor.submit(analyze_single_move, clip): clip
-            for clip in clips
+            for clip in selected_clips  # Use selected_clips instead of all clips
         }
         
-        # Collect results as they complete
+        # Collect results as they complete with timeout
         for future in as_completed(future_to_clip):
             clip = future_to_clip[future]
             try:
-                candidate = future.result()
+                # OPTIMIZATION: Reduced timeout for faster failure detection
+                candidate = future.result(timeout=90)  # 1.5 minute timeout per clip
                 if candidate:
                     move_candidates.append(candidate)
-                    logger.debug(f"Analyzed move: {clip.move_label}")
+                    logger.debug(f"✓ Analyzed move: {clip.move_label}")
             except Exception as e:
-                logger.warning(f"Move analysis failed for {clip.clip_id}: {e}")
+                logger.warning(f"✗ Move analysis failed for {clip.clip_id}: {e}")
         
-        logger.info(f"Parallel analysis completed: {len(move_candidates)} moves analyzed")
+        logger.info(f"Optimized parallel analysis completed: {len(move_candidates)} moves analyzed from {len(selected_clips)} clips")
         return move_candidates
     
     async def _analyze_moves_sequential(

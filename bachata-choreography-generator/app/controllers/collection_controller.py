@@ -93,6 +93,69 @@ class CollectionController(BaseController):
                 )
         
         @self.router.get(
+            "",
+            response_model=CollectionResponse,
+            responses={
+                400: {"model": CollectionError, "description": "Invalid parameters"},
+                401: {"model": CollectionError, "description": "Authentication required"}
+            }
+        )
+        async def get_collection(
+            current_user: AuthenticatedUser,
+            db: Annotated[Session, Depends(get_database_session)],
+            page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+            limit: int = Query(default=20, ge=1, le=100, description="Items per page (max 100)"),
+            difficulty: str = Query(default=None, description="Filter by difficulty level"),
+            search: str = Query(default=None, description="Search in titles and music info"),
+            sort_by: str = Query(default="created_at", description="Sort field"),
+            sort_order: str = Query(default="desc", description="Sort order (asc, desc)")
+        ):
+            """
+            Get user's saved choreographies with pagination and filtering.
+            
+            Supports filtering by difficulty, searching in titles and music metadata,
+            and sorting by various fields. Returns paginated results.
+            """
+            try:
+                self.log_request("get_collection", {
+                    "user_id": current_user.id,
+                    "page": page,
+                    "limit": limit,
+                    "difficulty": difficulty,
+                    "search": search
+                })
+                
+                request = CollectionListRequest(
+                    page=page,
+                    limit=limit,
+                    difficulty=difficulty,
+                    search=search,
+                    sort_by=sort_by,
+                    sort_order=sort_order
+                )
+                
+                collection = await self.collection_service.get_user_collection(
+                    db=db,
+                    user_id=current_user.id,
+                    request=request
+                )
+                
+                return collection
+                
+            except ValueError as e:
+                self.log_error("get_collection", e)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(e)
+                )
+            except Exception as e:
+                self.log_error("get_collection", e)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to retrieve collection"
+                )
+        
+        @self.router.get(
             "/list",
             response_model=CollectionResponse,
             responses={

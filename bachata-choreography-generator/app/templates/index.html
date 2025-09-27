@@ -3,8 +3,8 @@
 {% block title %}Bachata Choreography Generator{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex items-center justify-center p-4" x-data="choreographyGenerator()">
-    <div class="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full animate-fade-in">
+<div class="min-h-screen flex items-center justify-center p-2 sm:p-4" x-data="choreographyGenerator()">
+    <div class="bg-white/95 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-2xl p-3 sm:p-6 lg:p-8 max-w-2xl w-full animate-fade-in">
         <!-- Header -->
         <div class="text-center mb-6 sm:mb-8">
             <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
@@ -19,13 +19,13 @@
         <div x-show="!isGenerating && !result && !error" x-transition:enter="transition ease-out duration-300">
             <form hx-post="/api/choreography"
                   hx-trigger="submit"
-                  hx-target="#generation-response"
-                  hx-swap="innerHTML"
+                  hx-target="this"
+                  hx-swap="none"
+                  hx-indicator="#loading-spinner"
                   @htmx:before-request="startGeneration(); prepareFormSubmission()"
                   @htmx:after-request="handleGenerationResponse($event)"
                   @htmx:response-error="handleGenerationError({message: 'Server error occurred'})"
                   @htmx:send-error="handleGenerationError({message: 'Failed to connect to server. Please try again.'})"
-                  x-data="choreographyForm()"
                   class="space-y-4 sm:space-y-6">
                 
                 <!-- Song Selection -->
@@ -83,9 +83,9 @@
                             name="difficulty"
                             x-model="difficulty"
                             class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-gray-900 text-sm sm:text-base">
-                        <option value="beginner">Beginner - Basic steps and simple patterns</option>
-                        <option value="intermediate" selected>Intermediate - Mixed complexity with turns</option>
-                        <option value="advanced">Advanced - Complex moves and styling</option>
+                        <option value="beginner">🌱 Beginner - Basic steps and simple patterns</option>
+                        <option value="intermediate" selected>🌿 Intermediate - Mixed complexity with turns</option>
+                        <option value="advanced">🌳 Advanced - Complex moves and styling</option>
                     </select>
                 </div>
                 
@@ -96,13 +96,11 @@
                 <input type="hidden" name="quality_mode" value="balanced">
                 <input type="hidden" name="energy_level" value="medium">
                 
-                <div id="generation-response"></div>
-                
                 <!-- Generate Button -->
                 <button type="submit"
-                        :disabled="!canGenerate()"
+                        :disabled="!canGenerate() || isGenerating"
                         class="w-full bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:from-primary-600 hover:to-secondary-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
-                    <span x-show="!isGenerating">Create Choreography</span>
+                    <span x-show="!isGenerating">🎭 Create Choreography</span>
                     <span x-show="isGenerating" class="flex items-center justify-center">
                         <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -121,31 +119,44 @@
              id="progress-container">
             
             <div class="text-center">
-                <h3 class="text-2xl font-bold text-gray-900 mb-2">Generating Your Choreography</h3>
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">🎵 Generating Your Choreography</h3>
                 <p class="text-gray-600" x-text="progressMessage">Starting...</p>
                 <p class="text-sm text-gray-500 mt-2">This usually takes 20-30 seconds</p>
             </div>
             
             <!-- Progress Bar -->
-            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                <div class="bg-gradient-to-r from-primary-500 to-secondary-500 h-4 rounded-full transition-all duration-500 ease-out"
-                     :style="`width: ${progress}%`"></div>
+            <div class="w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
+                <div class="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 h-6 rounded-full transition-all duration-500 ease-out relative"
+                     :style="`width: ${progress}%`">
+                    <div class="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+                </div>
             </div>
             
             <div class="text-center">
-                <span class="text-2xl font-bold text-primary-600" x-text="`${progress}%`"></span>
+                <span class="text-3xl font-bold text-primary-600" x-text="`${progress}%`"></span>
+                <div class="mt-2 text-sm text-gray-500">
+                    <span x-text="getStageEmoji()"></span>
+                    <span x-text="currentStage"></span>
+                </div>
             </div>
             
-            <!-- Progress polling will be handled by JavaScript -->
-            <div id="progress-update" style="display: none;"></div>
+            <!-- Progress polling using HTMX -->
+            <div hx-get="/api/task/progress"
+                 hx-trigger="every 2s"
+                 hx-target="this"
+                 hx-swap="none"
+                 @htmx:after-request="handleProgressUpdate($event)"
+                 x-show="isGenerating && currentTaskId"
+                 style="display: none;">
+            </div>
             
             <!-- Manual refresh button for connection issues -->
             <div class="text-center">
-                <button hx-get="/api/task/progress"
-                        hx-target="#progress-update"
-                        hx-swap="innerHTML"
-                        class="text-sm text-gray-500 hover:text-gray-700 underline">
-                    Check Status Manually
+                <button @click="manualProgressCheck()"
+                        :disabled="isCheckingProgress"
+                        class="text-sm text-gray-500 hover:text-gray-700 underline disabled:opacity-50">
+                    <span x-show="!isCheckingProgress">🔄 Check Status Manually</span>
+                    <span x-show="isCheckingProgress">Checking...</span>
                 </button>
             </div>
         </div>
@@ -164,8 +175,9 @@
                 <video x-show="result" 
                        :src="result ? `/api/video/${result.video_filename}` : ''"
                        controls
-                       class="w-full max-w-lg mx-auto rounded-xl shadow-lg">
-                    Your browser does not support the video tag.
+                       preload="metadata"
+                       class="w-full max-w-lg mx-auto rounded-xl shadow-lg bg-black">
+                    <p class="text-gray-500">Your browser does not support the video tag.</p>
                 </video>
             </div>
             
@@ -210,8 +222,8 @@
                         
                         <button type="submit"
                                 :disabled="isSaving"
-                                class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span x-show="!isSaving">Save to Collection</span>
+                                class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                            <span x-show="!isSaving">💾 Save to Collection</span>
                             <span x-show="isSaving" class="flex items-center justify-center">
                                 <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -223,9 +235,19 @@
                     </form>
                 </template>
                 
+                <template x-if="!$root.user.isAuthenticated">
+                    <div class="flex-1 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+                        <p class="text-blue-700 text-sm mb-2">💡 Want to save your choreographies?</p>
+                        <button @click="$root.showLogin = true" 
+                                class="text-blue-600 hover:text-blue-800 font-semibold underline">
+                            Login or Register
+                        </button>
+                    </div>
+                </template>
+                
                 <button @click="resetForm()" 
-                        class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-xl font-semibold transition-colors duration-200">
-                    Generate Another
+                        class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105">
+                    🔄 Generate Another
                 </button>
             </div>
             
@@ -271,6 +293,8 @@
             currentTaskId: null,
             progress: 0,
             progressMessage: 'Starting...',
+            currentStage: 'initializing',
+            isCheckingProgress: false,
             
             // Save state
             isSaving: false,
@@ -283,9 +307,15 @@
             // Form validation
             canGenerate() {
                 if (this.selectedSong === 'new_song') {
-                    return this.youtubeUrl.trim() !== '';
+                    return this.youtubeUrl.trim() !== '' && this.isValidYouTubeUrl(this.youtubeUrl);
                 }
                 return this.selectedSong !== '';
+            },
+            
+            // Validate YouTube URL format
+            isValidYouTubeUrl(url) {
+                const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/;
+                return youtubeRegex.test(url);
             },
             
             // Toggle YouTube input visibility
@@ -300,20 +330,16 @@
                 const hiddenField = document.querySelector('#hidden_youtube_url');
                 if (hiddenField) {
                     hiddenField.value = this.getYoutubeUrl();
-                    console.log('Updated hidden field:', hiddenField.value);
                 }
             },
             
             // Prepare form submission
             prepareFormSubmission() {
-                // Update the hidden youtube_url field before submission
                 const hiddenField = document.querySelector('#hidden_youtube_url');
                 const youtubeUrl = this.getYoutubeUrl();
-                console.log('Preparing form submission:', { youtubeUrl, selectedSong: this.selectedSong });
                 
                 if (hiddenField) {
                     hiddenField.value = youtubeUrl;
-                    console.log('Set hidden field value:', hiddenField.value);
                 }
             },
             
@@ -325,20 +351,34 @@
                 return this.selectedSong;
             },
             
+            // Get stage emoji for progress display
+            getStageEmoji() {
+                const stageEmojis = {
+                    'initializing': '🚀',
+                    'downloading': '⬇️',
+                    'analyzing': '🎵',
+                    'selecting': '💃',
+                    'generating': '🎬',
+                    'finalizing': '✨',
+                    'completed': '🎉',
+                    'failed': '❌'
+                };
+                return stageEmojis[this.currentStage] || '⏳';
+            },
+            
             // Start generation process
             startGeneration() {
                 this.isGenerating = true;
                 this.result = null;
                 this.error = false;
-                this.progress = 0;
+                this.progress = 5;
                 this.progressMessage = 'Starting generation...';
+                this.currentStage = 'initializing';
+                this.currentTaskId = null;
             },
             
             // Handle generation response from HTMX
             handleGenerationResponse(event) {
-                console.log('HTMX Response:', event.detail);
-                
-                // Check if the request failed completely
                 if (event.detail.xhr.status === 0) {
                     this.handleGenerationError({ message: 'Failed to connect to server. Please try again.' });
                     return;
@@ -349,13 +389,14 @@
                     const data = JSON.parse(response);
                     if (event.detail.xhr.status === 200) {
                         this.currentTaskId = data.task_id;
+                        this.progress = 10;
                         this.progressMessage = 'Generation started, analyzing music...';
+                        this.currentStage = 'downloading';
                         this.startProgressPolling();
                     } else {
                         this.handleGenerationError(data);
                     }
                 } catch (e) {
-                    console.error('Failed to parse response:', e, response);
                     this.handleGenerationError({ message: 'Failed to parse server response' });
                 }
             },
@@ -363,7 +404,7 @@
             // Start progress polling with HTMX
             startProgressPolling() {
                 if (this.currentTaskId) {
-                    // Update the HTMX polling URL with the task ID
+                    // Update the HTMX polling element
                     const progressElement = document.querySelector('[hx-get="/api/task/progress"]');
                     if (progressElement) {
                         progressElement.setAttribute('hx-get', `/api/task/${this.currentTaskId}`);
@@ -371,7 +412,7 @@
                         htmx.process(progressElement);
                     }
                     
-                    // Also start manual polling as backup
+                    // Start manual polling as backup
                     this.pollTaskStatus();
                 }
             },
@@ -381,60 +422,61 @@
                 if (event.detail.xhr.status === 200) {
                     try {
                         const data = JSON.parse(event.detail.xhr.response);
-                        
-                        // Update progress
-                        this.progress = data.progress;
-                        this.progressMessage = data.message;
-                        
-                        if (data.status === 'completed') {
-                            this.showResult(data.result);
-                        } else if (data.status === 'failed') {
-                            this.showError(data.error || 'Generation failed');
-                        }
+                        this.updateProgressFromData(data);
                     } catch (e) {
                         console.error('Failed to parse progress response:', e);
                     }
                 }
             },
             
+            // Update progress from data
+            updateProgressFromData(data) {
+                this.progress = data.progress || 0;
+                this.progressMessage = data.message || 'Processing...';
+                this.currentStage = data.stage || 'processing';
+                
+                if (data.status === 'completed') {
+                    this.showResult(data.result);
+                } else if (data.status === 'failed') {
+                    this.showError(data.error || 'Generation failed');
+                }
+            },
+            
             // Manual polling as backup
             async pollTaskStatus() {
                 if (!this.currentTaskId || !this.isGenerating) {
-                    console.log('Polling stopped - no task ID or not generating');
                     return;
                 }
-                
-                console.log('Polling task:', this.currentTaskId);
                 
                 try {
                     const response = await fetch(`/api/task/${this.currentTaskId}`);
                     const data = await response.json();
                     
-                    console.log('Poll response:', data);
-                    
-                    // Update progress
-                    this.progress = data.progress;
-                    this.progressMessage = data.message;
-                    
-                    if (data.status === 'completed') {
-                        console.log('Task completed, calling showResult');
-                        this.showResult(data.result);
-                        return; // Stop polling
-                    } else if (data.status === 'failed') {
-                        console.log('Task failed, calling showError');
-                        this.showError(data.error || 'Generation failed');
-                        return; // Stop polling
-                    }
+                    this.updateProgressFromData(data);
                     
                     // Continue polling if still running
                     if (data.status === 'running' || data.status === 'started') {
-                        console.log('Task still running, continuing to poll');
                         setTimeout(() => this.pollTaskStatus(), 2000);
                     }
                 } catch (error) {
                     console.error('Polling error:', error);
-                    // Retry after a delay
                     setTimeout(() => this.pollTaskStatus(), 3000);
+                }
+            },
+            
+            // Manual progress check
+            async manualProgressCheck() {
+                if (!this.currentTaskId) return;
+                
+                this.isCheckingProgress = true;
+                try {
+                    const response = await fetch(`/api/task/${this.currentTaskId}`);
+                    const data = await response.json();
+                    this.updateProgressFromData(data);
+                } catch (error) {
+                    this.$root.showNotification('Failed to check progress', 'error');
+                } finally {
+                    this.isCheckingProgress = false;
                 }
             },
             
@@ -443,6 +485,7 @@
                 this.isGenerating = false;
                 this.error = true;
                 this.errorMessage = errorData.message || errorData.detail || 'Generation failed';
+                this.currentStage = 'failed';
                 this.$root.showNotification(this.errorMessage, 'error');
             },
             
@@ -455,7 +498,7 @@
             handleSaveResponse(event) {
                 this.isSaving = false;
                 if (event.detail.xhr.status === 200) {
-                    this.$root.showNotification('Choreography saved to your collection!', 'success');
+                    this.$root.showNotification('💾 Choreography saved to your collection!', 'success');
                 } else {
                     try {
                         const errorData = JSON.parse(event.detail.xhr.response);
@@ -466,25 +509,17 @@
                 }
             },
             
-            // Get the YouTube URL for the API
-            getYoutubeUrl() {
-                if (this.selectedSong === 'new_song') {
-                    return this.youtubeUrl;
-                }
-                return this.selectedSong;
-            },
-
-            
             // Show results
             showResult(resultData) {
-                console.log('showResult called with:', resultData);
                 this.isGenerating = false;
                 this.result = resultData;
                 this.error = false;
+                this.progress = 100;
+                this.currentStage = 'completed';
                 
                 // Show success notification
                 if (this.$root && this.$root.showNotification) {
-                    this.$root.showNotification('Choreography generated successfully!', 'success');
+                    this.$root.showNotification('🎉 Choreography generated successfully!', 'success');
                 }
             },
             
@@ -494,6 +529,7 @@
                 this.error = true;
                 this.errorMessage = message;
                 this.result = null;
+                this.currentStage = 'failed';
                 
                 // Show error notification
                 this.$root.showNotification(message, 'error');
@@ -509,52 +545,10 @@
                 this.error = false;
                 this.progress = 0;
                 this.progressMessage = 'Starting...';
+                this.currentStage = 'initializing';
                 this.currentTaskId = null;
                 this.isSaving = false;
-            }
-        }
-    }
-    
-    function choreographyForm() {
-        return {
-            selectedSong: '',
-            youtubeUrl: '',
-            difficulty: 'intermediate',
-            
-            canGenerate() {
-                if (this.selectedSong === 'new_song') {
-                    return this.youtubeUrl.trim() !== '';
-                }
-                return this.selectedSong !== '';
-            },
-            
-            toggleYouTubeInput() {
-                if (this.selectedSong !== 'new_song') {
-                    this.youtubeUrl = '';
-                }
-            },
-            
-            updateHiddenField() {
-                const hiddenField = document.querySelector('#hidden_youtube_url');
-                if (hiddenField) {
-                    hiddenField.value = this.getYoutubeUrl();
-                }
-            },
-            
-            getYoutubeUrl() {
-                if (this.selectedSong === 'new_song') {
-                    return this.youtubeUrl;
-                }
-                return this.selectedSong;
-            },
-            
-            // Prepare form submission
-            prepareFormSubmission() {
-                // Update the hidden youtube_url field before submission
-                const hiddenField = document.querySelector('#hidden_youtube_url');
-                if (hiddenField) {
-                    hiddenField.value = this.getYoutubeUrl();
-                }
+                this.isCheckingProgress = false;
             }
         }
     }

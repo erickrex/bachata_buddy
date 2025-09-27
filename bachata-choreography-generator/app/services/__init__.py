@@ -7,6 +7,10 @@
 # from .move_analyzer import MoveAnalyzer
 # from .recommendation_engine import RecommendationEngine
 
+# Resource management services
+from .resource_manager import resource_manager
+from .temp_file_manager import temp_file_manager
+
 # __all__ = [
 #     'VideoGenerator',
 #     'YouTubeService', 
@@ -14,3 +18,8 @@
 #     'MoveAnalyzer',
 #     'RecommendationEngine'
 # ]
+
+__all__ = [
+    'resource_manager',
+    'temp_file_manager'
+]

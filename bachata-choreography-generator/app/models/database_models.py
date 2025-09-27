@@ -35,6 +35,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    preferences = Column(JSON, default=lambda: {"auto_save_choreographies": True}, nullable=True)
     
     # Relationships
     choreographies = relationship("SavedChoreography", back_populates="user", cascade="all, delete-orphan")

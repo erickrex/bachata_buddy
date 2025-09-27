@@ -25,7 +25,8 @@ class TempFileManager:
         self, 
         suffix: str = "", 
         prefix: str = "temp_", 
-        directory: Optional[Path] = None
+        directory: Optional[Path] = None,
+        user_id: Optional[str] = None
     ) -> AsyncGenerator[Path, None]:
         """
         Context manager for temporary files with automatic cleanup.
@@ -39,7 +40,10 @@ class TempFileManager:
             Path to the temporary file
         """
         if directory is None:
-            directory = self.temp_base_dir
+            if user_id:
+                directory = self.temp_base_dir / f"user_{user_id}"
+            else:
+                directory = self.temp_base_dir
         
         directory.mkdir(parents=True, exist_ok=True)
         
@@ -63,7 +67,8 @@ class TempFileManager:
     async def temp_directory(
         self, 
         prefix: str = "temp_dir_", 
-        parent: Optional[Path] = None
+        parent: Optional[Path] = None,
+        user_id: Optional[str] = None
     ) -> AsyncGenerator[Path, None]:
         """
         Context manager for temporary directories with automatic cleanup.
@@ -76,7 +81,10 @@ class TempFileManager:
             Path to the temporary directory
         """
         if parent is None:
-            parent = self.temp_base_dir
+            if user_id:
+                parent = self.temp_base_dir / f"user_{user_id}"
+            else:
+                parent = self.temp_base_dir
         
         parent.mkdir(parents=True, exist_ok=True)
         
@@ -132,6 +140,30 @@ class TempFileManager:
     def get_active_file_count(self) -> int:
         """Get the number of currently tracked temporary files."""
         return len(self.active_files)
+    
+    async def cleanup_user_temp_files(self, user_id: str):
+        """Clean up all temporary files for a specific user."""
+        user_temp_dir = self.temp_base_dir / f"user_{user_id}"
+        
+        if user_temp_dir.exists():
+            try:
+                import shutil
+                shutil.rmtree(user_temp_dir)
+                self.logger.info(f"Cleaned up user temp directory: {user_temp_dir}")
+                
+                # Remove any tracked files in this directory
+                files_to_remove = [f for f in self.active_files if str(f).startswith(str(user_temp_dir))]
+                for file_path in files_to_remove:
+                    self.active_files.discard(file_path)
+                    
+            except Exception as e:
+                self.logger.warning(f"Failed to cleanup user temp directory {user_temp_dir}: {e}")
+    
+    def get_user_temp_directory(self, user_id: str) -> Path:
+        """Get the temporary directory path for a specific user."""
+        user_temp_dir = self.temp_base_dir / f"user_{user_id}"
+        user_temp_dir.mkdir(parents=True, exist_ok=True)
+        return user_temp_dir
 
 # Global temp file manager instance
 temp_file_manager = TempFileManager()

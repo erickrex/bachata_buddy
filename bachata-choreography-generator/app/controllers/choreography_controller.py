@@ -7,7 +7,7 @@ import uuid
 from typing import Dict, Optional
 from pathlib import Path
 
-from fastapi import HTTPException, BackgroundTasks, Form
+from fastapi import HTTPException, BackgroundTasks, Form, Depends
 from pydantic import BaseModel
 
 from .base_controller import BaseController
@@ -18,6 +18,8 @@ from app.exceptions import (
 )
 from app.validation import ChoreographyRequestValidator, validate_system_requirements, validate_youtube_url_async
 from app.services.resource_manager import resource_manager
+from app.middleware.auth_middleware import AuthenticatedUser, CurrentUser
+from app.models.database_models import User
 
 class ChoreographyResponse(BaseModel):
     """Response model for choreography generation."""
@@ -67,10 +69,12 @@ class ChoreographyController(BaseController):
         @self.router.post("/choreography", response_model=ChoreographyResponse)
         async def create_choreography(
             background_tasks: BackgroundTasks,
+            current_user: AuthenticatedUser,
             youtube_url: str = Form(...),
             difficulty: str = Form(default="intermediate"),
             quality_mode: str = Form(default="balanced"),
-            energy_level: str = Form(default="medium")
+            energy_level: str = Form(default="medium"),
+            auto_save: bool = Form(default=True)
         ):
             """
             Create a new choreography from a YouTube URL.
@@ -115,7 +119,7 @@ class ChoreographyController(BaseController):
                 # Generate unique task ID
                 task_id = str(uuid.uuid4())
                 
-                # Initialize task status with enhanced info
+                # Initialize task status with enhanced info including user context
                 self.active_tasks[task_id] = {
                     "status": "started",
                     "progress": 0,
@@ -124,10 +128,13 @@ class ChoreographyController(BaseController):
                     "result": None,
                     "error": None,
                     "created_at": asyncio.get_event_loop().time(),
+                    "user_id": current_user.id,
+                    "user_email": current_user.email,
                     "request_params": {
                         "difficulty": difficulty,
                         "quality_mode": quality_mode,
-                        "energy_level": energy_level
+                        "energy_level": energy_level,
+                        "auto_save": auto_save
                     },
                     "video_info": url_validation.get("details", {})
                 }
@@ -136,10 +143,12 @@ class ChoreographyController(BaseController):
                 background_tasks.add_task(
                     self._generate_choreography_task_safe,
                     task_id,
+                    current_user.id,
                     youtube_url,
                     difficulty,
                     energy_level,
-                    quality_mode
+                    quality_mode,
+                    auto_save
                 )
                 
                 self.logger.info(f"Started choreography generation task {task_id} for URL: {youtube_url}")
@@ -265,7 +274,7 @@ class ChoreographyController(BaseController):
                 raise HTTPException(status_code=500, detail="Error validating YouTube URL")
         
         @self.router.get("/video/{filename}")
-        async def serve_video(filename: str):
+        async def serve_video(filename: str, current_user: CurrentUser = None):
             """Serve generated video files."""
             from fastapi.responses import FileResponse
             from pathlib import Path
@@ -275,15 +284,26 @@ class ChoreographyController(BaseController):
                 # Sanitize filename to prevent directory traversal
                 filename = os.path.basename(filename)
                 
-                # Check if file exists in output directory
-                video_path = Path("data/output") / filename
-                
-                if not video_path.exists() or not video_path.is_file():
-                    raise HTTPException(status_code=404, detail="Video file not found")
-                
                 # Verify it's a video file
                 if not filename.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
                     raise HTTPException(status_code=400, detail="Invalid file type")
+                
+                video_path = None
+                
+                # If user is authenticated, check their user-specific directory first
+                if current_user:
+                    user_video_path = Path("data/output") / f"user_{current_user.id}" / filename
+                    if user_video_path.exists() and user_video_path.is_file():
+                        video_path = user_video_path
+                
+                # Fall back to general output directory for backward compatibility
+                if not video_path:
+                    general_video_path = Path("data/output") / filename
+                    if general_video_path.exists() and general_video_path.is_file():
+                        video_path = general_video_path
+                
+                if not video_path:
+                    raise HTTPException(status_code=404, detail="Video file not found")
                 
                 return FileResponse(
                     path=str(video_path),
@@ -364,17 +384,19 @@ class ChoreographyController(BaseController):
     async def _generate_choreography_task_safe(
         self,
         task_id: str,
+        user_id: str,
         youtube_url: str,
         difficulty: str,
         energy_level: Optional[str],
-        quality_mode: str
+        quality_mode: str,
+        auto_save: bool = True
     ):
         """
         Safe wrapper for choreography generation with comprehensive error handling.
         """
         try:
             await self._generate_choreography_task(
-                task_id, youtube_url, difficulty, energy_level, quality_mode
+                task_id, user_id, youtube_url, difficulty, energy_level, quality_mode, auto_save
             )
         except Exception as e:
             self.logger.error(f"Critical error in task {task_id}: {e}", exc_info=True)
@@ -392,10 +414,12 @@ class ChoreographyController(BaseController):
     async def _generate_choreography_task(
         self,
         task_id: str,
+        user_id: str,
         youtube_url: str,
         difficulty: str,
         energy_level: Optional[str],
-        quality_mode: str
+        quality_mode: str,
+        auto_save: bool = True
     ):
         """
         Background task for generating choreography with enhanced error handling.
@@ -414,12 +438,22 @@ class ChoreographyController(BaseController):
                 "message": "Downloading audio from YouTube..."
             })
             
-            # Get pipeline with specified quality mode
+            # Create user-specific output directory
+            user_output_dir = Path("data/output") / f"user_{user_id}"
+            user_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create user-specific temp directory
+            user_temp_dir = Path("data/temp") / f"user_{user_id}" / task_id
+            user_temp_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Get pipeline with specified quality mode and user-specific paths
             config = PipelineConfig(
                 quality_mode=quality_mode,
                 enable_caching=True,
                 max_workers=4,
-                cleanup_after_generation=True
+                cleanup_after_generation=True,
+                output_directory=str(user_output_dir),
+                temp_directory=str(user_temp_dir)
             )
             task_pipeline = ChoreoGenerationPipeline(config)
             
@@ -451,12 +485,27 @@ class ChoreographyController(BaseController):
             )
             
             if result.success:
+                # Attempt automatic saving if requested and user preferences allow it
+                saved_choreography_id = None
+                should_auto_save = auto_save and await self._should_auto_save_for_user(user_id)
+                
+                if should_auto_save:
+                    try:
+                        saved_choreography_id = await self._auto_save_choreography(
+                            user_id, result, youtube_url, difficulty, quality_mode, energy_level
+                        )
+                        self.logger.info(f"Automatically saved choreography {saved_choreography_id} for user {user_id}")
+                    except Exception as save_error:
+                        self.logger.warning(f"Auto-save failed for task {task_id}: {save_error}")
+                        # Don't fail the entire task if auto-save fails
+                
                 # Update with success
                 self.active_tasks[task_id].update({
                     "status": "completed",
                     "progress": 100,
                     "stage": "completed",
-                    "message": "Choreography generation completed successfully!",
+                    "message": "Choreography generation completed successfully!" + 
+                              (" (Saved to collection)" if saved_choreography_id else ""),
                     "completed_at": asyncio.get_event_loop().time(),
                     "total_time": asyncio.get_event_loop().time() - start_time,
                     "result": {
@@ -468,7 +517,9 @@ class ChoreographyController(BaseController):
                         "recommendations_generated": result.recommendations_generated,
                         "cache_hits": result.cache_hits,
                         "cache_misses": result.cache_misses,
-                        "video_filename": Path(result.output_path).name if result.output_path else None
+                        "video_filename": Path(result.output_path).name if result.output_path else None,
+                        "saved_choreography_id": saved_choreography_id,
+                        "auto_saved": auto_save and saved_choreography_id is not None
                     }
                 })
                 
@@ -563,11 +614,224 @@ class ChoreographyController(BaseController):
         finally:
             # Always attempt cleanup after task completion (success or failure)
             try:
+                # Clean up user-specific temporary files
+                from app.services.temp_file_manager import temp_file_manager
+                await temp_file_manager.cleanup_user_temp_files(user_id)
+                
+                # General cleanup
                 cleanup_stats = await resource_manager.cleanup_temporary_files()
                 if cleanup_stats["files_removed"] > 0:
                     self.logger.debug(f"Task cleanup: {cleanup_stats['files_removed']} temp files removed")
             except Exception as cleanup_error:
                 self.logger.warning(f"Task cleanup failed: {cleanup_error}")
+    
+    async def _should_auto_save_for_user(self, user_id: str) -> bool:
+        """
+        Check if auto-save is enabled for the user based on their preferences.
+        
+        Args:
+            user_id: User's unique identifier
+            
+        Returns:
+            bool: True if auto-save should be performed, False otherwise
+        """
+        try:
+            from app.database import get_database_session
+            from app.models.database_models import User
+            
+            # Get database session
+            db_gen = get_database_session()
+            db = next(db_gen)
+            
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user:
+                    return False
+                
+                # Check user preferences
+                preferences = user.preferences or {}
+                return preferences.get("auto_save_choreographies", True)  # Default to True
+                
+            finally:
+                db.close()
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to check auto-save preference for user {user_id}: {e}")
+            return True  # Default to auto-save on error
+    
+    async def _auto_save_choreography(
+        self,
+        user_id: str,
+        result,
+        youtube_url: str,
+        difficulty: str,
+        quality_mode: str,
+        energy_level: str
+    ) -> Optional[str]:
+        """
+        Automatically save a generated choreography to the user's collection.
+        
+        Args:
+            user_id: User's unique identifier
+            result: Pipeline generation result
+            youtube_url: Original YouTube URL
+            difficulty: Difficulty level used
+            quality_mode: Quality mode used
+            energy_level: Energy level used
+            
+        Returns:
+            Optional[str]: Saved choreography ID if successful, None otherwise
+        """
+        try:
+            from app.services.collection_service import CollectionService
+            from app.models.collection_models import SaveChoreographyRequest
+            from app.database import get_database_session
+            
+            # Extract metadata from result
+            metadata = {}
+            if result.metadata_path and Path(result.metadata_path).exists():
+                try:
+                    import json
+                    with open(result.metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                except Exception as e:
+                    self.logger.warning(f"Failed to load metadata from {result.metadata_path}: {e}")
+            
+            # Generate title from YouTube URL or metadata
+            title = self._generate_choreography_title(youtube_url, metadata, difficulty)
+            
+            # Create music info
+            music_info = {
+                "youtube_url": youtube_url,
+                "title": metadata.get("title", "Unknown"),
+                "duration": result.sequence_duration,
+                "tempo": metadata.get("tempo"),
+                "energy_level": energy_level
+            }
+            
+            # Create generation parameters
+            generation_parameters = {
+                "difficulty": difficulty,
+                "quality_mode": quality_mode,
+                "energy_level": energy_level,
+                "processing_time": result.processing_time,
+                "moves_analyzed": result.moves_analyzed,
+                "recommendations_generated": result.recommendations_generated
+            }
+            
+            # Generate thumbnail if possible
+            thumbnail_path = await self._generate_video_thumbnail(result.output_path)
+            
+            # Create save request
+            save_request = SaveChoreographyRequest(
+                title=title,
+                video_path=result.output_path,
+                thumbnail_path=thumbnail_path,
+                difficulty=difficulty,
+                duration=result.sequence_duration,
+                music_info=music_info,
+                generation_parameters=generation_parameters
+            )
+            
+            # Save to collection
+            collection_service = CollectionService("data")
+            
+            # Get database session
+            db_gen = get_database_session()
+            db = next(db_gen)
+            
+            try:
+                saved_choreography = await collection_service.save_choreography(
+                    db, user_id, save_request
+                )
+                return saved_choreography.id
+            finally:
+                db.close()
+                
+        except Exception as e:
+            self.logger.error(f"Auto-save failed for user {user_id}: {e}")
+            return None
+    
+    def _generate_choreography_title(self, youtube_url: str, metadata: Dict, difficulty: str) -> str:
+        """
+        Generate a title for the choreography based on available information.
+        
+        Args:
+            youtube_url: Original YouTube URL
+            metadata: Extracted metadata
+            difficulty: Difficulty level
+            
+        Returns:
+            str: Generated title
+        """
+        # Try to extract title from metadata
+        if metadata.get("title"):
+            base_title = metadata["title"]
+            # Clean up the title
+            base_title = base_title.replace("(Official Video)", "").replace("(Official Audio)", "")
+            base_title = base_title.replace("[Official Video]", "").replace("[Official Audio]", "")
+            base_title = base_title.strip()
+        else:
+            # Extract from URL or use generic title
+            try:
+                from urllib.parse import urlparse, parse_qs
+                parsed = urlparse(youtube_url)
+                video_id = parse_qs(parsed.query).get('v', ['Unknown'])[0]
+                base_title = f"YouTube Video {video_id[:8]}"
+            except:
+                base_title = "Bachata Choreography"
+        
+        # Add difficulty level
+        title = f"{base_title} ({difficulty.title()})"
+        
+        # Ensure title is not too long
+        if len(title) > 200:
+            title = title[:197] + "..."
+        
+        return title
+    
+    async def _generate_video_thumbnail(self, video_path: str) -> Optional[str]:
+        """
+        Generate a thumbnail for the video.
+        
+        Args:
+            video_path: Path to the video file
+            
+        Returns:
+            Optional[str]: Path to generated thumbnail, None if failed
+        """
+        try:
+            import subprocess
+            from pathlib import Path
+            
+            video_file = Path(video_path)
+            if not video_file.exists():
+                return None
+            
+            # Generate thumbnail filename
+            thumbnail_path = video_file.parent / f"{video_file.stem}_thumb.jpg"
+            
+            # Use FFmpeg to generate thumbnail at 2 seconds
+            cmd = [
+                "ffmpeg", "-i", str(video_file),
+                "-ss", "00:00:02",  # Seek to 2 seconds
+                "-vframes", "1",    # Extract 1 frame
+                "-q:v", "2",        # High quality
+                "-y",               # Overwrite output
+                str(thumbnail_path)
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0 and thumbnail_path.exists():
+                return str(thumbnail_path)
+            else:
+                self.logger.warning(f"Thumbnail generation failed: {result.stderr}")
+                return None
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to generate thumbnail for {video_path}: {e}")
+            return None
     
     def _get_user_friendly_error_message(self, error_message: str) -> str:
         """Convert technical error messages to user-friendly messages."""

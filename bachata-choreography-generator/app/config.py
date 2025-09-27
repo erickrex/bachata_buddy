@@ -16,7 +16,7 @@ class Settings:
         # JWT Configuration
         self.jwt_secret_key: str = os.getenv(
             "JWT_SECRET_KEY", 
-            self._generate_secret_key()
+            "dev-secret-key-for-bachata-choreography-generator-change-in-production"
         )
         self.jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
         self.access_token_expire_minutes: int = int(

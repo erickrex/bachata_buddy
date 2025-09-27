@@ -328,3 +328,71 @@ class AuthController(BaseController):
                 "authenticated": True,
                 "user": UserResponse.from_orm(current_user)
             }
+        
+        @self.router.get(
+            "/preferences",
+            responses={
+                401: {"model": ErrorResponse, "description": "Authentication required"}
+            }
+        )
+        async def get_user_preferences(current_user: AuthenticatedUser):
+            """
+            Get current user's preferences.
+            
+            Returns the user's preferences including auto-save settings.
+            """
+            preferences = current_user.preferences or {"auto_save_choreographies": True}
+            return {"preferences": preferences}
+        
+        @self.router.put(
+            "/preferences",
+            responses={
+                400: {"model": ErrorResponse, "description": "Invalid preferences"},
+                401: {"model": ErrorResponse, "description": "Authentication required"}
+            }
+        )
+        async def update_user_preferences(
+            preferences: dict,
+            current_user: AuthenticatedUser,
+            db: Session = Depends(get_database_session)
+        ):
+            """
+            Update current user's preferences.
+            
+            Allows updating user preferences like auto-save settings.
+            """
+            try:
+                # Validate preferences structure
+                valid_keys = {"auto_save_choreographies"}
+                if not all(key in valid_keys for key in preferences.keys()):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid preference keys"
+                    )
+                
+                # Validate auto_save_choreographies value
+                if "auto_save_choreographies" in preferences:
+                    if not isinstance(preferences["auto_save_choreographies"], bool):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="auto_save_choreographies must be a boolean"
+                        )
+                
+                # Update user preferences
+                current_user.preferences = preferences
+                db.commit()
+                db.refresh(current_user)
+                
+                return {
+                    "message": "Preferences updated successfully",
+                    "preferences": current_user.preferences
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to update preferences"
+                )

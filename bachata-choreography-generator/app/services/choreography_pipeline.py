@@ -56,6 +56,10 @@ class PipelineConfig:
     output_dir: str = "data/output"
     temp_dir: str = "data/temp"
     
+    # User-specific directory overrides (optional)
+    output_directory: Optional[str] = None
+    temp_directory: Optional[str] = None
+    
     # Service-specific settings
     youtube_output_dir: str = "data/temp"
     annotation_data_dir: str = "data"
@@ -245,9 +249,13 @@ class ChoreoGenerationPipeline:
         self._cache_hits = 0
         self._cache_misses = 0
         
+        # Determine which directories to use (user-specific or default)
+        self.effective_output_dir = self.config.output_directory or self.config.output_dir
+        self.effective_temp_dir = self.config.temp_directory or self.config.temp_dir
+        
         # Ensure directories exist
-        Path(self.config.output_dir).mkdir(parents=True, exist_ok=True)
-        Path(self.config.temp_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.effective_output_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.effective_temp_dir).mkdir(parents=True, exist_ok=True)
         
         logger.info(f"ChoreoGenerationPipeline initialized with {self.config.quality_mode} quality mode")
     
@@ -315,7 +323,7 @@ class ChoreoGenerationPipeline:
             # Configure based on quality mode
             if self.config.quality_mode == "fast":
                 video_config = VideoGenerationConfig(
-                    output_path=f"{self.config.output_dir}/choreography_fast.mp4",
+                    output_path=f"{self.effective_output_dir}/choreography_fast.mp4",
                     resolution="1280x720",
                     video_bitrate="4M",
                     audio_bitrate="128k",
@@ -323,7 +331,7 @@ class ChoreoGenerationPipeline:
                 )
             elif self.config.quality_mode == "high_quality":
                 video_config = VideoGenerationConfig(
-                    output_path=f"{self.config.output_dir}/choreography_hq.mp4",
+                    output_path=f"{self.effective_output_dir}/choreography_hq.mp4",
                     resolution="1920x1080",
                     video_bitrate="8M",
                     audio_bitrate="320k",
@@ -331,7 +339,7 @@ class ChoreoGenerationPipeline:
                 )
             else:  # balanced
                 video_config = VideoGenerationConfig(
-                    output_path=f"{self.config.output_dir}/choreography_balanced.mp4",
+                    output_path=f"{self.effective_output_dir}/choreography_balanced.mp4",
                     resolution="1280x720",
                     video_bitrate="6M",
                     audio_bitrate="192k",
@@ -364,8 +372,10 @@ class ChoreoGenerationPipeline:
         """Lazy-loaded YouTube service."""
         if self._youtube_service is None:
             logger.debug("Initializing YouTubeService")
+            # Use user-specific temp directory for YouTube downloads
+            youtube_temp_dir = self.effective_temp_dir
             self._youtube_service = YouTubeService(
-                output_dir=self.config.youtube_output_dir
+                output_dir=youtube_temp_dir
             )
         return self._youtube_service
     
@@ -1005,7 +1015,7 @@ class ChoreoGenerationPipeline:
             song_name = Path(audio_path).stem
             safe_name = "".join(c for c in song_name if c.isalnum() or c in "_-")[:30]
             output_filename = f"{safe_name}_{self.config.quality_mode}_choreography.mp4"
-            output_path = Path(self.config.output_dir) / output_filename
+            output_path = Path(self.effective_output_dir) / output_filename
             
             # Update video generator config with dynamic output path
             self.video_generator.config.output_path = str(output_path)
@@ -1114,7 +1124,7 @@ class ChoreoGenerationPipeline:
                     # Additional cleanup logic could be added here
             
             # Clean up temporary files
-            temp_dir = Path(self.config.temp_dir)
+            temp_dir = Path(self.effective_temp_dir)
             if temp_dir.exists():
                 for temp_file in temp_dir.glob("*.tmp"):
                     try:

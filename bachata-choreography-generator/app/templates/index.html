@@ -96,6 +96,25 @@
                 <input type="hidden" name="quality_mode" value="balanced">
                 <input type="hidden" name="energy_level" value="medium">
                 
+                <!-- Authentication Notice -->
+                <template x-if="!$root.user.isAuthenticated">
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+                        <div class="text-blue-600 mb-2">
+                            <svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-blue-700 font-semibold mb-2">Login Required</p>
+                        <p class="text-blue-600 text-sm mb-3">
+                            Please login or register to generate choreographies
+                        </p>
+                        <button @click="$root.showLogin = true" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors duration-200">
+                            Login Now
+                        </button>
+                    </div>
+                </template>
+
                 <!-- Generate Button -->
                 <button type="submit"
                         :disabled="!canGenerate() || isGenerating"
@@ -306,6 +325,11 @@
             
             // Form validation
             canGenerate() {
+                // Check if user is authenticated
+                if (!this.$root.user.isAuthenticated) {
+                    return false;
+                }
+                
                 if (this.selectedSong === 'new_song') {
                     return this.youtubeUrl.trim() !== '' && this.isValidYouTubeUrl(this.youtubeUrl);
                 }
@@ -387,17 +411,40 @@
                 const response = event.detail.xhr.response;
                 try {
                     const data = JSON.parse(response);
+                    
                     if (event.detail.xhr.status === 200) {
                         this.currentTaskId = data.task_id;
                         this.progress = 10;
                         this.progressMessage = 'Generation started, analyzing music...';
                         this.currentStage = 'downloading';
                         this.startProgressPolling();
+                    } else if (event.detail.xhr.status === 401) {
+                        // Authentication required
+                        this.handleGenerationError({ 
+                            message: 'Please login to generate choreographies. Click the Login button in the top right corner.' 
+                        });
+                        // Show login modal after a short delay
+                        setTimeout(() => {
+                            this.$root.showLogin = true;
+                        }, 2000);
                     } else {
+                        // Other errors (400, 500, etc.)
                         this.handleGenerationError(data);
                     }
                 } catch (e) {
-                    this.handleGenerationError({ message: 'Failed to parse server response' });
+                    // Handle cases where response is not valid JSON
+                    if (event.detail.xhr.status === 401) {
+                        this.handleGenerationError({ 
+                            message: 'Please login to generate choreographies. Click the Login button in the top right corner.' 
+                        });
+                        setTimeout(() => {
+                            this.$root.showLogin = true;
+                        }, 2000);
+                    } else {
+                        this.handleGenerationError({ 
+                            message: `Server error (${event.detail.xhr.status}). Please try again or contact support.` 
+                        });
+                    }
                 }
             },
             

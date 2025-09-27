@@ -1,13 +1,13 @@
 {
   "pipeline_info": {
-    "quality_mode": "fast",
-    "processing_time": 2.43902587890625,
-    "cache_hits": 0,
-    "cache_misses": 9
+    "quality_mode": "balanced",
+    "processing_time": 18.776796579360962,
+    "cache_hits": 9,
+    "cache_misses": 0
   },
   "sequence_info": {
-    "total_moves": 25,
-    "total_duration": 200.0,
+    "total_moves": 23,
+    "total_duration": 200.1212244897959,
     "difficulty_level": "advanced",
     "audio_tempo": 129.19921875
   },
@@ -15,165 +15,153 @@
     "tempo": 129.19921875,
     "duration": 200.1212244897959,
     "sections": 6,
-    "rhythm_strength": 0.7755424662252532,
+    "rhythm_strength": 0.7755424719363543,
     "syncopation": 0.5758790709744388
   },
   "moves_used": [
     {
       "clip_id": "move_1",
-      "video_path": "data/Bachata_steps/dip/dip_1.mp4",
+      "video_path": "data\\Bachata_steps\\body_roll\\body_roll_1.mp4",
       "start_time": 0.0,
-      "duration": 8.0
+      "duration": 10.048
     },
     {
       "clip_id": "move_2",
-      "video_path": "data/Bachata_steps/body_roll/body_roll_1.mp4",
-      "start_time": 8.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\hammerlock\\hammerlock_1.mp4",
+      "start_time": 10.048,
+      "duration": 10.048
     },
     {
       "clip_id": "move_3",
-      "video_path": "data/Bachata_steps/hammerlock/hammerlock_1.mp4",
-      "start_time": 16.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\dip\\dip_1.mp4",
+      "start_time": 20.096,
+      "duration": 12.0
     },
     {
       "clip_id": "move_4",
-      "video_path": "data/Bachata_steps/lady_right_turn/lady_right_turn_1.mp4",
-      "start_time": 24.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\lady_right_turn\\lady_right_turn_1.mp4",
+      "start_time": 32.096000000000004,
+      "duration": 6.677
     },
     {
       "clip_id": "move_5",
-      "video_path": "data/Bachata_steps/cross_body_lead/cross_body_lead_1.mp4",
-      "start_time": 32.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\basic_steps\\basic_step_1.mp4",
+      "start_time": 38.773,
+      "duration": 12.0
     },
     {
       "clip_id": "move_6",
-      "video_path": "data/Bachata_steps/basic_steps/basic_step_1.mp4",
-      "start_time": 40.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\cross_body_lead\\cross_body_lead_1.mp4",
+      "start_time": 50.773,
+      "duration": 7.125
     },
     {
       "clip_id": "move_7",
-      "video_path": "data/Bachata_steps/forward_backward/forward_backward_1.mp4",
-      "start_time": 48.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\forward_backward\\forward_backward_1.mp4",
+      "start_time": 57.898,
+      "duration": 6.421
     },
     {
       "clip_id": "move_8",
-      "video_path": "data/Bachata_steps/lady_left_turn/lady_left_turn_1.mp4",
-      "start_time": 56.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\lady_left_turn\\lady_left_turn_1.mp4",
+      "start_time": 64.319,
+      "duration": 4.672
     },
     {
       "clip_id": "move_9",
-      "video_path": "data/Bachata_steps/dip/dip_1.mp4",
-      "start_time": 64.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\body_roll\\body_roll_1.mp4",
+      "start_time": 68.991,
+      "duration": 10.048
     },
     {
       "clip_id": "move_10",
-      "video_path": "data/Bachata_steps/body_roll/body_roll_1.mp4",
-      "start_time": 72.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\hammerlock\\hammerlock_1.mp4",
+      "start_time": 79.039,
+      "duration": 10.048
     },
     {
       "clip_id": "move_11",
-      "video_path": "data/Bachata_steps/hammerlock/hammerlock_1.mp4",
-      "start_time": 80.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\dip\\dip_1.mp4",
+      "start_time": 89.087,
+      "duration": 12.0
     },
     {
       "clip_id": "move_12",
-      "video_path": "data/Bachata_steps/lady_right_turn/lady_right_turn_1.mp4",
-      "start_time": 88.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\lady_right_turn\\lady_right_turn_1.mp4",
+      "start_time": 101.087,
+      "duration": 6.677
     },
     {
       "clip_id": "move_13",
-      "video_path": "data/Bachata_steps/cross_body_lead/cross_body_lead_1.mp4",
-      "start_time": 96.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\basic_steps\\basic_step_1.mp4",
+      "start_time": 107.76400000000001,
+      "duration": 12.0
     },
     {
       "clip_id": "move_14",
-      "video_path": "data/Bachata_steps/basic_steps/basic_step_1.mp4",
-      "start_time": 104.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\cross_body_lead\\cross_body_lead_1.mp4",
+      "start_time": 119.76400000000001,
+      "duration": 7.125
     },
     {
       "clip_id": "move_15",
-      "video_path": "data/Bachata_steps/forward_backward/forward_backward_1.mp4",
-      "start_time": 112.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\forward_backward\\forward_backward_1.mp4",
+      "start_time": 126.88900000000001,
+      "duration": 6.421
     },
     {
       "clip_id": "move_16",
-      "video_path": "data/Bachata_steps/lady_left_turn/lady_left_turn_1.mp4",
-      "start_time": 120.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\lady_left_turn\\lady_left_turn_1.mp4",
+      "start_time": 133.31,
+      "duration": 4.672
     },
     {
       "clip_id": "move_17",
-      "video_path": "data/Bachata_steps/dip/dip_1.mp4",
-      "start_time": 128.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\body_roll\\body_roll_1.mp4",
+      "start_time": 137.982,
+      "duration": 10.048
     },
     {
       "clip_id": "move_18",
-      "video_path": "data/Bachata_steps/body_roll/body_roll_1.mp4",
-      "start_time": 136.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\hammerlock\\hammerlock_1.mp4",
+      "start_time": 148.03,
+      "duration": 10.048
     },
     {
       "clip_id": "move_19",
-      "video_path": "data/Bachata_steps/hammerlock/hammerlock_1.mp4",
-      "start_time": 144.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\dip\\dip_1.mp4",
+      "start_time": 158.078,
+      "duration": 12.0
     },
     {
       "clip_id": "move_20",
-      "video_path": "data/Bachata_steps/lady_right_turn/lady_right_turn_1.mp4",
-      "start_time": 152.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\lady_right_turn\\lady_right_turn_1.mp4",
+      "start_time": 170.078,
+      "duration": 6.677
     },
     {
       "clip_id": "move_21",
-      "video_path": "data/Bachata_steps/cross_body_lead/cross_body_lead_1.mp4",
-      "start_time": 160.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\basic_steps\\basic_step_1.mp4",
+      "start_time": 176.755,
+      "duration": 12.0
     },
     {
       "clip_id": "move_22",
-      "video_path": "data/Bachata_steps/basic_steps/basic_step_1.mp4",
-      "start_time": 168.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\cross_body_lead\\cross_body_lead_1.mp4",
+      "start_time": 188.755,
+      "duration": 7.125
     },
     {
       "clip_id": "move_23",
-      "video_path": "data/Bachata_steps/forward_backward/forward_backward_1.mp4",
-      "start_time": 176.0,
-      "duration": 8.0
-    },
-    {
-      "clip_id": "move_24",
-      "video_path": "data/Bachata_steps/lady_left_turn/lady_left_turn_1.mp4",
-      "start_time": 184.0,
-      "duration": 8.0
-    },
-    {
-      "clip_id": "move_25",
-      "video_path": "data/Bachata_steps/dip/dip_1.mp4",
-      "start_time": 192.0,
-      "duration": 8.0
+      "video_path": "data\\Bachata_steps\\forward_backward\\forward_backward_1.mp4",
+      "start_time": 195.88,
+      "duration": 4.241224489795911
     }
   ],
   "video_output": {
-    "output_path": "data/output/Temevas_fast_choreography.mp4",
-    "duration": 237.182033,
-    "file_size": 48734081,
-    "processing_time": 2.43902587890625
+    "output_path": "data\\output\\Temevas_balanced_choreography.mp4",
+    "duration": 200.121,
+    "file_size": 41310642,
+    "processing_time": 18.776796579360962
   }
 }

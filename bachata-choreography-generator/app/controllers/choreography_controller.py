@@ -375,7 +375,7 @@ class ChoreographyController(BaseController):
                         if ('{task_data['status']}' === 'completed') {{
                             data.showResult({json.dumps(task_data.get('result', {}))});
                         }} else if ('{task_data['status']}' === 'failed') {{
-                            const errorMsg = '{task_data.get('error', 'Generation failed').replace("'", "\\'").replace('"', '\\"')}';
+                            const errorMsg = '{task_data.get('error', 'Generation failed').replace("'", "\\'")}';
                             data.showError(errorMsg);
                         }}
                     }}

@@ -407,6 +407,9 @@ class ChoreoGenerationPipeline:
         start_time = time.time()
         result = PipelineResult(success=False)
         
+        # Store YouTube metadata for later use
+        self._youtube_metadata = None
+        
         try:
             logger.info(f"Starting choreography generation: {audio_input}")
             
@@ -461,7 +464,7 @@ class ChoreoGenerationPipeline:
             
             # Step 7: Export metadata
             metadata_path = await self._export_metadata(
-                sequence, video_result, music_features, audio_path
+                sequence, video_result, music_features, audio_path, audio_input
             )
             
             # Cleanup if requested
@@ -506,6 +509,14 @@ class ChoreoGenerationPipeline:
             
             if download_result.success:
                 audio_path = download_result.file_path
+                
+                # Store YouTube metadata for later use
+                self._youtube_metadata = {
+                    "title": download_result.title,
+                    "duration": download_result.duration,
+                    "url": audio_input
+                }
+                
                 # Cache the result
                 if self.cache:
                     self.cache.set("youtube_download", audio_input, audio_path)
@@ -1054,7 +1065,8 @@ class ChoreoGenerationPipeline:
         sequence: ChoreographySequence,
         video_result: Dict[str, Any],
         music_features: MusicFeatures,
-        audio_path: str
+        audio_path: str,
+        original_input: str
     ) -> Optional[str]:
         """Export comprehensive metadata."""
         try:
@@ -1073,6 +1085,11 @@ class ChoreoGenerationPipeline:
                     "processing_time": video_result["processing_time"],
                     "cache_hits": self._cache_hits,
                     "cache_misses": self._cache_misses
+                },
+                "source_info": {
+                    "original_input": original_input,
+                    "is_youtube": self.youtube_service.validate_url(original_input),
+                    "youtube_metadata": self._youtube_metadata
                 },
                 "sequence_info": {
                     "total_moves": len(sequence.moves),

@@ -296,6 +296,21 @@ class ChoreographyController(BaseController):
                     if user_video_path.exists() and user_video_path.is_file():
                         video_path = user_video_path
                 
+                # If no user or user-specific file not found, search all user directories
+                # This allows video playback even when HTML video element doesn't send auth headers
+                if not video_path:
+                    output_dir = Path("data/output")
+                    self.logger.debug(f"Searching for {filename} in user directories under {output_dir}")
+                    # Check all user directories
+                    for user_dir in output_dir.glob("user_*"):
+                        if user_dir.is_dir():
+                            potential_path = user_dir / filename
+                            self.logger.debug(f"Checking: {potential_path}")
+                            if potential_path.exists() and potential_path.is_file():
+                                video_path = potential_path
+                                self.logger.debug(f"Found video at: {video_path}")
+                                break
+                
                 # Fall back to general output directory for backward compatibility
                 if not video_path:
                     general_video_path = Path("data/output") / filename
@@ -701,11 +716,18 @@ class ChoreographyController(BaseController):
             title = self._generate_choreography_title(youtube_url, metadata, difficulty)
             
             # Create music info
+            youtube_metadata = metadata.get("source_info", {}).get("youtube_metadata")
+            music_title = "Unknown"
+            if youtube_metadata and youtube_metadata.get("title"):
+                music_title = youtube_metadata["title"]
+            elif metadata.get("title"):
+                music_title = metadata["title"]
+            
             music_info = {
                 "youtube_url": youtube_url,
-                "title": metadata.get("title", "Unknown"),
+                "title": music_title,
                 "duration": result.sequence_duration,
-                "tempo": metadata.get("tempo"),
+                "tempo": metadata.get("music_analysis", {}).get("tempo"),
                 "energy_level": energy_level
             }
             
@@ -764,10 +786,17 @@ class ChoreographyController(BaseController):
         Returns:
             str: Generated title
         """
-        # Try to extract title from metadata
-        if metadata.get("title"):
-            base_title = metadata["title"]
+        # Try to extract title from new metadata structure
+        youtube_metadata = metadata.get("source_info", {}).get("youtube_metadata")
+        if youtube_metadata and youtube_metadata.get("title"):
+            base_title = youtube_metadata["title"]
             # Clean up the title
+            base_title = base_title.replace("(Official Video)", "").replace("(Official Audio)", "")
+            base_title = base_title.replace("[Official Video]", "").replace("[Official Audio]", "")
+            base_title = base_title.strip()
+        elif metadata.get("title"):
+            # Fallback to old metadata structure
+            base_title = metadata["title"]
             base_title = base_title.replace("(Official Video)", "").replace("(Official Audio)", "")
             base_title = base_title.replace("[Official Video]", "").replace("[Official Audio]", "")
             base_title = base_title.strip()

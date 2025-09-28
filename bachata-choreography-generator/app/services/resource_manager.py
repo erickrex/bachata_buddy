@@ -220,9 +220,15 @@ class ResourceManager:
     
     async def _monitor_resources(self):
         """Background task to monitor system resources."""
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
         while True:
             try:
                 resources = self.get_system_resources()
+                
+                # Reset error counter on successful execution
+                consecutive_errors = 0
                 
                 # Check memory usage
                 if "memory" in resources:
@@ -246,17 +252,30 @@ class ResourceManager:
                 if ("memory" in resources and 
                     resources["memory"]["percent_used"] > 90):
                     self.logger.info("High memory usage detected, running cleanup")
-                    await self.cleanup_temporary_files()
-                    await self.cleanup_cache_directory()
+                    try:
+                        await asyncio.wait_for(self.cleanup_temporary_files(), timeout=300)
+                        await asyncio.wait_for(self.cleanup_cache_directory(), timeout=300)
+                    except asyncio.TimeoutError:
+                        self.logger.error("Cleanup operation timed out")
                 
                 # Wait before next check
                 await asyncio.sleep(300)  # Check every 5 minutes
                 
             except asyncio.CancelledError:
+                self.logger.info("Resource monitoring cancelled")
                 break
             except Exception as e:
-                self.logger.error(f"Error in resource monitoring: {e}")
-                await asyncio.sleep(60)  # Wait 1 minute before retrying
+                consecutive_errors += 1
+                self.logger.error(f"Error in resource monitoring (attempt {consecutive_errors}): {e}")
+                
+                # If too many consecutive errors, stop monitoring to prevent infinite error loop
+                if consecutive_errors >= max_consecutive_errors:
+                    self.logger.error(f"Too many consecutive errors ({max_consecutive_errors}), stopping resource monitoring")
+                    break
+                
+                # Exponential backoff for retries
+                wait_time = min(60 * (2 ** consecutive_errors), 600)  # Max 10 minutes
+                await asyncio.sleep(wait_time)
     
     async def schedule_cleanup(self, interval_hours: int = 6):
         """Schedule periodic cleanup of temporary files."""
@@ -266,39 +285,81 @@ class ResourceManager:
     
     async def _periodic_cleanup(self, interval_hours: int):
         """Periodic cleanup task."""
+        consecutive_errors = 0
+        max_consecutive_errors = 3
+        
         while True:
             try:
                 await asyncio.sleep(interval_hours * 3600)
-                await self.cleanup_temporary_files()
-                await self.cleanup_cache_directory()
+                
+                # Reset error counter before attempting cleanup
+                consecutive_errors = 0
+                
+                # Run cleanup with timeout protection
+                try:
+                    await asyncio.wait_for(self.cleanup_temporary_files(), timeout=600)  # 10 minutes max
+                    await asyncio.wait_for(self.cleanup_cache_directory(), timeout=600)  # 10 minutes max
+                    self.logger.info("Periodic cleanup completed successfully")
+                except asyncio.TimeoutError:
+                    self.logger.error("Periodic cleanup timed out")
+                    consecutive_errors += 1
+                    
             except asyncio.CancelledError:
+                self.logger.info("Periodic cleanup cancelled")
                 break
             except Exception as e:
-                self.logger.error(f"Error in periodic cleanup: {e}")
+                consecutive_errors += 1
+                self.logger.error(f"Error in periodic cleanup (attempt {consecutive_errors}): {e}")
+                
+                # If too many consecutive errors, stop to prevent infinite error loop
+                if consecutive_errors >= max_consecutive_errors:
+                    self.logger.error(f"Too many consecutive cleanup errors ({max_consecutive_errors}), stopping periodic cleanup")
+                    break
+                
+                # Wait a bit before retrying (but not the full interval)
+                await asyncio.sleep(300)  # 5 minutes before retry
     
     async def shutdown(self):
         """Clean shutdown of resource manager."""
         self.logger.info("Shutting down resource manager")
         
-        # Stop monitoring
-        await self.stop_monitoring()
+        try:
+            # Stop monitoring with timeout
+            await asyncio.wait_for(self.stop_monitoring(), timeout=30)
+        except asyncio.TimeoutError:
+            self.logger.warning("Monitoring shutdown timed out")
+        except Exception as e:
+            self.logger.error(f"Error stopping monitoring: {e}")
         
         # Cancel cleanup tasks
         for task in self.cleanup_tasks:
             if not task.done():
                 task.cancel()
         
-        # Wait for tasks to complete
+        # Wait for tasks to complete with timeout
         if self.cleanup_tasks:
-            await asyncio.gather(*self.cleanup_tasks, return_exceptions=True)
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self.cleanup_tasks, return_exceptions=True),
+                    timeout=60
+                )
+            except asyncio.TimeoutError:
+                self.logger.warning("Cleanup tasks shutdown timed out")
         
-        # Final cleanup
-        await self.cleanup_temporary_files()
+        # Final cleanup with timeout
+        try:
+            await asyncio.wait_for(self.cleanup_temporary_files(), timeout=120)
+        except asyncio.TimeoutError:
+            self.logger.warning("Final cleanup timed out")
+        except Exception as e:
+            self.logger.error(f"Error in final cleanup: {e}")
         
         # Clean up any active temporary files from temp file manager
         try:
             from .temp_file_manager import temp_file_manager
-            await temp_file_manager.cleanup_all_active_files()
+            await asyncio.wait_for(temp_file_manager.cleanup_all_active_files(), timeout=60)
+        except asyncio.TimeoutError:
+            self.logger.warning("Temp file manager cleanup timed out")
         except Exception as e:
             self.logger.warning(f"Error cleaning up temp file manager: {e}")
         

@@ -227,9 +227,15 @@ class SystemResourceValidator:
             output_dir = Path("data/output")
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            stat = os.statvfs(str(output_dir))
-            available_bytes = stat.f_bavail * stat.f_frsize
-            available_mb = available_bytes / (1024 * 1024)
+            # Cross-platform disk space check
+            if os.name == 'nt':  # Windows
+                import shutil
+                total, used, free = shutil.disk_usage(str(output_dir))
+                available_mb = free / (1024 * 1024)
+            else:  # Unix/Linux
+                stat = os.statvfs(str(output_dir))
+                available_bytes = stat.f_bavail * stat.f_frsize
+                available_mb = available_bytes / (1024 * 1024)
             
             result["available_mb"] = int(available_mb)
             result["sufficient"] = available_mb >= required_mb

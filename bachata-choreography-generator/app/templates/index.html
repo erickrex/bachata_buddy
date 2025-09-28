@@ -96,6 +96,25 @@
                 <input type="hidden" name="quality_mode" value="balanced">
                 <input type="hidden" name="energy_level" value="medium">
                 
+                <!-- Authentication Notice -->
+                <template x-if="!$root.user.isAuthenticated">
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+                        <div class="text-blue-600 mb-2">
+                            <svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-blue-700 font-semibold mb-2">Login Required</p>
+                        <p class="text-blue-600 text-sm mb-3">
+                            Please login or register to generate choreographies
+                        </p>
+                        <button @click="$root.showLogin = true" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors duration-200">
+                            Login Now
+                        </button>
+                    </div>
+                </template>
+                
                 <!-- Generate Button -->
                 <button type="submit"
                         :disabled="!canGenerate() || isGenerating"
@@ -173,12 +192,102 @@
             <!-- Video Player -->
             <div class="text-center">
                 <video x-show="result" 
+                        x-ref="videoPlayer"
                        :src="result ? `/api/video/${result.video_filename}` : ''"
-                       controls
-                       preload="metadata"
-                       class="w-full max-w-lg mx-auto rounded-xl shadow-lg bg-black">
-                    <p class="text-gray-500">Your browser does not support the video tag.</p>
+                        @loadedmetadata="initVideoPlayer()"
+                        @timeupdate="updateVideoProgress()"
+                        @ended="handleVideoEnd()"
+                        @click="togglePlayPause()"
+                        preload="metadata"
+                        class="w-full max-w-lg mx-auto rounded-xl shadow-lg bg-black">
+                     <p class="text-gray-500">Your browser does not support the video tag.</p>
                 </video>
+            </div>
+             
+             <!-- Custom Video Controls -->
+             <div x-show="result" class="max-w-lg mx-auto space-y-3">
+                 <!-- Basic Play/Pause Controls -->
+                 <div class="flex items-center justify-center space-x-4 mb-3">
+                     <button @click="togglePlayPause()" 
+                             class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors duration-200">
+                         <span x-show="!isPlaying">▶️ Play</span>
+                         <span x-show="isPlaying">⏸️ Pause</span>
+                     </button>
+                     
+                     <button @click="seekTo(0)" 
+                             class="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors duration-200">
+                         ⏮️ Start
+                     </button>
+                 </div>
+
+                 <!-- Progress Bar -->
+                 <div x-show="videoDuration > 0" class="space-y-2">
+                     <div class="flex justify-between text-sm text-gray-600">
+                         <span x-text="formatTime(currentTime)">0:00</span>
+                         <span x-text="formatTime(videoDuration)">0:00</span>
+                     </div>
+                     
+                     <!-- Progress bar container -->
+                     <div class="relative bg-gray-300 h-2 rounded-full cursor-pointer" @click="seekToPosition($event)">
+                         <!-- Progress indicator -->
+                         <div class="bg-blue-500 h-2 rounded-full transition-all duration-100"
+                              :style="`width: ${progressPercentage}%`"></div>
+                         
+                         <!-- Loop segment indicator -->
+                         <div x-show="loopStart >= 0 && loopEnd > loopStart" 
+                              class="absolute top-0 h-2 bg-green-400 rounded-full opacity-70"
+                              :style="`left: ${loopStartPercentage}%; width: ${loopSegmentWidth}%`"></div>
+                     </div>
+                 </div>
+
+                 <!-- Loop Controls -->
+                 <div class="flex items-center justify-center space-x-4">
+                     <button @click="toggleLoop()" 
+                             :class="isLooping ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-500 hover:bg-gray-600'"
+                             class="px-4 py-2 text-white rounded-lg font-semibold transition-colors duration-200">
+                        <span x-show="!isLooping">🔄 Enable Loop</span>
+                        <span x-show="isLooping">⏹️ Disable Loop</span>
+                     </button>
+                 </div>
+
+                 <!-- Loop Segment Info -->
+                 <div x-show="loopStart >= 0 && loopEnd > loopStart" 
+                      class="bg-green-50 border border-green-200 rounded-lg p-3">
+                     <div class="text-sm text-green-800">
+                        <p><strong>Loop Segment:</strong> <span x-text="formatTime(loopStart)"></span> - <span x-text="formatTime(loopEnd)"></span></p>
+                        <p><strong>Duration:</strong> <span x-text="formatTime(loopEnd - loopStart)"></span></p>
+                     </div>
+                     
+                     <!-- Fine Adjustment Controls -->
+                     <div class="flex items-center justify-center space-x-8 mt-3">
+                         <div class="flex flex-col items-center space-y-2">
+                             <span class="text-sm font-medium text-gray-700">Start</span>
+                             <div class="flex space-x-2">
+                                 <button @click="adjustLoopStart(-5)" 
+                                         class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors duration-200">
+                                     ⏪ -5s
+                                 </button>
+                                 <button @click="adjustLoopStart(5)" 
+                                         class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors duration-200">
+                                     ⏩ +5s
+                                 </button>
+                             </div>
+                         </div>
+                         <div class="flex flex-col items-center space-y-2">
+                             <span class="text-sm font-medium text-gray-700">End</span>
+                             <div class="flex space-x-2">
+                                 <button @click="adjustLoopEnd(-5)" 
+                                         class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors duration-200">
+                                     ⏪ -5s
+                                 </button>
+                                 <button @click="adjustLoopEnd(5)" 
+                                         class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors duration-200">
+                                     ⏩ +5s
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
             </div>
             
             <!-- Result Info -->
@@ -241,7 +350,7 @@
                         <button @click="$root.showLogin = true" 
                                 class="text-blue-600 hover:text-blue-800 font-semibold underline">
                             Login or Register
-                        </button>
+                    </button>
                     </div>
                 </template>
                 
@@ -303,9 +412,40 @@
             result: null,
             error: false,
             errorMessage: '',
+             
+             // Video player state
+             videoDuration: 0,
+             currentTime: 0,
+             progressPercentage: 0,
+             isPlaying: false,
+             
+             // Loop functionality
+             isLooping: false,
+             loopStart: -1,
+             loopEnd: -1,
+             
+             // Computed properties for loop indicators
+             get loopStartPercentage() {
+                 if (this.videoDuration > 0 && this.loopStart >= 0) {
+                     return (this.loopStart / this.videoDuration) * 100;
+                 }
+                 return 0;
+             },
+             
+             get loopSegmentWidth() {
+                 if (this.videoDuration > 0 && this.loopStart >= 0 && this.loopEnd > this.loopStart) {
+                     return ((this.loopEnd - this.loopStart) / this.videoDuration) * 100;
+                 }
+                 return 0;
+             },
             
             // Form validation
             canGenerate() {
+                // Check if user is authenticated
+                if (!this.$root.user.isAuthenticated) {
+                    return false;
+                }
+                
                 if (this.selectedSong === 'new_song') {
                     return this.youtubeUrl.trim() !== '' && this.isValidYouTubeUrl(this.youtubeUrl);
                 }
@@ -387,17 +527,40 @@
                 const response = event.detail.xhr.response;
                 try {
                     const data = JSON.parse(response);
+                    
                     if (event.detail.xhr.status === 200) {
                         this.currentTaskId = data.task_id;
                         this.progress = 10;
                         this.progressMessage = 'Generation started, analyzing music...';
                         this.currentStage = 'downloading';
                         this.startProgressPolling();
+                    } else if (event.detail.xhr.status === 401) {
+                        // Authentication required
+                        this.handleGenerationError({ 
+                            message: 'Please login to generate choreographies. Click the Login button in the top right corner.' 
+                        });
+                        // Show login modal after a short delay
+                        setTimeout(() => {
+                            this.$root.showLogin = true;
+                        }, 2000);
                     } else {
+                        // Other errors (400, 500, etc.)
                         this.handleGenerationError(data);
                     }
                 } catch (e) {
-                    this.handleGenerationError({ message: 'Failed to parse server response' });
+                    // Handle cases where response is not valid JSON
+                    if (event.detail.xhr.status === 401) {
+                        this.handleGenerationError({ 
+                            message: 'Please login to generate choreographies. Click the Login button in the top right corner.' 
+                        });
+                        setTimeout(() => {
+                            this.$root.showLogin = true;
+                        }, 2000);
+                    } else {
+                        this.handleGenerationError({ 
+                            message: `Server error (${event.detail.xhr.status}). Please try again or contact support.` 
+                        });
+                    }
                 }
             },
             
@@ -499,7 +662,7 @@
                 this.isSaving = false;
                 if (event.detail.xhr.status === 200) {
                     this.$root.showNotification('💾 Choreography saved to your collection!', 'success');
-                } else {
+                    } else {
                     try {
                         const errorData = JSON.parse(event.detail.xhr.response);
                         this.$root.showNotification(errorData.message || 'Failed to save choreography', 'error');
@@ -535,6 +698,132 @@
                 this.$root.showNotification(message, 'error');
             },
             
+            // Video player functions
+            togglePlayPause() {
+                const video = this.$refs.videoPlayer;
+                if (video) {
+                    if (video.paused) {
+                        // If loop is active and there's a selected segment, start from loop beginning
+                        if (this.isLooping && this.loopStart >= 0) {
+                            video.currentTime = this.loopStart;
+                        }
+                        video.play();
+                        this.isPlaying = true;
+                    } else {
+                        video.pause();
+                        this.isPlaying = false;
+                    }
+                }
+            },
+
+            seekTo(time) {
+                const video = this.$refs.videoPlayer;
+                if (video) {
+                    video.currentTime = time;
+                }
+            },
+
+            initVideoPlayer() {
+                const video = this.$refs.videoPlayer;
+                if (video) {
+                    this.videoDuration = video.duration;
+                    this.currentTime = video.currentTime;
+                    this.isPlaying = !video.paused;
+                    this.updateVideoProgress();
+                }
+            },
+
+            updateVideoProgress() {
+                const video = this.$refs.videoPlayer;
+                if (video) {
+                    this.currentTime = video.currentTime;
+                    this.progressPercentage = (video.currentTime / video.duration) * 100;
+                    this.isPlaying = !video.paused;
+                    
+                    // Check if we need to loop
+                    if (this.isLooping && this.loopEnd > 0 && video.currentTime >= this.loopEnd) {
+                        video.currentTime = this.loopStart;
+                    }
+                }
+            },
+
+            handleVideoEnd() {
+                this.isPlaying = false;
+                if (this.isLooping && this.loopStart >= 0) {
+                    const video = this.$refs.videoPlayer;
+                    if (video) {
+                        video.currentTime = this.loopStart;
+                        video.play();
+                    }
+                }
+            },
+
+            seekToPosition(event) {
+                const video = this.$refs.videoPlayer;
+                if (video && this.videoDuration > 0) {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const clickX = event.clientX - rect.left;
+                    const percentage = clickX / rect.width;
+                    const newTime = percentage * this.videoDuration;
+                    video.currentTime = newTime;
+                    
+                    // If loop is active and no segment is selected, create a 10-second one
+                    if (this.isLooping && (this.loopStart < 0 || this.loopEnd <= this.loopStart)) {
+                        this.loopStart = Math.max(0, newTime - 5);
+                        this.loopEnd = Math.min(this.videoDuration, newTime + 5);
+                    }
+                }
+            },
+
+            // Loop functionality
+            toggleLoop() {
+                this.isLooping = !this.isLooping;
+                
+                if (this.isLooping) {
+                    // When enabling loop, automatically create a 10-second segment
+                    this.selectCurrent10Seconds();
+                    
+                    // Move video to segment start
+                    if (this.loopStart >= 0) {
+                        const video = this.$refs.videoPlayer;
+                        if (video) {
+                            video.currentTime = this.loopStart;
+                        }
+                    }
+                } else {
+                    // When disabling loop, clear the segment
+                    this.loopStart = -1;
+                    this.loopEnd = -1;
+                }
+            },
+
+            selectCurrent10Seconds() {
+                const video = this.$refs.videoPlayer;
+                if (video && this.videoDuration > 0) {
+                    this.loopStart = Math.max(0, this.currentTime - 5);
+                    this.loopEnd = Math.min(this.videoDuration, this.currentTime + 5);
+                }
+            },
+
+            adjustLoopStart(seconds) {
+                if (this.loopStart >= 0) {
+                    this.loopStart = Math.max(0, Math.min(this.loopStart + seconds, this.loopEnd - 1));
+                }
+            },
+
+            adjustLoopEnd(seconds) {
+                if (this.loopEnd > 0) {
+                    this.loopEnd = Math.min(this.videoDuration, Math.max(this.loopEnd + seconds, this.loopStart + 1));
+                }
+            },
+
+            formatTime(seconds) {
+                if (isNaN(seconds) || seconds < 0) return '0:00';
+                const minutes = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            },
+            
             // Reset form
             resetForm() {
                 this.selectedSong = '';
@@ -549,6 +838,15 @@
                 this.currentTaskId = null;
                 this.isSaving = false;
                 this.isCheckingProgress = false;
+                
+                // Reset video player state
+                this.videoDuration = 0;
+                this.currentTime = 0;
+                this.progressPercentage = 0;
+                this.isPlaying = false;
+                this.isLooping = false;
+                this.loopStart = -1;
+                this.loopEnd = -1;
             }
         }
     }

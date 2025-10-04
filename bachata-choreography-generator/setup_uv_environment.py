@@ -59,9 +59,9 @@ def check_system_requirements():
         if result.returncode == 0:
             logger.info("✅ Docker available: %s", result.stdout.strip())
         else:
-            logger.warning("⚠️  Docker not working properly (optional for Qdrant)")
+            logger.warning("⚠️  Docker not working properly (optional)")
     except (subprocess.TimeoutExpired, FileNotFoundError):
-        logger.warning("⚠️  Docker not found (optional for Qdrant vector database)")
+        logger.warning("⚠️  Docker not found (optional)")
     
     return True
 
@@ -125,20 +125,7 @@ def install_packages_with_uv():
         logger.error("❌ Error installing packages: %s", e)
         return False
     
-    # Install optional packages
-    optional_packages = ["qdrant-client>=1.0.0"]
-    
-    for package in optional_packages:
-        try:
-            logger.info("Installing optional package: %s", package)
-            result = subprocess.run(["uv", "add", package], capture_output=True, text=True, timeout=300)
-            
-            if result.returncode == 0:
-                logger.info("✅ Installed optional: %s", package)
-            else:
-                logger.warning("⚠️  Failed to install optional %s: %s", package, result.stderr)
-        except Exception as e:
-            logger.warning("⚠️  Error installing optional %s: %s", package, e)
+    # No optional packages currently needed
     
     return True
 
@@ -166,12 +153,7 @@ def validate_installation():
             logger.error("❌ Failed to import %s (%s): %s", module, description, e)
             return False
     
-    # Test optional imports
-    try:
-        import qdrant_client
-        logger.info("✅ qdrant_client (Vector database) - optional")
-    except ImportError:
-        logger.warning("⚠️  qdrant_client not available - optional")
+    # No optional imports currently needed
     
     # Test pipeline imports
     try:
@@ -358,10 +340,7 @@ def print_next_steps(data_status):
     print("   # Comprehensive test")
     print("   uv run python optimized_choreography_generator.py --test-all")
     
-    # Optional Qdrant
-    print("\n4. 🔧 OPTIONAL - SETUP QDRANT:")
-    print("   uv run python setup_qdrant.py start")
-    print("   uv run python setup_qdrant.py migrate")
+    # No additional setup needed
     
     print("\n" + "="*60)
     print("🎵 Ready for Bachata choreography generation! 💃")

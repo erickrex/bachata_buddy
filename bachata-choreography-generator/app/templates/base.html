@@ -617,30 +617,56 @@
                     this.setupHTMXHeaders();
                 },
                 
+                // Refresh authentication state (useful after login)
+                async refreshAuthState() {
+                    await this.checkAuthStatus();
+                },
+                
                 // Check if user is authenticated
-                checkAuthStatus() {
+                async checkAuthStatus() {
                     const token = localStorage.getItem('auth_token');
                     const userData = localStorage.getItem('user_data');
                     
                     if (token && userData) {
                         try {
-                            this.user = {
-                                ...JSON.parse(userData),
-                                isAuthenticated: true,
-                                token: token
-                            };
+                            // Validate token with server
+                            const response = await fetch('/api/auth/status', {
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+                            
+                            if (response.ok) {
+                                const authData = await response.json();
+                                this.user = {
+                                    ...authData.user,
+                                    isAuthenticated: true,
+                                    token: token
+                                };
+                                console.log('User authenticated:', this.user.email);
+                            } else {
+                                console.log('Token invalid, clearing auth data');
+                                this.clearAuthData();
+                            }
                         } catch (e) {
-                            console.error('Error parsing user data:', e);
+                            console.error('Error validating token:', e);
                             this.clearAuthData();
                         }
+                    } else {
+                        this.user.isAuthenticated = false;
                     }
                 },
                 
                 // Set up HTMX headers for authentication
                 setupHTMXHeaders() {
                     document.body.addEventListener('htmx:configRequest', (event) => {
-                        if (this.user.isAuthenticated) {
-                            event.detail.headers['Authorization'] = `Bearer ${this.user.token}`;
+                        // Always try to get token from localStorage as fallback
+                        const token = this.user.token || localStorage.getItem('auth_token');
+                        if (token) {
+                            event.detail.headers['Authorization'] = `Bearer ${token}`;
+                            console.log('HTMX request with auth token');
+                        } else {
+                            console.log('HTMX request without auth token');
                         }
                     });
                 },
@@ -671,6 +697,9 @@
                             
                             this.showLogin = false;
                             this.showNotification('Login successful!', 'success');
+                            
+                            // Update authentication state immediately
+                            this.user.isAuthenticated = true;
                             
                             // Refresh page to update UI
                             setTimeout(() => window.location.reload(), 1000);

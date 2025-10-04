@@ -98,20 +98,35 @@
                 
                 <!-- Authentication Notice -->
                 <template x-if="!$root.user.isAuthenticated">
-                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
-                        <div class="text-blue-600 mb-2">
-                            <svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-6 text-center shadow-lg">
+                        <div class="text-blue-600 mb-3">
+                            <svg class="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                             </svg>
                         </div>
-                        <p class="text-blue-700 font-semibold mb-2">Login Required</p>
-                        <p class="text-blue-600 text-sm mb-3">
-                            Please login or register to generate choreographies
+                        <p class="text-blue-800 font-bold text-lg mb-2">🔐 Sign In Required</p>
+                        <p class="text-blue-700 text-sm mb-4">
+                            Create your account or login to start generating personalized Bachata choreographies
                         </p>
                         <button @click="$root.showLogin = true" 
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors duration-200">
-                            Login Now
+                                class="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-md">
+                            🚀 Get Started - Login
                         </button>
+                    </div>
+                </template>
+                
+                <!-- Authentication Success Indicator -->
+                <template x-if="$root.user.isAuthenticated">
+                    <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
+                        <div class="text-green-600 mb-2">
+                            <svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-green-700 font-semibold mb-1">Ready to Generate!</p>
+                        <p class="text-green-600 text-sm">
+                            Welcome, <span x-text="$root.user.displayName || $root.user.email"></span>
+                        </p>
                     </div>
                 </template>
                 
@@ -160,12 +175,9 @@
             </div>
             
             <!-- Progress polling using HTMX -->
-            <div hx-get="/api/task/progress"
-                 hx-trigger="every 2s"
-                 hx-target="this"
-                 hx-swap="none"
+            <div x-ref="progressPollingElement"
                  @htmx:after-request="handleProgressUpdate($event)"
-                 x-show="isGenerating && currentTaskId"
+                 x-show="isGenerating && currentTaskId && $root.user.isAuthenticated"
                  style="display: none;">
             </div>
             
@@ -345,12 +357,13 @@
                 </template>
                 
                 <template x-if="!$root.user.isAuthenticated">
-                    <div class="flex-1 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
-                        <p class="text-blue-700 text-sm mb-2">💡 Want to save your choreographies?</p>
+                    <div class="flex-1 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-4 text-center shadow-md">
+                        <p class="text-blue-800 font-semibold text-sm mb-2">💡 Want to save your choreographies?</p>
+                        <p class="text-blue-600 text-xs mb-3">Create an account to build your personal collection</p>
                         <button @click="$root.showLogin = true" 
-                                class="text-blue-600 hover:text-blue-800 font-semibold underline">
-                            Login or Register
-                    </button>
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors duration-200 text-sm">
+                            🔐 Login or Register
+                        </button>
                     </div>
                 </template>
                 
@@ -404,6 +417,64 @@
             progressMessage: 'Starting...',
             currentStage: 'initializing',
             isCheckingProgress: false,
+            
+            // Initialize component
+            init() {
+                // Check for any existing task ID in localStorage
+                const savedTaskId = localStorage.getItem('currentTaskId');
+                if (savedTaskId && this.$root.user.isAuthenticated) {
+                    // Validate that the task still exists
+                    this.validateAndResumeTask(savedTaskId);
+                } else if (savedTaskId && !this.$root.user.isAuthenticated) {
+                    // Clear task ID if user is not authenticated
+                    localStorage.removeItem('currentTaskId');
+                }
+                
+                // Watch for authentication status changes
+                this.$watch('$root.user.isAuthenticated', (isAuthenticated) => {
+                    if (!isAuthenticated && this.isGenerating) {
+                        // Stop polling if user logs out during generation
+                        this.stopProgressPolling();
+                        this.isGenerating = false;
+                        this.currentTaskId = null;
+                    }
+                });
+            },
+            
+            // Cleanup when component is destroyed
+            destroy() {
+                // Clear any polling intervals
+                if (this.pollingInterval) {
+                    clearInterval(this.pollingInterval);
+                }
+                // Stop HTMX polling
+                this.stopProgressPolling();
+            },
+            
+            // Validate and resume task if it exists
+            async validateAndResumeTask(taskId) {
+                try {
+                    const response = await fetch(`/api/task/${taskId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.status === 'running' || data.status === 'started') {
+                            this.currentTaskId = taskId;
+                            this.isGenerating = true;
+                            this.updateProgressFromData(data);
+                            this.startProgressPolling();
+                        } else {
+                            // Task completed or failed, clear it
+                            localStorage.removeItem('currentTaskId');
+                        }
+                    } else {
+                        // Task no longer exists, clear it
+                        localStorage.removeItem('currentTaskId');
+                    }
+                } catch (e) {
+                    // Error checking task, clear it
+                    localStorage.removeItem('currentTaskId');
+                }
+            },
             
             // Save state
             isSaving: false,
@@ -537,12 +608,12 @@
                     } else if (event.detail.xhr.status === 401) {
                         // Authentication required
                         this.handleGenerationError({ 
-                            message: 'Please login to generate choreographies. Click the Login button in the top right corner.' 
+                            message: '🔐 Login Required: Please sign in to generate choreographies. You can create an account or login using the button in the top right corner.' 
                         });
                         // Show login modal after a short delay
                         setTimeout(() => {
                             this.$root.showLogin = true;
-                        }, 2000);
+                        }, 1500);
                     } else {
                         // Other errors (400, 500, etc.)
                         this.handleGenerationError(data);
@@ -551,11 +622,11 @@
                     // Handle cases where response is not valid JSON
                     if (event.detail.xhr.status === 401) {
                         this.handleGenerationError({ 
-                            message: 'Please login to generate choreographies. Click the Login button in the top right corner.' 
+                            message: '🔐 Login Required: Please sign in to generate choreographies. You can create an account or login using the button in the top right corner.' 
                         });
                         setTimeout(() => {
                             this.$root.showLogin = true;
-                        }, 2000);
+                        }, 1500);
                     } else {
                         this.handleGenerationError({ 
                             message: `Server error (${event.detail.xhr.status}). Please try again or contact support.` 
@@ -566,12 +637,14 @@
             
             // Start progress polling with HTMX
             startProgressPolling() {
-                if (this.currentTaskId) {
+                if (this.currentTaskId && this.$root.user.isAuthenticated) {
                     // Update the HTMX polling element
-                    const progressElement = document.querySelector('[hx-get="/api/task/progress"]');
+                    const progressElement = this.$refs.progressPollingElement;
                     if (progressElement) {
                         progressElement.setAttribute('hx-get', `/api/task/${this.currentTaskId}`);
                         progressElement.setAttribute('hx-trigger', 'every 2s');
+                        progressElement.setAttribute('hx-target', 'this');
+                        progressElement.setAttribute('hx-swap', 'none');
                         htmx.process(progressElement);
                     }
                     
@@ -589,6 +662,10 @@
                     } catch (e) {
                         console.error('Failed to parse progress response:', e);
                     }
+                } else if (event.detail.xhr.status === 404) {
+                    // Task no longer exists, stop polling
+                    console.log('Task no longer exists (HTMX), stopping polling');
+                    this.clearTaskId();
                 }
             },
             
@@ -600,21 +677,50 @@
                 
                 if (data.status === 'completed') {
                     this.showResult(data.result);
+                    this.clearTaskId();
                 } else if (data.status === 'failed') {
                     this.showError(data.error || 'Generation failed');
+                    this.clearTaskId();
+                }
+            },
+            
+            // Clear task ID and stop polling
+            clearTaskId() {
+                this.currentTaskId = null;
+                this.isGenerating = false;
+                localStorage.removeItem('currentTaskId');
+                this.stopProgressPolling();
+            },
+            
+            // Stop progress polling
+            stopProgressPolling() {
+                const progressElement = this.$refs.progressPollingElement;
+                if (progressElement) {
+                    // Remove HTMX attributes to stop polling
+                    progressElement.removeAttribute('hx-get');
+                    progressElement.removeAttribute('hx-trigger');
+                    progressElement.removeAttribute('hx-target');
+                    progressElement.removeAttribute('hx-swap');
                 }
             },
             
             // Manual polling as backup
             async pollTaskStatus() {
-                if (!this.currentTaskId || !this.isGenerating) {
+                if (!this.currentTaskId || !this.isGenerating || !this.$root.user.isAuthenticated) {
                     return;
                 }
                 
                 try {
                     const response = await fetch(`/api/task/${this.currentTaskId}`);
-                    const data = await response.json();
                     
+                    if (response.status === 404) {
+                        // Task no longer exists, stop polling
+                        console.log('Task no longer exists, stopping polling');
+                        this.clearTaskId();
+                        return;
+                    }
+                    
+                    const data = await response.json();
                     this.updateProgressFromData(data);
                     
                     // Continue polling if still running
@@ -629,11 +735,19 @@
             
             // Manual progress check
             async manualProgressCheck() {
-                if (!this.currentTaskId) return;
+                if (!this.currentTaskId || !this.$root.user.isAuthenticated) return;
                 
                 this.isCheckingProgress = true;
                 try {
                     const response = await fetch(`/api/task/${this.currentTaskId}`);
+                    
+                    if (response.status === 404) {
+                        // Task no longer exists
+                        this.clearTaskId();
+                        this.$root.showNotification('Task no longer exists', 'warning');
+                        return;
+                    }
+                    
                     const data = await response.json();
                     this.updateProgressFromData(data);
                 } catch (error) {

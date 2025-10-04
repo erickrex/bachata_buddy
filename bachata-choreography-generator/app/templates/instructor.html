@@ -395,6 +395,7 @@
 <script>
     function instructorDashboard() {
         return {
+            // State
             classPlans: [],
             loading: true,
             showCreatePlan: false,
@@ -406,6 +407,8 @@
             loadingChoreographies: false,
             draggedSequence: null,
             dashboardStats: null,
+            
+            // Forms
             planForm: {
                 title: '',
                 description: '',
@@ -420,18 +423,15 @@
             },
             
             async init() {
-                await this.loadClassPlans();
-                await this.loadDashboardStats();
+                await Promise.all([this.loadClassPlans(), this.loadDashboardStats()]);
             },
             
+            // Data loading
             async loadClassPlans() {
                 try {
                     this.loading = true;
-                    
                     const response = await fetch('/api/instructor/class-plans', {
-                        headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        }
+                        headers: { 'Authorization': `Bearer ${this.$root.user.token}` }
                     });
                     
                     if (response.ok) {
@@ -448,6 +448,42 @@
                 }
             },
             
+            async loadDashboardStats() {
+                try {
+                    const response = await fetch('/api/instructor/dashboard/stats', {
+                        headers: { 'Authorization': `Bearer ${this.$root.user.token}` }
+                    });
+                    
+                    if (response.ok) {
+                        this.dashboardStats = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Error loading dashboard stats:', error);
+                }
+            },
+            
+            async loadUserChoreographies() {
+                try {
+                    this.loadingChoreographies = true;
+                    const response = await fetch('/api/collection/list', {
+                        headers: { 'Authorization': `Bearer ${this.$root.user.token}` }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.userChoreographies = data.choreographies || [];
+                    } else {
+                        throw new Error('Failed to load choreographies');
+                    }
+                } catch (error) {
+                    console.error('Error loading choreographies:', error);
+                    this.$root.showNotification('Failed to load choreographies', 'error');
+                } finally {
+                    this.loadingChoreographies = false;
+                }
+            },
+            
+            // Plan management
             editPlan(plan) {
                 this.editingPlan = plan;
                 this.planForm = {
@@ -460,21 +496,20 @@
             },
             
             closeModal() {
-                this.showCreatePlan = false;
-                this.editingPlan = null;
-                this.showChoreographySelector = false;
-                this.selectedPlan = null;
+                Object.assign(this, {
+                    showCreatePlan: false, editingPlan: null, showChoreographySelector: false,
+                    selectedPlan: null
+                });
+                this.resetForms();
+            },
+            
+            resetForms() {
                 this.planForm = {
-                    title: '',
-                    description: '',
-                    difficulty_level: 'intermediate',
-                    estimated_duration: null,
-                    instructor_notes: ''
+                    title: '', description: '', difficulty_level: 'intermediate',
+                    estimated_duration: null, instructor_notes: ''
                 };
                 this.choreographyForm = {
-                    choreography_id: '',
-                    notes: '',
-                    estimated_time: 15
+                    choreography_id: '', notes: '', estimated_time: 15
                 };
             },
             
@@ -483,11 +518,10 @@
                     const url = this.editingPlan 
                         ? `/api/instructor/class-plans/${this.editingPlan.id}`
                         : '/api/instructor/class-plans';
-                    
                     const method = this.editingPlan ? 'PUT' : 'POST';
                     
                     const response = await fetch(url, {
-                        method: method,
+                        method,
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${this.$root.user.token}`
@@ -512,16 +546,12 @@
             },
             
             async deletePlan(planId) {
-                if (!confirm('Are you sure you want to delete this class plan?')) {
-                    return;
-                }
+                if (!confirm('Are you sure you want to delete this class plan?')) return;
                 
                 try {
                     const response = await fetch(`/api/instructor/class-plans/${planId}`, {
                         method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        }
+                        headers: { 'Authorization': `Bearer ${this.$root.user.token}` }
                     });
                     
                     if (response.ok) {
@@ -536,64 +566,41 @@
                 }
             },
             
+            async duplicatePlan(plan) {
+                const newTitle = prompt('Enter title for the duplicated class plan:', `${plan.title} (Copy)`);
+                if (!newTitle) return;
+                
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/duplicate`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.$root.user.token}`
+                        },
+                        body: JSON.stringify({ new_title: newTitle, copy_sequences: true })
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadClassPlans();
+                        this.$root.showNotification('Class plan duplicated successfully', 'success');
+                    } else {
+                        throw new Error('Failed to duplicate class plan');
+                    }
+                } catch (error) {
+                    console.error('Error duplicating class plan:', error);
+                    this.$root.showNotification('Failed to duplicate class plan', 'error');
+                }
+            },
+            
+            // Choreography management
             async addChoreographyToPlan(plan) {
                 this.selectedPlan = plan;
                 this.showChoreographySelector = true;
                 await this.loadUserChoreographies();
             },
             
-            async exportPlan(plan) {
-                try {
-                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/export`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const htmlContent = await response.text();
-                        const printWindow = window.open('', '_blank');
-                        printWindow.document.write(htmlContent);
-                        printWindow.document.close();
-                        printWindow.focus();
-                        printWindow.print();
-                    } else {
-                        throw new Error('Failed to export class plan');
-                    }
-                } catch (error) {
-                    console.error('Error exporting class plan:', error);
-                    this.$root.showNotification('Failed to export class plan', 'error');
-                }
-            },
-            
-            async loadUserChoreographies() {
-                try {
-                    this.loadingChoreographies = true;
-                    
-                    const response = await fetch('/api/collection/list', {
-                        headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.userChoreographies = data.choreographies || [];
-                    } else {
-                        throw new Error('Failed to load choreographies');
-                    }
-                } catch (error) {
-                    console.error('Error loading choreographies:', error);
-                    this.$root.showNotification('Failed to load choreographies', 'error');
-                } finally {
-                    this.loadingChoreographies = false;
-                }
-            },
-            
             async addChoreographyToSelectedPlan() {
-                if (!this.choreographyForm.choreography_id || !this.selectedPlan) {
-                    return;
-                }
+                if (!this.choreographyForm.choreography_id || !this.selectedPlan) return;
                 
                 try {
                     const response = await fetch(`/api/instructor/class-plans/${this.selectedPlan.id}/choreographies`, {
@@ -619,16 +626,12 @@
             },
             
             async removeChoreographyFromPlan(planId, choreographyId) {
-                if (!confirm('Remove this choreography from the class plan?')) {
-                    return;
-                }
+                if (!confirm('Remove this choreography from the class plan?')) return;
                 
                 try {
                     const response = await fetch(`/api/instructor/class-plans/${planId}/choreographies/${choreographyId}`, {
                         method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        }
+                        headers: { 'Authorization': `Bearer ${this.$root.user.token}` }
                     });
                     
                     if (response.ok) {
@@ -643,7 +646,30 @@
                 }
             },
             
-            // Drag and drop functionality
+            // Export functionality
+            async exportPlan(plan) {
+                try {
+                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/export`, {
+                        headers: { 'Authorization': `Bearer ${this.$root.user.token}` }
+                    });
+                    
+                    if (response.ok) {
+                        const htmlContent = await response.text();
+                        const printWindow = window.open('', '_blank');
+                        printWindow.document.write(htmlContent);
+                        printWindow.document.close();
+                        printWindow.focus();
+                        printWindow.print();
+                    } else {
+                        throw new Error('Failed to export class plan');
+                    }
+                } catch (error) {
+                    console.error('Error exporting class plan:', error);
+                    this.$root.showNotification('Failed to export class plan', 'error');
+                }
+            },
+            
+            // Drag and drop functionality - CRITICAL FEATURE PRESERVED
             startDrag(event, sequence) {
                 this.draggedSequence = sequence;
                 event.dataTransfer.effectAllowed = 'move';
@@ -658,20 +684,17 @@
             async drop(event, targetSequence, plan) {
                 event.preventDefault();
                 
-                if (!this.draggedSequence || this.draggedSequence.id === targetSequence.id) {
-                    return;
-                }
+                if (!this.draggedSequence || this.draggedSequence.id === targetSequence.id) return;
                 
                 // Calculate new sequence orders
                 const sequences = [...plan.sequences].sort((a, b) => a.sequence_order - b.sequence_order);
                 const draggedIndex = sequences.findIndex(s => s.id === this.draggedSequence.id);
                 const targetIndex = sequences.findIndex(s => s.id === targetSequence.id);
                 
-                // Remove dragged item and insert at new position
+                // Reorder sequences
                 sequences.splice(draggedIndex, 1);
                 sequences.splice(targetIndex, 0, this.draggedSequence);
                 
-                // Update sequence orders
                 const sequenceUpdates = sequences.map((seq, index) => ({
                     choreography_id: seq.choreography_id,
                     sequence_order: index + 1
@@ -701,58 +724,10 @@
                 }
             },
             
-            async loadDashboardStats() {
-                try {
-                    const response = await fetch('/api/instructor/dashboard/stats', {
-                        headers: {
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        this.dashboardStats = await response.json();
-                    } else {
-                        throw new Error('Failed to load dashboard stats');
-                    }
-                } catch (error) {
-                    console.error('Error loading dashboard stats:', error);
-                }
-            },
-            
-            async duplicatePlan(plan) {
-                const newTitle = prompt('Enter title for the duplicated class plan:', `${plan.title} (Copy)`);
-                if (!newTitle) return;
-                
-                try {
-                    const response = await fetch(`/api/instructor/class-plans/${plan.id}/duplicate`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.$root.user.token}`
-                        },
-                        body: JSON.stringify({
-                            new_title: newTitle,
-                            copy_sequences: true
-                        })
-                    });
-                    
-                    if (response.ok) {
-                        await this.loadClassPlans();
-                        this.$root.showNotification('Class plan duplicated successfully', 'success');
-                    } else {
-                        throw new Error('Failed to duplicate class plan');
-                    }
-                } catch (error) {
-                    console.error('Error duplicating class plan:', error);
-                    this.$root.showNotification('Failed to duplicate class plan', 'error');
-                }
-            },
-            
+            // Utility functions
             formatDate(dateString) {
                 return new Date(dateString).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
+                    year: 'numeric', month: 'short', day: 'numeric'
                 });
             },
             

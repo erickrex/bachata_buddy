@@ -338,11 +338,11 @@
     </div>
 </div>
 {% endblock %}
-{% 
-block extra_scripts %}
+{% block extra_scripts %}
 <script>
     function collectionManager() {
         return {
+            // State
             choreographies: [],
             loading: true,
             searchQuery: '',
@@ -353,6 +353,8 @@ block extra_scripts %}
             totalCount: 0,
             totalPages: 0,
             limit: 12,
+            
+            // Modals
             showDeleteModal: false,
             choreographyToDelete: null,
             showVideoModal: false,
@@ -362,14 +364,13 @@ block extra_scripts %}
                 await this.loadCollection();
             },
             
+            // Main data loading
             async loadCollection() {
                 try {
                     this.loading = true;
-                    
-                    // Get token from localStorage directly
                     const token = localStorage.getItem('auth_token');
+                    
                     if (!token) {
-                        console.error('No authentication token found');
                         this.$root?.showNotification?.('Please log in to view your collection', 'error');
                         return;
                     }
@@ -381,18 +382,11 @@ block extra_scripts %}
                         sort_order: this.sortOrder
                     });
                     
-                    if (this.searchQuery.trim()) {
-                        params.append('search', this.searchQuery.trim());
-                    }
-                    
-                    if (this.difficultyFilter) {
-                        params.append('difficulty', this.difficultyFilter);
-                    }
+                    if (this.searchQuery.trim()) params.append('search', this.searchQuery.trim());
+                    if (this.difficultyFilter) params.append('difficulty', this.difficultyFilter);
                     
                     const response = await fetch(`/api/collection/list?${params}`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
                     
                     if (response.ok) {
@@ -406,18 +400,16 @@ block extra_scripts %}
                     }
                 } catch (error) {
                     console.error('Error loading collection:', error);
-                    if (this.$root?.showNotification) {
-                        this.$root.showNotification('Failed to load collection', 'error');
-                    } else {
+                    this.$root?.showNotification?.('Failed to load collection', 'error') || 
                         alert('Failed to load collection. Please refresh the page.');
-                    }
                 } finally {
                     this.loading = false;
                 }
             },
             
+            // Search and filtering
             async performSearch() {
-                this.currentPage = 1; // Reset to first page when searching
+                this.currentPage = 1;
                 await this.loadCollection();
             },
             
@@ -426,6 +418,15 @@ block extra_scripts %}
                 await this.loadCollection();
             },
             
+            clearFilters() {
+                Object.assign(this, {
+                    searchQuery: '', difficultyFilter: '', sortBy: 'created_at',
+                    sortOrder: 'desc', currentPage: 1
+                });
+                this.loadCollection();
+            },
+            
+            // Pagination
             async goToPage(page) {
                 if (page >= 1 && page <= this.totalPages && page !== this.currentPage) {
                     this.currentPage = page;
@@ -439,7 +440,6 @@ block extra_scripts %}
                 let start = Math.max(1, this.currentPage - Math.floor(maxVisible / 2));
                 let end = Math.min(this.totalPages, start + maxVisible - 1);
                 
-                // Adjust start if we're near the end
                 if (end - start + 1 < maxVisible) {
                     start = Math.max(1, end - maxVisible + 1);
                 }
@@ -447,19 +447,10 @@ block extra_scripts %}
                 for (let i = start; i <= end; i++) {
                     pages.push(i);
                 }
-                
                 return pages;
             },
             
-            clearFilters() {
-                this.searchQuery = '';
-                this.difficultyFilter = '';
-                this.sortBy = 'created_at';
-                this.sortOrder = 'desc';
-                this.currentPage = 1;
-                this.loadCollection();
-            },
-            
+            // Delete functionality
             confirmDelete(choreography) {
                 this.choreographyToDelete = choreography;
                 this.showDeleteModal = true;
@@ -468,29 +459,22 @@ block extra_scripts %}
             async deleteChoreography(choreographyId) {
                 try {
                     this.showDeleteModal = false;
-                    
-                    // Get token from localStorage directly
                     const token = localStorage.getItem('auth_token');
+                    
                     if (!token) {
-                        console.error('No authentication token found');
                         this.$root?.showNotification?.('Please log in to delete choreographies', 'error');
                         return;
                     }
                     
                     const response = await fetch(`/api/collection/${choreographyId}`, {
                         method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
                     
                     if (response.ok) {
-                        if (this.$root?.showNotification) {
-                            this.$root.showNotification('Choreography deleted successfully', 'success');
-                        }
+                        this.$root?.showNotification?.('Choreography deleted successfully', 'success');
                         
-                        // If this was the last item on the current page and we're not on page 1,
-                        // go to the previous page
+                        // Go to previous page if this was the last item
                         if (this.choreographies.length === 1 && this.currentPage > 1) {
                             this.currentPage--;
                         }
@@ -501,42 +485,14 @@ block extra_scripts %}
                     }
                 } catch (error) {
                     console.error('Error deleting choreography:', error);
-                    if (this.$root?.showNotification) {
-                        this.$root.showNotification('Failed to delete choreography', 'error');
-                    } else {
+                    this.$root?.showNotification?.('Failed to delete choreography', 'error') || 
                         alert('Failed to delete choreography. Please try again.');
-                    }
                 } finally {
                     this.choreographyToDelete = null;
                 }
             },
             
-            downloadChoreography(choreography) {
-                try {
-                    // Extract filename from video path
-                    const filename = this.getVideoFilename(choreography);
-                    
-                    // Create download link
-                    const link = document.createElement('a');
-                    link.href = `/api/video/${filename}`;
-                    link.download = `${choreography.title}.mp4`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    if (this.$root?.showNotification) {
-                        this.$root.showNotification('Download started', 'info');
-                    }
-                } catch (error) {
-                    console.error('Error downloading choreography:', error);
-                    if (this.$root?.showNotification) {
-                        this.$root.showNotification('Failed to start download', 'error');
-                    } else {
-                        alert('Failed to start download. Please try again.');
-                    }
-                }
-            },
-            
+            // Video functionality
             playChoreography(choreography) {
                 this.currentVideo = {
                     url: this.getVideoUrl(choreography),
@@ -546,40 +502,52 @@ block extra_scripts %}
                     music_info: choreography.music_info
                 };
                 this.showVideoModal = true;
-                
-                // Prevent body scrolling when modal is open
                 document.body.style.overflow = 'hidden';
             },
             
             closeVideoModal() {
                 this.showVideoModal = false;
                 this.currentVideo = null;
-                
-                // Restore body scrolling
                 document.body.style.overflow = '';
             },
             
             onVideoLoaded() {
-                // Video has loaded and is ready to play
                 console.log('Video loaded successfully');
             },
             
+            // Download functionality
+            downloadChoreography(choreography) {
+                try {
+                    const filename = this.getVideoFilename(choreography);
+                    const link = document.createElement('a');
+                    link.href = `/api/video/${filename}`;
+                    link.download = `${choreography.title}.mp4`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    this.$root?.showNotification?.('Download started', 'info');
+                } catch (error) {
+                    console.error('Error downloading choreography:', error);
+                    this.$root?.showNotification?.('Failed to start download', 'error') || 
+                        alert('Failed to start download. Please try again.');
+                }
+            },
+            
+            // Utility functions
             getVideoUrl(choreography) {
-                const filename = this.getVideoFilename(choreography);
-                return `/api/video/${filename}`;
+                return `/api/video/${this.getVideoFilename(choreography)}`;
             },
             
             getThumbnailUrl(choreography) {
                 if (choreography.thumbnail_path) {
-                    const filename = this.getThumbnailFilename(choreography);
-                    return `/api/video/${filename}`;
+                    return `/api/video/${this.getThumbnailFilename(choreography)}`;
                 }
                 return null;
             },
             
             getVideoFilename(choreography) {
                 if (choreography.video_path) {
-                    // Extract filename from path
                     const parts = choreography.video_path.split('/');
                     return parts[parts.length - 1];
                 }
@@ -588,7 +556,6 @@ block extra_scripts %}
             
             getThumbnailFilename(choreography) {
                 if (choreography.thumbnail_path) {
-                    // Extract filename from path
                     const parts = choreography.thumbnail_path.split('/');
                     return parts[parts.length - 1];
                 }
@@ -597,34 +564,27 @@ block extra_scripts %}
             
             getDifficultyBadgeClass(difficulty) {
                 const classes = {
-                    'beginner': 'bg-green-100 text-green-800',
-                    'intermediate': 'bg-yellow-100 text-yellow-800',
-                    'advanced': 'bg-red-100 text-red-800'
+                    beginner: 'bg-green-100 text-green-800',
+                    intermediate: 'bg-yellow-100 text-yellow-800',
+                    advanced: 'bg-red-100 text-red-800'
                 };
                 return classes[difficulty] || 'bg-gray-100 text-gray-800';
             },
             
             formatDate(dateString) {
                 return new Date(dateString).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
                 });
             },
             
             formatDuration(seconds) {
                 if (!seconds) return 'N/A';
-                
                 const minutes = Math.floor(seconds / 60);
                 const remainingSeconds = Math.floor(seconds % 60);
-                
-                if (minutes > 0) {
-                    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-                } else {
-                    return `${remainingSeconds}s`;
-                }
+                return minutes > 0 
+                    ? `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+                    : `${remainingSeconds}s`;
             }
         }
     }

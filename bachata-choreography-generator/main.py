@@ -54,10 +54,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Bachata Choreography Generator API")
     
     try:
-        # Initialize database
-        logger.info("Initializing database...")
-        init_database()
-        logger.info("Database initialized successfully")
+        # Initialize database (can be skipped for testing)
+        skip_db_init = os.getenv("SKIP_DB_INIT", "false").lower() == "true"
+        if not skip_db_init:
+            logger.info("Initializing database...")
+            init_database()
+            logger.info("Database initialized successfully")
+        else:
+            logger.info("Skipping database initialization (SKIP_DB_INIT=true)")
         
         # Validate system requirements (can be skipped for development)
         skip_validation = os.getenv("SKIP_SYSTEM_VALIDATION", "false").lower() == "true"

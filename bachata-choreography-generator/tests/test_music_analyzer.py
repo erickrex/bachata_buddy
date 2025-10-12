@@ -12,7 +12,7 @@ from typing import Dict, Any
 # Add the app directory to the Python path
 sys.path.append(str(Path(__file__).parent / "app"))
 
-from services.music_analyzer import MusicAnalyzer
+from app.services.music_analyzer import MusicAnalyzer
 import logging
 import numpy as np
 

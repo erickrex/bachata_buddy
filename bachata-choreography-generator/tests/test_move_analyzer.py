@@ -13,7 +13,7 @@ import logging
 # Add the app directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
 
-from services.move_analyzer import MoveAnalyzer, analyze_video_directory
+from app.services.move_analyzer import MoveAnalyzer, analyze_video_directory
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

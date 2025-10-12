@@ -11,7 +11,7 @@ from pathlib import Path
 # Add the app directory to Python path
 sys.path.append(str(Path(__file__).parent / "app"))
 
-from services.youtube_service import YouTubeService
+from app.services.youtube_service import YouTubeService
 
 
 async def main():

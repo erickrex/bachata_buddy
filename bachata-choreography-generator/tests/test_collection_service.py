@@ -3,71 +3,15 @@ Tests for the collection service functionality.
 """
 
 import pytest
-import tempfile
-import shutil
-from pathlib import Path
-from unittest.mock import Mock
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.database import Base
-from app.models.database_models import User, SavedChoreography
-from app.services.collection_service import CollectionService
 from app.models.collection_models import SaveChoreographyRequest, CollectionListRequest
 
 
-@pytest.fixture
-def temp_storage():
-    """Create temporary storage directory for tests."""
-    temp_dir = tempfile.mkdtemp()
-    yield temp_dir
-    shutil.rmtree(temp_dir)
-
-
-@pytest.fixture
-def test_db():
-    """Create in-memory SQLite database for testing."""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    return SessionLocal()
-
-
-@pytest.fixture
-def test_user(test_db):
-    """Create a test user."""
-    user = User(
-        id="test-user-123",
-        email="test@example.com",
-        password_hash="hashed_password",
-        display_name="Test User",
-        is_instructor=False
-    )
-    test_db.add(user)
-    test_db.commit()
-    test_db.refresh(user)
-    return user
-
-
-@pytest.fixture
-def test_video_file(temp_storage):
-    """Create a test video file."""
-    video_path = Path(temp_storage) / "test_video.mp4"
-    video_path.write_text("fake video content")
-    return str(video_path)
-
-
-@pytest.fixture
-def collection_service(temp_storage):
-    """Create collection service with temporary storage."""
-    return CollectionService(storage_base_path=temp_storage)
-
-
+@pytest.mark.service
 class TestCollectionService:
     """Test cases for the collection service."""
     
     @pytest.mark.asyncio
-    async def test_save_choreography_success(self, collection_service, test_db, test_user, test_video_file):
+    async def test_save_choreography_success(self, collection_service, test_db, test_user, temp_video_file):
         """Test successful choreography saving."""
         request = SaveChoreographyRequest(
             title="Test Choreography",

@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load collection_filters %}
+
+{% block title %}{{ choreography.title }} - My Collection{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'js/choreography-app.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="choreographyApp()" x-init="initDetailPage()" class="max-w-4xl mx-auto">
+    <!-- Back Button -->
+    <div class="mb-6">
+        <a href="{% url 'collections:list' %}" 
+           class="inline-flex items-center text-purple-600 hover:text-purple-700 font-medium">
+            ← Back to Collection
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100 mb-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ choreography.title }}</h1>
+                <div class="flex items-center space-x-4 text-sm text-gray-600">
+                    <span class="flex items-center">
+                        <span class="mr-1">📅</span>
+                        {{ choreography.created_at|date:"F d, Y" }}
+                    </span>
+                    <span class="flex items-center">
+                        <span class="mr-1">⏱️</span>
+                        {{ choreography.duration|floatformat:0 }}s
+                    </span>
+                    <span>
+                        {% if choreography.difficulty == 'beginner' %}
+                        <span class="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                            Beginner
+                        </span>
+                        {% elif choreography.difficulty == 'intermediate' %}
+                        <span class="bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                            Intermediate
+                        </span>
+                        {% elif choreography.difficulty == 'advanced' %}
+                        <span class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                            Advanced
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex space-x-2">
+                <a href="{% url 'collections:edit' choreography.pk %}" 
+                   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    ✏️ Edit
+                </a>
+                <button @click="confirmDelete()"
+                        class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    🗑️ Delete
+                </button>
+            </div>
+        </div>
+
+        <!-- Music Info -->
+        {% if choreography.music_info %}
+        <div class="bg-purple-50 rounded-lg p-4 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">🎵 Music Information</h3>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                {% if choreography.music_info.title %}
+                <div>
+                    <span class="text-gray-600">Title:</span>
+                    <span class="font-medium ml-2">{{ choreography.music_info.title }}</span>
+                </div>
+                {% endif %}
+                {% if choreography.music_info.artist %}
+                <div>
+                    <span class="text-gray-600">Artist:</span>
+                    <span class="font-medium ml-2">{{ choreography.music_info.artist }}</span>
+                </div>
+                {% endif %}
+                {% if choreography.music_info.bpm %}
+                <div>
+                    <span class="text-gray-600">BPM:</span>
+                    <span class="font-medium ml-2">{{ choreography.music_info.bpm }}</span>
+                </div>
+                {% endif %}
+                {% if choreography.music_info.tempo %}
+                <div>
+                    <span class="text-gray-600">Tempo:</span>
+                    <span class="font-medium ml-2">{{ choreography.music_info.tempo }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Generation Parameters -->
+        {% if choreography.generation_parameters %}
+        <div class="bg-gray-50 rounded-lg p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">⚙️ Generation Parameters</h3>
+            <div class="text-sm text-gray-600">
+                <pre class="whitespace-pre-wrap">{{ choreography.generation_parameters|pprint }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Video Player Section -->
+    <div class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">🎬 Video Player</h2>
+
+        <!-- Video Player -->
+        <div class="mb-6">
+            <video x-ref="videoPlayer"
+                   src="{% url 'choreography:serve_video' filename=choreography.video_path|basename %}"
+                   @timeupdate="updateVideoProgress()"
+                   @ended="handleVideoEnd()"
+                   @loadedmetadata="initVideoPlayer()"
+                   controls
+                   class="w-full rounded-xl shadow-lg">
+            </video>
+        </div>
+
+        <!-- Video Controls -->
+        <div class="mb-6">
+            <!-- Play/Pause Button -->
+            <div class="flex justify-center mb-4">
+                <button @click="togglePlayPause()"
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-xl font-semibold transition-colors">
+                    <span x-show="!isPlaying">▶️ Play</span>
+                    <span x-show="isPlaying">⏸️ Pause</span>
+                </button>
+            </div>
+
+            <!-- Progress Bar with Click-to-Seek -->
+            <div class="relative w-full h-3 bg-gray-200 rounded-full cursor-pointer mb-2"
+                 @click="seekToPosition($event)">
+                <!-- Current Progress -->
+                <div class="absolute h-full bg-blue-500 rounded-full transition-all"
+                     :style="`width: ${progressPercentage}%`"></div>
+                
+                <!-- Loop Segment Indicator -->
+                <div x-show="isLooping && loopStart >= 0"
+                     class="absolute h-full bg-green-300 opacity-50 rounded-full"
+                     :style="`left: ${loopStartPercentage}%; width: ${loopSegmentWidth}%`">
+                </div>
+            </div>
+
+            <!-- Time Display -->
+            <div class="flex justify-between text-sm text-gray-600">
+                <span x-text="formatTime(currentTime)"></span>
+                <span x-text="formatTime(videoDuration)"></span>
+            </div>
+        </div>
+
+        <!-- Loop Controls -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">🔁 Loop Controls</h3>
+                <button @click="toggleLoop()"
+                        :class="isLooping ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'"
+                        class="text-white px-4 py-2 rounded-lg font-semibold transition-colors">
+                    <span x-show="!isLooping">Enable Loop</span>
+                    <span x-show="isLooping">Disable Loop</span>
+                </button>
+            </div>
+
+            <!-- Loop Adjustment Controls -->
+            <div x-show="isLooping" x-cloak class="space-y-3">
+                <!-- Loop Start -->
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700">Loop Start:</span>
+                    <div class="flex items-center space-x-2">
+                        <button @click="adjustLoopStart(-1)"
+                                class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            -1s
+                        </button>
+                        <span class="text-lg font-mono font-bold text-purple-600 w-16 text-center" 
+                              x-text="formatTime(loopStart)"></span>
+                        <button @click="adjustLoopStart(1)"
+                                class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            +1s
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loop End -->
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700">Loop End:</span>
+                    <div class="flex items-center space-x-2">
+                        <button @click="adjustLoopEnd(-1)"
+                                class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            -1s
+                        </button>
+                        <span class="text-lg font-mono font-bold text-pink-600 w-16 text-center" 
+                              x-text="formatTime(loopEnd)"></span>
+                        <button @click="adjustLoopEnd(1)"
+                                class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            +1s
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loop Duration -->
+                <div class="text-center text-sm text-gray-600 pt-2 border-t border-gray-200">
+                    Loop Duration: <span class="font-bold" x-text="formatTime(loopEnd - loopStart)"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div x-show="showDeleteModal" 
+         x-cloak
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         @click.self="showDeleteModal = false">
+        <div class="bg-white rounded-2xl p-8 max-w-md mx-4 shadow-2xl">
+            <h3 class="text-2xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
+            <p class="text-gray-600 mb-6">
+                Are you sure you want to delete "{{ choreography.title }}"? This action cannot be undone.
+            </p>
+            <div class="flex space-x-4">
+                <button @click="showDeleteModal = false"
+                        class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
+                    Cancel
+                </button>
+                <form method="post" 
+                      action="{% url 'collections:delete' choreography.pk %}"
+                      class="flex-1">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+[x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Extend choreographyApp for detail page
+document.addEventListener('alpine:init', () => {
+    // Add detail page specific methods
+    window.choreographyAppDetailExtensions = {
+        showDeleteModal: false,
+        
+        initDetailPage() {
+            // Initialize video player when page loads
+            this.init();
+        },
+        
+        confirmDelete() {
+            this.showDeleteModal = true;
+        }
+    };
+});
+</script>
+{% endblock %}

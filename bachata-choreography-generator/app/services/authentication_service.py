@@ -9,11 +9,11 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.hashers import make_password, check_password
+from django.db import IntegrityError
 
-from app.models.database_models import User
+User = get_user_model()
 
 
 class AuthenticationService:
@@ -41,10 +41,6 @@ class AuthenticationService:
         self.jwt_algorithm = jwt_algorithm
         self.access_token_expire_minutes = access_token_expire_minutes
         
-        # Password hashing context
-        # Use pbkdf2_sha256 for better compatibility (still very secure)
-        self.pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-        
         # Simple in-memory rate limiting (in production, use Redis or similar)
         self._login_attempts: Dict[str, list] = {}
         self.max_login_attempts = 5
@@ -52,7 +48,7 @@ class AuthenticationService:
     
     def hash_password(self, password: str) -> str:
         """
-        Hash a password using the configured hashing scheme.
+        Hash a password using Django's password hashing.
         
         Args:
             password: Plain text password
@@ -60,11 +56,11 @@ class AuthenticationService:
         Returns:
             str: Hashed password
         """
-        return self.pwd_context.hash(password)
+        return make_password(password)
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """
-        Verify a password against its hash.
+        Verify a password against its hash using Django's check_password.
         
         Args:
             plain_password: Plain text password
@@ -73,7 +69,7 @@ class AuthenticationService:
         Returns:
             bool: True if password matches, False otherwise
         """
-        return self.pwd_context.verify(plain_password, hashed_password)
+        return check_password(plain_password, hashed_password)
     
     def create_access_token(self, user_id: str, email: str, is_instructor: bool = False) -> str:
         """
@@ -181,7 +177,6 @@ class AuthenticationService:
     
     async def register_user(
         self, 
-        db: Session, 
         email: str, 
         password: str, 
         display_name: str, 
@@ -191,7 +186,6 @@ class AuthenticationService:
         Register a new user.
         
         Args:
-            db: Database session
             email: User's email address
             password: Plain text password
             display_name: User's display name
@@ -212,36 +206,29 @@ class AuthenticationService:
             raise ValueError("Display name is required")
         
         # Check if user already exists
-        existing_user = db.query(User).filter(User.email == email.lower().strip()).first()
-        if existing_user:
+        if User.objects.filter(email=email.lower().strip()).exists():
             return None  # User already exists
         
         try:
-            # Create new user
-            user = User(
-                id=str(uuid.uuid4()),
+            # Create new user using Django's create_user method
+            user = User.objects.create_user(
+                username=email.lower().strip(),  # Use email as username
                 email=email.lower().strip(),
-                password_hash=self.hash_password(password),
+                password=password,  # Django will hash this automatically
                 display_name=display_name.strip(),
                 is_instructor=is_instructor
             )
             
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            
             return user
             
         except IntegrityError:
-            db.rollback()
             return None  # Email constraint violation
     
-    async def authenticate_user(self, db: Session, email: str, password: str) -> Optional[User]:
+    async def authenticate_user(self, email: str, password: str) -> Optional[User]:
         """
         Authenticate a user with email and password.
         
         Args:
-            db: Database session
             email: User's email address
             password: Plain text password
             
@@ -256,43 +243,40 @@ class AuthenticationService:
             return None
         
         # Find user
-        user = db.query(User).filter(
-            User.email == email,
-            User.is_active == True
-        ).first()
-        
-        if not user:
+        try:
+            user = User.objects.get(email=email, is_active=True)
+        except User.DoesNotExist:
             self.record_login_attempt(email, False)
             return None
         
-        # Verify password
-        if not self.verify_password(password, user.password_hash):
+        # Use Django's authenticate with username (which is email in our case)
+        authenticated_user = authenticate(username=user.username, password=password)
+        
+        if not authenticated_user:
             self.record_login_attempt(email, False)
             return None
         
         # Successful authentication
         self.record_login_attempt(email, True)
-        return user
+        return authenticated_user
     
-    async def get_user_by_id(self, db: Session, user_id: str) -> Optional[User]:
+    async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """
         Get a user by their ID.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             
         Returns:
             Optional[User]: User if found and active, None otherwise
         """
-        return db.query(User).filter(
-            User.id == user_id,
-            User.is_active == True
-        ).first()
+        try:
+            return User.objects.get(id=user_id, is_active=True)
+        except User.DoesNotExist:
+            return None
     
     async def update_user_profile(
         self, 
-        db: Session, 
         user_id: str, 
         display_name: Optional[str] = None,
         new_password: Optional[str] = None
@@ -301,7 +285,6 @@ class AuthenticationService:
         Update a user's profile information.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             display_name: New display name (optional)
             new_password: New password (optional)
@@ -312,7 +295,7 @@ class AuthenticationService:
         Raises:
             ValueError: If input validation fails
         """
-        user = await self.get_user_by_id(db, user_id)
+        user = await self.get_user_by_id(user_id)
         if not user:
             return None
         
@@ -326,40 +309,25 @@ class AuthenticationService:
         if new_password is not None:
             if len(new_password) < 8:
                 raise ValueError("Password must be at least 8 characters long")
-            user.password_hash = self.hash_password(new_password)
+            user.set_password(new_password)  # Django's method to hash and set password
         
-        # Update timestamp
-        user.updated_at = datetime.utcnow()
-        
-        try:
-            db.commit()
-            db.refresh(user)
-            return user
-        except Exception:
-            db.rollback()
-            raise
+        user.save()
+        return user
     
-    async def deactivate_user(self, db: Session, user_id: str) -> bool:
+    async def deactivate_user(self, user_id: str) -> bool:
         """
         Deactivate a user account (soft delete).
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             
         Returns:
             bool: True if successful, False if user not found
         """
-        user = await self.get_user_by_id(db, user_id)
+        user = await self.get_user_by_id(user_id)
         if not user:
             return False
         
         user.is_active = False
-        user.updated_at = datetime.utcnow()
-        
-        try:
-            db.commit()
-            return True
-        except Exception:
-            db.rollback()
-            raise
+        user.save()
+        return True

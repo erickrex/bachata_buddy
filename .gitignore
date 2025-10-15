@@ -1,3 +1,4 @@
+.env
 __pycache__/
 bachata-coreography-generator/__pycache__/
 bachata-coreography-generator/.venv/

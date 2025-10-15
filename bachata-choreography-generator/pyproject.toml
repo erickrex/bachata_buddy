@@ -5,6 +5,13 @@ description = "AI-powered Bachata choreography generator that creates dance sequ
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "django>=5.2,<5.3",
+    "django-htmx>=1.17.0",
+    "psycopg2-binary>=2.9.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.5.0",
+    "pytest-timeout>=2.1.0",
     "fastapi>=0.104.1",
     "uvicorn>=0.24.0",
     "jinja2>=3.1.2",
@@ -25,11 +32,9 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "email-validator>=2.0.0",
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.21.0",
-    "pytest-timeout>=2.1.0",
     "aiohttp>=3.9.0",
+    "python-dotenv>=1.1.1",
 ]
 
 [project.optional-dependencies]

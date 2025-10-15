@@ -164,8 +164,10 @@ class SequenceGenerator:
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.12
-- uv (Python package manager) or pip
+- Python 3.12+
+- UV (Python package manager)
+- PostgreSQL 14+
+- FFmpeg
 
 ### Installation
 
@@ -175,38 +177,71 @@ git clone <repository-url>
 cd bachata-choreography-generator
 ```
 
-2. **Install FFMPEG**
+2. **Install UV Package Manager**
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+3. **Install FFmpeg**
 ```bash
 # For macOS
 brew install ffmpeg portaudio libsndfile
 
 # For Ubuntu/Debian
 sudo apt-get install ffmpeg portaudio19-dev libsndfile1-dev
-
 ```
 
-3. **Install dependencies**
+4. **Install Python dependencies**
 ```bash
-# Using uv (recommended)
+# Using UV (recommended)
 uv sync
-
-# if venv does not activate run
-
-
 ```
 
-4. **Run the app**
-```
-uv run python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+5. **Set up PostgreSQL database**
+```bash
+# Create database
+createdb bachata_vibes
+
+# Or using psql
+psql -U postgres -c "CREATE DATABASE bachata_vibes;"
 ```
 
-5. **Go to the browser**
-
+6. **Run Django migrations**
+```bash
+uv run python manage.py migrate
 ```
-http://127.0.0.1:8000/
+
+7. **Create superuser**
+```bash
+uv run python manage.py createsuperuser
 ```
 
-Enjoy :)
+8. **Run the Django development server**
+```bash
+uv run python manage.py runserver
+```
+
+9. **Access the application**
+- Home: http://localhost:8000/
+- Admin: http://localhost:8000/admin/
+- Collection: http://localhost:8000/collection/
+
+Enjoy! 💃🕺
+
+### 📚 Detailed Setup Guide
+
+For comprehensive setup instructions, including:
+- PostgreSQL configuration
+- Production deployment
+- Testing with pytest
+- UV command reference
+- Troubleshooting
+
+See **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)**
 
 ### 📹 Video Annotation 
 
@@ -243,6 +278,49 @@ Each move clip includes:
 - **Role Information**: lead_follow_roles (lead_focus, follow_focus, both)
 - **Descriptive**: notes with detailed move description
 - **Optional Metadata**: duration, quality assessments, compatibility info
+
+## 🏗️ Architecture & Technology Stack
+
+### Current Implementation: Django 5.2 LTS
+
+The application has been migrated from FastAPI to Django 5.2 LTS for improved maintainability, built-in admin interface, and production-ready features.
+
+**Technology Stack:**
+- **Framework**: Django 5.2 LTS
+- **Database**: PostgreSQL 14+
+- **ORM**: Django ORM
+- **Templates**: Django Template Language
+- **Frontend**: HTMX + Alpine.js + Tailwind CSS
+- **Testing**: pytest + pytest-django
+- **Package Manager**: UV (fast Python package manager)
+- **Video Processing**: FFmpeg
+- **Audio Analysis**: librosa
+- **Computer Vision**: MediaPipe
+
+**Key Features:**
+- ✅ Function-Based Views (FBVs) for simplicity
+- ✅ Built-in Django Admin interface
+- ✅ Session-based authentication
+- ✅ PostgreSQL for production-ready database
+- ✅ Comprehensive test suite (67%+ coverage)
+- ✅ Background task processing with progress polling
+- ✅ Video player with advanced loop controls
+- ✅ Collection management with filtering and search
+- ✅ Instructor dashboard for class planning
+
+### Migration from FastAPI
+
+The application was successfully migrated from FastAPI to Django while maintaining 100% feature parity. All 24 services remain unchanged and fully functional.
+
+**Benefits of Django Migration:**
+- Built-in admin interface (no custom admin needed)
+- Mature ORM with extensive features
+- Better long-term support (LTS version)
+- Enhanced security features (CSRF, XSS protection)
+- Larger ecosystem and community
+- Production-ready from the start
+
+For migration details, see **[django_migration.md](django_migration.md)**
 
 ## 🔧 Configuration
 

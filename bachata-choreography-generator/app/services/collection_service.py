@@ -11,10 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, func
+from django.db.models import Q, Count, Sum, Avg
+from django.contrib.auth import get_user_model
 
-from app.models.database_models import SavedChoreography, User
+from choreography.models import SavedChoreography
 from app.models.collection_models import (
     SaveChoreographyRequest,
     SavedChoreographyResponse,
@@ -23,6 +23,8 @@ from app.models.collection_models import (
     CollectionStatsResponse,
     UpdateChoreographyRequest
 )
+
+User = get_user_model()
 
 
 class CollectionService:
@@ -180,7 +182,6 @@ class CollectionService:
     
     async def save_choreography(
         self, 
-        db: Session, 
         user_id: str, 
         request: SaveChoreographyRequest
     ) -> SavedChoreographyResponse:
@@ -188,7 +189,6 @@ class CollectionService:
         Save a choreography to user's collection.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             request: Save choreography request data
             
@@ -201,8 +201,9 @@ class CollectionService:
             OSError: If file operations fail
         """
         # Verify user exists
-        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-        if not user:
+        try:
+            user = User.objects.get(id=user_id, is_active=True)
+        except User.DoesNotExist:
             raise ValueError("User not found")
         
         # Validate difficulty level
@@ -216,20 +217,20 @@ class CollectionService:
         try:
             # Copy video file to user storage
             user_video_path = self._copy_video_to_user_storage(
-                request.video_path, user_id, choreography_id
+                request.video_path, str(user_id), choreography_id
             )
             
             # Copy thumbnail if provided
             user_thumbnail_path = None
             if request.thumbnail_path:
                 user_thumbnail_path = self._copy_thumbnail_to_user_storage(
-                    request.thumbnail_path, user_id, choreography_id
+                    request.thumbnail_path, str(user_id), choreography_id
                 )
             
             # Create database record
-            choreography = SavedChoreography(
+            choreography = SavedChoreography.objects.create(
                 id=choreography_id,
-                user_id=user_id,
+                user=user,
                 title=request.title.strip(),
                 video_path=user_video_path,
                 thumbnail_path=user_thumbnail_path,
@@ -239,17 +240,12 @@ class CollectionService:
                 generation_parameters=request.generation_parameters
             )
             
-            db.add(choreography)
-            db.commit()
-            db.refresh(choreography)
-            
             return SavedChoreographyResponse.model_validate(choreography)
             
         except Exception as e:
-            db.rollback()
             # Clean up any copied files on error
             try:
-                user_storage = self._get_user_storage_path(user_id)
+                user_storage = self._get_user_storage_path(str(user_id))
                 video_file = user_storage / f"{choreography_id}.mp4"
                 if video_file.exists():
                     video_file.unlink()
@@ -262,7 +258,6 @@ class CollectionService:
     
     async def get_user_collection(
         self, 
-        db: Session, 
         user_id: str, 
         request: CollectionListRequest
     ) -> CollectionResponse:
@@ -270,7 +265,6 @@ class CollectionService:
         Retrieve user's choreography collection with pagination and filtering.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             request: Collection list request parameters
             
@@ -281,41 +275,38 @@ class CollectionService:
             ValueError: If user doesn't exist or invalid parameters
         """
         # Verify user exists
-        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-        if not user:
+        try:
+            user = User.objects.get(id=user_id, is_active=True)
+        except User.DoesNotExist:
             raise ValueError("User not found")
         
         # Build base query
-        query = db.query(SavedChoreography).filter(SavedChoreography.user_id == user_id)
+        queryset = SavedChoreography.objects.filter(user=user)
         
         # Apply difficulty filter
         if request.difficulty:
-            query = query.filter(SavedChoreography.difficulty == request.difficulty)
+            queryset = queryset.filter(difficulty=request.difficulty)
         
         # Apply search filter
         if request.search:
-            search_term = f"%{request.search}%"
-            query = query.filter(
-                or_(
-                    SavedChoreography.title.ilike(search_term),
-                    SavedChoreography.music_info.op('->>')('title').ilike(search_term),
-                    SavedChoreography.music_info.op('->>')('artist').ilike(search_term)
-                )
+            queryset = queryset.filter(
+                Q(title__icontains=request.search) |
+                Q(music_info__title__icontains=request.search) |
+                Q(music_info__artist__icontains=request.search)
             )
         
         # Apply sorting
-        sort_column = getattr(SavedChoreography, request.sort_by, SavedChoreography.created_at)
+        sort_field = request.sort_by if hasattr(SavedChoreography, request.sort_by) else 'created_at'
         if request.sort_order.lower() == "desc":
-            query = query.order_by(desc(sort_column))
-        else:
-            query = query.order_by(asc(sort_column))
+            sort_field = f"-{sort_field}"
+        queryset = queryset.order_by(sort_field)
         
         # Get total count
-        total_count = query.count()
+        total_count = queryset.count()
         
         # Apply pagination
         offset = (request.page - 1) * request.limit
-        choreographies = query.offset(offset).limit(request.limit).all()
+        choreographies = list(queryset[offset:offset + request.limit])
         
         # Calculate pagination info
         total_pages = (total_count + request.limit - 1) // request.limit
@@ -339,7 +330,6 @@ class CollectionService:
     
     async def get_choreography_by_id(
         self, 
-        db: Session, 
         user_id: str, 
         choreography_id: str
     ) -> Optional[SavedChoreographyResponse]:
@@ -347,27 +337,23 @@ class CollectionService:
         Get a specific choreography by ID (user must own it).
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             choreography_id: Choreography's unique identifier
             
         Returns:
             Optional[SavedChoreographyResponse]: Choreography if found and owned by user
         """
-        choreography = db.query(SavedChoreography).filter(
-            and_(
-                SavedChoreography.id == choreography_id,
-                SavedChoreography.user_id == user_id
+        try:
+            choreography = SavedChoreography.objects.get(
+                id=choreography_id,
+                user_id=user_id
             )
-        ).first()
-        
-        if choreography:
             return SavedChoreographyResponse.model_validate(choreography)
-        return None
+        except SavedChoreography.DoesNotExist:
+            return None
     
     async def update_choreography(
         self, 
-        db: Session, 
         user_id: str, 
         choreography_id: str, 
         request: UpdateChoreographyRequest
@@ -376,7 +362,6 @@ class CollectionService:
         Update choreography metadata.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             choreography_id: Choreography's unique identifier
             request: Update request data
@@ -387,14 +372,12 @@ class CollectionService:
         Raises:
             ValueError: If invalid parameters provided
         """
-        choreography = db.query(SavedChoreography).filter(
-            and_(
-                SavedChoreography.id == choreography_id,
-                SavedChoreography.user_id == user_id
+        try:
+            choreography = SavedChoreography.objects.get(
+                id=choreography_id,
+                user_id=user_id
             )
-        ).first()
-        
-        if not choreography:
+        except SavedChoreography.DoesNotExist:
             return None
         
         # Update title if provided
@@ -408,17 +391,11 @@ class CollectionService:
                 raise ValueError(f"Invalid difficulty level. Must be one of: {valid_difficulties}")
             choreography.difficulty = request.difficulty
         
-        try:
-            db.commit()
-            db.refresh(choreography)
-            return SavedChoreographyResponse.model_validate(choreography)
-        except Exception:
-            db.rollback()
-            raise
+        choreography.save()
+        return SavedChoreographyResponse.model_validate(choreography)
     
     async def delete_choreography(
         self, 
-        db: Session, 
         user_id: str, 
         choreography_id: str
     ) -> bool:
@@ -426,47 +403,36 @@ class CollectionService:
         Delete a choreography and clean up associated files.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             choreography_id: Choreography's unique identifier
             
         Returns:
             bool: True if deletion was successful, False if choreography not found
         """
-        choreography = db.query(SavedChoreography).filter(
-            and_(
-                SavedChoreography.id == choreography_id,
-                SavedChoreography.user_id == user_id
+        try:
+            choreography = SavedChoreography.objects.get(
+                id=choreography_id,
+                user_id=user_id
             )
-        ).first()
-        
-        if not choreography:
+        except SavedChoreography.DoesNotExist:
             return False
         
-        try:
-            # Delete associated files
-            self._delete_choreography_files(choreography)
-            
-            # Delete database record
-            db.delete(choreography)
-            db.commit()
-            
-            return True
-            
-        except Exception:
-            db.rollback()
-            raise
+        # Delete associated files
+        self._delete_choreography_files(choreography)
+        
+        # Delete database record
+        choreography.delete()
+        
+        return True
     
     async def get_collection_stats(
         self, 
-        db: Session, 
         user_id: str
     ) -> CollectionStatsResponse:
         """
         Get collection statistics and analytics.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             
         Returns:
@@ -476,31 +442,31 @@ class CollectionService:
             ValueError: If user doesn't exist
         """
         # Verify user exists
-        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-        if not user:
+        try:
+            user = User.objects.get(id=user_id, is_active=True)
+        except User.DoesNotExist:
             raise ValueError("User not found")
         
         # Get total count and duration
-        stats = db.query(
-            func.count(SavedChoreography.id).label('total_count'),
-            func.sum(SavedChoreography.duration).label('total_duration')
-        ).filter(SavedChoreography.user_id == user_id).first()
+        stats = SavedChoreography.objects.filter(user=user).aggregate(
+            total_count=Count('id'),
+            total_duration=Sum('duration')
+        )
         
-        total_choreographies = stats.total_count or 0
-        total_duration = float(stats.total_duration or 0)
+        total_choreographies = stats['total_count'] or 0
+        total_duration = float(stats['total_duration'] or 0)
         
         # Get difficulty breakdown
-        difficulty_stats = db.query(
-            SavedChoreography.difficulty,
-            func.count(SavedChoreography.id).label('count')
-        ).filter(SavedChoreography.user_id == user_id).group_by(SavedChoreography.difficulty).all()
+        difficulty_stats = SavedChoreography.objects.filter(user=user).values('difficulty').annotate(
+            count=Count('id')
+        )
         
-        difficulty_breakdown = {stat.difficulty: stat.count for stat in difficulty_stats}
+        difficulty_breakdown = {stat['difficulty']: stat['count'] for stat in difficulty_stats}
         
         # Get recent activity (last 5 choreographies)
-        recent_choreographies = db.query(SavedChoreography).filter(
-            SavedChoreography.user_id == user_id
-        ).order_by(desc(SavedChoreography.created_at)).limit(5).all()
+        recent_choreographies = list(
+            SavedChoreography.objects.filter(user=user).order_by('-created_at')[:5]
+        )
         
         recent_activity = [
             SavedChoreographyResponse.model_validate(choreo) for choreo in recent_choreographies
@@ -508,15 +474,13 @@ class CollectionService:
         
         # Calculate storage used
         storage_used_mb = 0.0
-        all_choreographies = db.query(SavedChoreography).filter(
-            SavedChoreography.user_id == user_id
-        ).all()
+        all_choreographies = SavedChoreography.objects.filter(user=user)
         
         for choreo in all_choreographies:
             if choreo.video_path:
-                storage_used_mb += self._get_file_size_mb(choreo.video_path)
+                storage_used_mb += self._get_file_size_mb(str(choreo.video_path))
             if choreo.thumbnail_path:
-                storage_used_mb += self._get_file_size_mb(choreo.thumbnail_path)
+                storage_used_mb += self._get_file_size_mb(str(choreo.thumbnail_path))
         
         return CollectionStatsResponse(
             total_choreographies=total_choreographies,
@@ -526,24 +490,23 @@ class CollectionService:
             storage_used_mb=round(storage_used_mb, 2)
         )
     
-    async def cleanup_orphaned_files(self, db: Session, user_id: str) -> Dict[str, Any]:
+    async def cleanup_orphaned_files(self, user_id: str) -> Dict[str, Any]:
         """
         Clean up orphaned files in user's storage directory.
         
         Args:
-            db: Database session
             user_id: User's unique identifier
             
         Returns:
             Dict[str, Any]: Cleanup results
         """
-        user_storage = self._get_user_storage_path(user_id)
+        user_storage = self._get_user_storage_path(str(user_id))
         
         # Get all choreography IDs for this user
         choreography_ids = set(
-            choreo.id for choreo in db.query(SavedChoreography.id).filter(
-                SavedChoreography.user_id == user_id
-            ).all()
+            str(choreo_id) for choreo_id in SavedChoreography.objects.filter(
+                user_id=user_id
+            ).values_list('id', flat=True)
         )
         
         # Find orphaned files

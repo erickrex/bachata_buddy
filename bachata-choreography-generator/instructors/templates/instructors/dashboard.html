@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Instructor Dashboard - Bachata Choreography Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Instructor Dashboard</h1>
+                <p class="text-gray-600 mt-2">Manage your class plans and choreography sequences</p>
+            </div>
+            <a href="{% url 'instructors:class_plan_create' %}" 
+               class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2">
+                <span>➕</span>
+                <span>Create New Class Plan</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm font-medium">Total Class Plans</p>
+                    <p class="text-3xl font-bold text-purple-600 mt-2">{{ total_plans }}</p>
+                </div>
+                <div class="bg-purple-100 rounded-full p-3">
+                    <span class="text-3xl">📋</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm font-medium">Total Sequences</p>
+                    <p class="text-3xl font-bold text-pink-600 mt-2">
+                        {% widthratio class_plans.count 1 1 as total %}
+                        {{ class_plans|length|add:"0" }}
+                    </p>
+                </div>
+                <div class="bg-pink-100 rounded-full p-3">
+                    <span class="text-3xl">🎵</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm font-medium">Your Role</p>
+                    <p class="text-xl font-bold text-blue-600 mt-2">Instructor</p>
+                </div>
+                <div class="bg-blue-100 rounded-full p-3">
+                    <span class="text-3xl">🎓</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Class Plans List -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Your Class Plans</h2>
+        
+        {% if class_plans %}
+        <div class="space-y-4">
+            {% for plan in class_plans %}
+            <div class="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3 mb-2">
+                            <h3 class="text-xl font-bold text-gray-900">{{ plan.title }}</h3>
+                            <span class="px-3 py-1 rounded-full text-xs font-medium
+                                {% if plan.difficulty_level == 'beginner' %}bg-green-100 text-green-800
+                                {% elif plan.difficulty_level == 'intermediate' %}bg-yellow-100 text-yellow-800
+                                {% elif plan.difficulty_level == 'advanced' %}bg-red-100 text-red-800
+                                {% endif %}">
+                                {{ plan.get_difficulty_level_display }}
+                            </span>
+                        </div>
+                        
+                        {% if plan.description %}
+                        <p class="text-gray-600 mb-3">{{ plan.description|truncatewords:30 }}</p>
+                        {% endif %}
+                        
+                        <div class="flex items-center space-x-6 text-sm text-gray-500">
+                            <span class="flex items-center space-x-1">
+                                <span>🎵</span>
+                                <span>{{ plan.sequences.count }} sequence{{ plan.sequences.count|pluralize }}</span>
+                            </span>
+                            
+                            {% if plan.estimated_duration %}
+                            <span class="flex items-center space-x-1">
+                                <span>⏱️</span>
+                                <span>{{ plan.estimated_duration }} min</span>
+                            </span>
+                            {% endif %}
+                            
+                            <span class="flex items-center space-x-1">
+                                <span>📅</span>
+                                <span>Created {{ plan.created_at|date:"M d, Y" }}</span>
+                            </span>
+                            
+                            {% if plan.updated_at != plan.created_at %}
+                            <span class="flex items-center space-x-1">
+                                <span>✏️</span>
+                                <span>Updated {{ plan.updated_at|date:"M d, Y" }}</span>
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-2 ml-4">
+                        <a href="{% url 'instructors:class_plan_detail' plan.id %}" 
+                           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            View Details
+                        </a>
+                        <a href="{% url 'instructors:class_plan_edit' plan.id %}" 
+                           class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            Edit
+                        </a>
+                        <button 
+                            hx-delete="{% url 'instructors:class_plan_delete' plan.id %}"
+                            hx-confirm="Are you sure you want to delete '{{ plan.title }}'? This action cannot be undone."
+                            hx-target="closest .border"
+                            hx-swap="outerHTML swap:1s"
+                            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Sequences Preview -->
+                {% if plan.sequences.all %}
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <p class="text-sm font-medium text-gray-700 mb-2">Sequences:</p>
+                    <div class="flex flex-wrap gap-2">
+                        {% for sequence in plan.sequences.all|slice:":5" %}
+                        <span class="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs">
+                            {{ sequence.sequence_order }}. {{ sequence.choreography.title|truncatewords:3 }}
+                        </span>
+                        {% endfor %}
+                        {% if plan.sequences.count > 5 %}
+                        <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
+                            +{{ plan.sequences.count|add:"-5" }} more
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <div class="text-6xl mb-4">📋</div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">No Class Plans Yet</h3>
+            <p class="text-gray-600 mb-6">Create your first class plan to start organizing your choreographies</p>
+            <a href="{% url 'instructors:class_plan_create' %}" 
+               class="inline-flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                <span>➕</span>
+                <span>Create Your First Class Plan</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

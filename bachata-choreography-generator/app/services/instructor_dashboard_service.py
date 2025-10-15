@@ -9,10 +9,13 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, func
+from django.db.models import Q, Count, Sum, Avg, Max
+from django.contrib.auth import get_user_model
 
-from app.models.database_models import ClassPlan, ClassPlanSequence, SavedChoreography, User
+from instructors.models import ClassPlan, ClassPlanSequence
+from choreography.models import SavedChoreography
+
+User = get_user_model()
 
 
 class InstructorDashboardService:
@@ -33,7 +36,6 @@ class InstructorDashboardService:
     
     async def create_class_plan(
         self, 
-        db: Session, 
         instructor_id: str, 
         title: str,
         description: Optional[str] = None,
@@ -45,7 +47,6 @@ class InstructorDashboardService:
         Create a new class plan for an instructor.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             title: Class plan title
             description: Detailed description of the class
@@ -60,15 +61,13 @@ class InstructorDashboardService:
             ValueError: If instructor doesn't exist or invalid parameters
         """
         # Verify instructor exists and has instructor privileges
-        instructor = db.query(User).filter(
-            and_(
-                User.id == instructor_id,
-                User.is_instructor == True,
-                User.is_active == True
+        try:
+            instructor = User.objects.get(
+                id=instructor_id,
+                is_instructor=True,
+                is_active=True
             )
-        ).first()
-        
-        if not instructor:
+        except User.DoesNotExist:
             raise ValueError("Instructor not found or user does not have instructor privileges")
         
         # Validate difficulty level
@@ -76,34 +75,20 @@ class InstructorDashboardService:
         if difficulty_level not in valid_difficulties:
             raise ValueError(f"Invalid difficulty level. Must be one of: {valid_difficulties}")
         
-        # Generate unique class plan ID
-        class_plan_id = str(uuid.uuid4())
+        # Create class plan record
+        class_plan = ClassPlan.objects.create(
+            instructor=instructor,
+            title=title.strip(),
+            description=description.strip() if description else "",
+            difficulty_level=difficulty_level,
+            estimated_duration=estimated_duration,
+            instructor_notes=instructor_notes.strip() if instructor_notes else ""
+        )
         
-        try:
-            # Create class plan record
-            class_plan = ClassPlan(
-                id=class_plan_id,
-                instructor_id=instructor_id,
-                title=title.strip(),
-                description=description.strip() if description else None,
-                difficulty_level=difficulty_level,
-                estimated_duration=estimated_duration,
-                instructor_notes=instructor_notes.strip() if instructor_notes else None
-            )
-            
-            db.add(class_plan)
-            db.commit()
-            db.refresh(class_plan)
-            
-            return class_plan
-            
-        except Exception as e:
-            db.rollback()
-            raise e
+        return class_plan
     
     async def get_instructor_class_plans(
         self, 
-        db: Session, 
         instructor_id: str,
         difficulty_filter: Optional[str] = None,
         sort_by: str = "created_at",
@@ -115,7 +100,6 @@ class InstructorDashboardService:
         Retrieve class plans for an instructor with filtering and sorting.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             difficulty_filter: Filter by difficulty level (optional)
             sort_by: Sort field (created_at, title, difficulty_level, estimated_duration)
@@ -130,44 +114,41 @@ class InstructorDashboardService:
             ValueError: If instructor doesn't exist
         """
         # Verify instructor exists
-        instructor = db.query(User).filter(
-            and_(
-                User.id == instructor_id,
-                User.is_instructor == True,
-                User.is_active == True
+        try:
+            instructor = User.objects.get(
+                id=instructor_id,
+                is_instructor=True,
+                is_active=True
             )
-        ).first()
-        
-        if not instructor:
+        except User.DoesNotExist:
             raise ValueError("Instructor not found or user does not have instructor privileges")
         
-        # Build base query
-        query = db.query(ClassPlan).filter(ClassPlan.instructor_id == instructor_id)
+        # Build base queryset
+        queryset = ClassPlan.objects.filter(instructor=instructor)
         
         # Apply difficulty filter
         if difficulty_filter:
             valid_difficulties = ["beginner", "intermediate", "advanced"]
             if difficulty_filter in valid_difficulties:
-                query = query.filter(ClassPlan.difficulty_level == difficulty_filter)
+                queryset = queryset.filter(difficulty_level=difficulty_filter)
         
         # Apply sorting
         valid_sort_fields = ["created_at", "title", "difficulty_level", "estimated_duration", "updated_at"]
         if sort_by in valid_sort_fields:
-            sort_column = getattr(ClassPlan, sort_by)
+            sort_field = sort_by
             if sort_order.lower() == "desc":
-                query = query.order_by(desc(sort_column))
-            else:
-                query = query.order_by(asc(sort_column))
+                sort_field = f"-{sort_field}"
+            queryset = queryset.order_by(sort_field)
         else:
             # Default sorting
-            query = query.order_by(desc(ClassPlan.created_at))
+            queryset = queryset.order_by("-created_at")
         
         # Get total count
-        total_count = query.count()
+        total_count = queryset.count()
         
         # Apply pagination
         offset = (page - 1) * limit
-        class_plans = query.offset(offset).limit(limit).all()
+        class_plans = list(queryset[offset:offset + limit])
         
         # Calculate pagination info
         total_pages = (total_count + limit - 1) // limit
@@ -186,7 +167,6 @@ class InstructorDashboardService:
     
     async def get_class_plan_by_id(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str
     ) -> Optional[ClassPlan]:
@@ -194,25 +174,22 @@ class InstructorDashboardService:
         Get a specific class plan by ID (instructor must own it).
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             
         Returns:
             Optional[ClassPlan]: Class plan if found and owned by instructor
         """
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            return ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        return class_plan
+        except ClassPlan.DoesNotExist:
+            return None
     
     async def update_class_plan(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str,
         title: Optional[str] = None,
@@ -225,7 +202,6 @@ class InstructorDashboardService:
         Update class plan metadata.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             title: Updated title (optional)
@@ -240,14 +216,12 @@ class InstructorDashboardService:
         Raises:
             ValueError: If invalid parameters provided
         """
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             return None
         
         # Update fields if provided
@@ -255,7 +229,7 @@ class InstructorDashboardService:
             class_plan.title = title.strip()
         
         if description is not None:
-            class_plan.description = description.strip() if description else None
+            class_plan.description = description.strip() if description else ""
         
         if difficulty_level is not None:
             valid_difficulties = ["beginner", "intermediate", "advanced"]
@@ -267,22 +241,13 @@ class InstructorDashboardService:
             class_plan.estimated_duration = estimated_duration
         
         if instructor_notes is not None:
-            class_plan.instructor_notes = instructor_notes.strip() if instructor_notes else None
+            class_plan.instructor_notes = instructor_notes.strip() if instructor_notes else ""
         
-        # Update timestamp
-        class_plan.updated_at = datetime.utcnow()
-        
-        try:
-            db.commit()
-            db.refresh(class_plan)
-            return class_plan
-        except Exception:
-            db.rollback()
-            raise
+        class_plan.save()
+        return class_plan
     
     async def delete_class_plan(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str
     ) -> bool:
@@ -290,42 +255,26 @@ class InstructorDashboardService:
         Delete a class plan and all associated sequences.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             
         Returns:
             bool: True if deletion was successful, False if class plan not found
         """
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             return False
         
-        try:
-            # Delete associated sequences (cascade should handle this, but explicit for clarity)
-            db.query(ClassPlanSequence).filter(
-                ClassPlanSequence.class_plan_id == class_plan_id
-            ).delete()
-            
-            # Delete class plan
-            db.delete(class_plan)
-            db.commit()
-            
-            return True
-            
-        except Exception:
-            db.rollback()
-            raise
+        # Delete class plan (cascade will handle sequences)
+        class_plan.delete()
+        return True
     
     async def add_choreography_to_plan(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str,
         choreography_id: str,
@@ -337,7 +286,6 @@ class InstructorDashboardService:
         Add a choreography to a class plan with sequencing information.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             choreography_id: Choreography's unique identifier
@@ -352,76 +300,53 @@ class InstructorDashboardService:
             ValueError: If class plan or choreography not found/accessible
         """
         # Verify class plan exists and belongs to instructor
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             raise ValueError("Class plan not found or not accessible")
         
         # Verify choreography exists and belongs to instructor
-        choreography = db.query(SavedChoreography).filter(
-            and_(
-                SavedChoreography.id == choreography_id,
-                SavedChoreography.user_id == instructor_id
+        try:
+            choreography = SavedChoreography.objects.get(
+                id=choreography_id,
+                user_id=instructor_id
             )
-        ).first()
-        
-        if not choreography:
+        except SavedChoreography.DoesNotExist:
             raise ValueError("Choreography not found or not accessible")
         
         # Check if choreography is already in this class plan
-        existing_sequence = db.query(ClassPlanSequence).filter(
-            and_(
-                ClassPlanSequence.class_plan_id == class_plan_id,
-                ClassPlanSequence.choreography_id == choreography_id
-            )
-        ).first()
-        
-        if existing_sequence:
+        if ClassPlanSequence.objects.filter(
+            class_plan=class_plan,
+            choreography=choreography
+        ).exists():
             raise ValueError("Choreography is already in this class plan")
         
         # Auto-assign sequence order if not provided
         if sequence_order is None:
-            max_order = db.query(func.max(ClassPlanSequence.sequence_order)).filter(
-                ClassPlanSequence.class_plan_id == class_plan_id
-            ).scalar()
+            max_order = ClassPlanSequence.objects.filter(
+                class_plan=class_plan
+            ).aggregate(Max('sequence_order'))['sequence_order__max']
             sequence_order = (max_order or 0) + 1
         
-        # Generate unique sequence ID
-        sequence_id = str(uuid.uuid4())
+        # Create sequence record
+        sequence = ClassPlanSequence.objects.create(
+            class_plan=class_plan,
+            choreography=choreography,
+            sequence_order=sequence_order,
+            notes=notes.strip() if notes else "",
+            estimated_time=estimated_time
+        )
         
-        try:
-            # Create sequence record
-            sequence = ClassPlanSequence(
-                id=sequence_id,
-                class_plan_id=class_plan_id,
-                choreography_id=choreography_id,
-                sequence_order=sequence_order,
-                notes=notes.strip() if notes else None,
-                estimated_time=estimated_time
-            )
-            
-            db.add(sequence)
-            
-            # Update class plan timestamp
-            class_plan.updated_at = datetime.utcnow()
-            
-            db.commit()
-            db.refresh(sequence)
-            
-            return sequence
-            
-        except Exception as e:
-            db.rollback()
-            raise e
+        # Update class plan timestamp
+        class_plan.save()  # This will update updated_at automatically
+        
+        return sequence
     
     async def remove_choreography_from_plan(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str,
         choreography_id: str
@@ -430,7 +355,6 @@ class InstructorDashboardService:
         Remove a choreography from a class plan.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             choreography_id: Choreography's unique identifier
@@ -439,43 +363,32 @@ class InstructorDashboardService:
             bool: True if removal was successful, False if sequence not found
         """
         # Verify class plan belongs to instructor
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             return False
         
         # Find and delete the sequence
-        sequence = db.query(ClassPlanSequence).filter(
-            and_(
-                ClassPlanSequence.class_plan_id == class_plan_id,
-                ClassPlanSequence.choreography_id == choreography_id
+        try:
+            sequence = ClassPlanSequence.objects.get(
+                class_plan=class_plan,
+                choreography_id=choreography_id
             )
-        ).first()
-        
-        if not sequence:
+        except ClassPlanSequence.DoesNotExist:
             return False
         
-        try:
-            db.delete(sequence)
-            
-            # Update class plan timestamp
-            class_plan.updated_at = datetime.utcnow()
-            
-            db.commit()
-            return True
-            
-        except Exception:
-            db.rollback()
-            raise
+        sequence.delete()
+        
+        # Update class plan timestamp
+        class_plan.save()
+        
+        return True
     
     async def reorder_choreography_sequence(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str,
         choreography_sequence_updates: List[Dict[str, Any]]
@@ -484,7 +397,6 @@ class InstructorDashboardService:
         Reorder choreographies in a class plan.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             choreography_sequence_updates: List of dicts with choreography_id and new sequence_order
@@ -496,48 +408,39 @@ class InstructorDashboardService:
             ValueError: If class plan not found or invalid sequence data
         """
         # Verify class plan belongs to instructor
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             raise ValueError("Class plan not found or not accessible")
         
-        try:
-            # Update sequence orders
-            for update in choreography_sequence_updates:
-                choreography_id = update.get("choreography_id")
-                new_order = update.get("sequence_order")
-                
-                if not choreography_id or new_order is None:
-                    continue
-                
-                sequence = db.query(ClassPlanSequence).filter(
-                    and_(
-                        ClassPlanSequence.class_plan_id == class_plan_id,
-                        ClassPlanSequence.choreography_id == choreography_id
-                    )
-                ).first()
-                
-                if sequence:
-                    sequence.sequence_order = new_order
+        # Update sequence orders
+        for update in choreography_sequence_updates:
+            choreography_id = update.get("choreography_id")
+            new_order = update.get("sequence_order")
             
-            # Update class plan timestamp
-            class_plan.updated_at = datetime.utcnow()
+            if not choreography_id or new_order is None:
+                continue
             
-            db.commit()
-            return True
-            
-        except Exception:
-            db.rollback()
-            raise
+            try:
+                sequence = ClassPlanSequence.objects.get(
+                    class_plan=class_plan,
+                    choreography_id=choreography_id
+                )
+                sequence.sequence_order = new_order
+                sequence.save()
+            except ClassPlanSequence.DoesNotExist:
+                continue
+        
+        # Update class plan timestamp
+        class_plan.save()
+        
+        return True
     
     async def update_sequence_details(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str,
         choreography_id: str,
@@ -548,7 +451,6 @@ class InstructorDashboardService:
         Update sequence-specific details (notes and estimated time).
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             choreography_id: Choreography's unique identifier
@@ -559,49 +461,39 @@ class InstructorDashboardService:
             Optional[ClassPlanSequence]: Updated sequence if successful
         """
         # Verify class plan belongs to instructor
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             return None
         
         # Find the sequence
-        sequence = db.query(ClassPlanSequence).filter(
-            and_(
-                ClassPlanSequence.class_plan_id == class_plan_id,
-                ClassPlanSequence.choreography_id == choreography_id
+        try:
+            sequence = ClassPlanSequence.objects.get(
+                class_plan=class_plan,
+                choreography_id=choreography_id
             )
-        ).first()
-        
-        if not sequence:
+        except ClassPlanSequence.DoesNotExist:
             return None
         
         # Update fields if provided
         if notes is not None:
-            sequence.notes = notes.strip() if notes else None
+            sequence.notes = notes.strip() if notes else ""
         
         if estimated_time is not None:
             sequence.estimated_time = estimated_time
         
-        try:
-            # Update class plan timestamp
-            class_plan.updated_at = datetime.utcnow()
-            
-            db.commit()
-            db.refresh(sequence)
-            return sequence
-            
-        except Exception:
-            db.rollback()
-            raise
+        sequence.save()
+        
+        # Update class plan timestamp
+        class_plan.save()
+        
+        return sequence
     
     async def generate_class_plan_summary(
         self, 
-        db: Session, 
         instructor_id: str, 
         class_plan_id: str
     ) -> Optional[Dict[str, Any]]:
@@ -609,7 +501,6 @@ class InstructorDashboardService:
         Generate a structured summary of a class plan with timing and progression.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             class_plan_id: Class plan's unique identifier
             
@@ -617,27 +508,23 @@ class InstructorDashboardService:
             Optional[Dict]: Structured class plan summary if found
         """
         # Get class plan with sequences
-        class_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            class_plan = ClassPlan.objects.select_related('instructor').get(
+                id=class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not class_plan:
+        except ClassPlan.DoesNotExist:
             return None
         
         # Get sequences with choreography details, ordered by sequence_order
-        sequences = db.query(ClassPlanSequence, SavedChoreography).join(
-            SavedChoreography, ClassPlanSequence.choreography_id == SavedChoreography.id
-        ).filter(
-            ClassPlanSequence.class_plan_id == class_plan_id
-        ).order_by(ClassPlanSequence.sequence_order).all()
+        sequences = ClassPlanSequence.objects.filter(
+            class_plan=class_plan
+        ).select_related('choreography').order_by('sequence_order')
         
         # Calculate summary statistics
-        total_choreographies = len(sequences)
+        total_choreographies = sequences.count()
         total_estimated_time = sum(
-            seq.estimated_time or 0 for seq, _ in sequences
+            seq.estimated_time or 0 for seq in sequences
         )
         
         # Calculate difficulty distribution
@@ -645,13 +532,17 @@ class InstructorDashboardService:
         total_video_duration = 0.0
         
         sequence_details = []
-        for sequence, choreography in sequences:
+        difficulty_progression = []
+        
+        for sequence in sequences:
+            choreography = sequence.choreography
             difficulty_counts[choreography.difficulty] += 1
             total_video_duration += choreography.duration
+            difficulty_progression.append(choreography.difficulty)
             
             sequence_details.append({
                 "sequence_order": sequence.sequence_order,
-                "choreography_id": choreography.id,
+                "choreography_id": str(choreography.id),
                 "choreography_title": choreography.title,
                 "choreography_difficulty": choreography.difficulty,
                 "choreography_duration": choreography.duration,
@@ -660,17 +551,12 @@ class InstructorDashboardService:
                 "music_info": choreography.music_info
             })
         
-        # Calculate progression analysis
-        difficulty_progression = [
-            choreo.difficulty for _, choreo in sequences
-        ]
-        
         # Estimate total class time (teaching time + video duration + transitions)
         estimated_total_time = total_estimated_time + (total_video_duration / 60) + (total_choreographies * 2)  # 2 min transition buffer per choreography
         
         return {
             "class_plan": {
-                "id": class_plan.id,
+                "id": str(class_plan.id),
                 "title": class_plan.title,
                 "description": class_plan.description,
                 "difficulty_level": class_plan.difficulty_level,
@@ -750,7 +636,6 @@ class InstructorDashboardService:
     
     async def duplicate_class_plan(
         self, 
-        db: Session, 
         instructor_id: str, 
         source_class_plan_id: str,
         new_title: str,
@@ -760,7 +645,6 @@ class InstructorDashboardService:
         Duplicate an existing class plan with optional sequence copying.
         
         Args:
-            db: Database session
             instructor_id: Instructor's unique identifier
             source_class_plan_id: ID of class plan to duplicate
             new_title: Title for the new class plan
@@ -773,54 +657,45 @@ class InstructorDashboardService:
             ValueError: If source class plan not found
         """
         # Get source class plan
-        source_plan = db.query(ClassPlan).filter(
-            and_(
-                ClassPlan.id == source_class_plan_id,
-                ClassPlan.instructor_id == instructor_id
+        try:
+            source_plan = ClassPlan.objects.get(
+                id=source_class_plan_id,
+                instructor_id=instructor_id
             )
-        ).first()
-        
-        if not source_plan:
+        except ClassPlan.DoesNotExist:
             raise ValueError("Source class plan not found or not accessible")
         
-        try:
-            # Create new class plan
-            new_plan = await self.create_class_plan(
-                db=db,
-                instructor_id=instructor_id,
-                title=new_title,
-                description=source_plan.description,
-                difficulty_level=source_plan.difficulty_level,
-                estimated_duration=source_plan.estimated_duration,
-                instructor_notes=source_plan.instructor_notes
-            )
+        # Create new class plan
+        new_plan = await self.create_class_plan(
+            instructor_id=instructor_id,
+            title=new_title,
+            description=source_plan.description,
+            difficulty_level=source_plan.difficulty_level,
+            estimated_duration=source_plan.estimated_duration,
+            instructor_notes=source_plan.instructor_notes
+        )
+        
+        # Copy sequences if requested
+        if copy_sequences:
+            source_sequences = ClassPlanSequence.objects.filter(
+                class_plan=source_plan
+            ).order_by('sequence_order')
             
-            # Copy sequences if requested
-            if copy_sequences:
-                source_sequences = db.query(ClassPlanSequence).filter(
-                    ClassPlanSequence.class_plan_id == source_class_plan_id
-                ).order_by(ClassPlanSequence.sequence_order).all()
-                
-                for source_sequence in source_sequences:
-                    await self.add_choreography_to_plan(
-                        db=db,
-                        instructor_id=instructor_id,
-                        class_plan_id=new_plan.id,
-                        choreography_id=source_sequence.choreography_id,
-                        sequence_order=source_sequence.sequence_order,
-                        notes=source_sequence.notes,
-                        estimated_time=source_sequence.estimated_time
-                    )
-            
-            return new_plan
-            
-        except Exception as e:
-            db.rollback()
-            raise e
+            for source_sequence in source_sequences:
+                await self.add_choreography_to_plan(
+                    instructor_id=instructor_id,
+                    class_plan_id=new_plan.id,
+                    choreography_id=str(source_sequence.choreography_id),
+                    sequence_order=source_sequence.sequence_order,
+                    notes=source_sequence.notes,
+                    estimated_time=source_sequence.estimated_time
+                )
+        
+        return new_plan
     
     async def get_instructor_dashboard_stats(
         self, 
-        db: Session, 
+        db,  # Database session (legacy SQLAlchemy - not used in Django)
         instructor_id: str
     ) -> Dict[str, Any]:
         """

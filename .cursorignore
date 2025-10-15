@@ -11,7 +11,7 @@ bachata-choreography-generator/app/services/music_analyzer/__pycache__/
 bachata-choreography-generator/app/services/move_analyzer/__pycache__/
 bachata-choreography-generator/app/services/recommendation_engine/__pycache__/
 
-
+bachata-choreography-generator/uv.lock
 bachata-choreography-generator/data/cache/
 bachata-choreography-generator/data/choreography_metadata/
 bachata-choreography-generator/data/output/ 

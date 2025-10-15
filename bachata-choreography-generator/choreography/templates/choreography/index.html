@@ -1,0 +1,329 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Generate Choreography - Bachata Vibes{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'js/choreography-app.js' %}?v=20251015"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="choreographyApp()" x-init="init()" class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <h1 class="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+            🎵 Generate Your Bachata Choreography
+        </h1>
+        <p class="text-gray-600 text-lg">
+            Select a song and difficulty level to create a custom dance choreography
+        </p>
+    </div>
+
+    <!-- Generation Form -->
+    <div x-show="!isGenerating && !result" class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <form method="post" 
+              action="{% url 'choreography:create' %}"
+              hx-post="{% url 'choreography:create' %}"
+              hx-trigger="submit"
+              hx-swap="none"
+              @htmx:after-request="handleGenerationResponse($event)"
+              @submit="startGeneration()">
+            {% csrf_token %}
+            
+            <!-- Song Selection -->
+            <div class="mb-6">
+                <label for="{{ form.song_selection.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
+                    🎼 Select Song
+                </label>
+                {{ form.song_selection }}
+                {% if form.song_selection.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ form.song_selection.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- YouTube URL (conditional) -->
+            <div class="mb-6" x-show="selectedSong === 'new_song'" x-cloak>
+                <label for="{{ form.youtube_url.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
+                    🔗 YouTube URL
+                </label>
+                {{ form.youtube_url }}
+                {% if form.youtube_url.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ form.youtube_url.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Difficulty Selection -->
+            <div class="mb-8">
+                <label for="{{ form.difficulty.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
+                    📊 Difficulty Level
+                </label>
+                {{ form.difficulty }}
+                {% if form.difficulty.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ form.difficulty.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" 
+                    :disabled="!canGenerate()"
+                    :class="canGenerate() ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700' : 'bg-gray-400 cursor-not-allowed'"
+                    class="w-full text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-105 shadow-lg">
+                ✨ Generate Choreography
+            </button>
+        </form>
+    </div>
+
+    <!-- Progress Display -->
+    <div x-show="isGenerating" x-cloak class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <div class="text-center mb-6">
+            <div class="text-6xl mb-4" x-text="getStageEmoji()"></div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Generating Your Choreography</h2>
+            <p class="text-gray-600" x-text="progressMessage"></p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden mb-4">
+            <div class="absolute h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+                 :style="`width: ${progress}%`"></div>
+        </div>
+
+        <!-- Progress Percentage -->
+        <div class="text-center">
+            <span class="text-2xl font-bold text-purple-600" x-text="`${Math.round(progress)}%`"></span>
+        </div>
+
+        <!-- Stage Indicator -->
+        <div class="mt-6 flex justify-between text-xs text-gray-500">
+            <span :class="{'text-purple-600 font-bold': currentStage === 'downloading'}">Downloading</span>
+            <span :class="{'text-purple-600 font-bold': currentStage === 'analyzing'}">Analyzing</span>
+            <span :class="{'text-purple-600 font-bold': currentStage === 'selecting'}">Selecting</span>
+            <span :class="{'text-purple-600 font-bold': currentStage === 'generating'}">Generating</span>
+            <span :class="{'text-purple-600 font-bold': currentStage === 'finalizing'}">Finalizing</span>
+        </div>
+
+        <!-- Hidden polling element for HTMX -->
+        <div x-ref="progressPollingElement" style="display: none;"></div>
+    </div>
+
+    <!-- Error Display -->
+    <div x-show="error" x-cloak class="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-6">
+        <div class="flex items-start">
+            <div class="text-3xl mr-4">❌</div>
+            <div>
+                <h3 class="text-lg font-bold text-red-800 mb-2">Generation Failed</h3>
+                <p class="text-red-700" x-text="errorMessage"></p>
+                <button @click="resetForm()" 
+                        class="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Player Section -->
+    <div x-show="result" x-cloak class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <div class="text-center mb-6">
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">🎉 Your Choreography is Ready!</h2>
+            <p class="text-gray-600">
+                Generated in <span x-text="result?.processing_time?.toFixed(1)"></span>s
+                • <span x-text="result?.moves_analyzed"></span> moves analyzed
+            </p>
+        </div>
+
+        <!-- Video Player -->
+        <div class="mb-6">
+            <video x-ref="videoPlayer"
+                   :src="result ? `/video/${result.video_filename}/` : ''"
+                   @timeupdate="updateVideoProgress()"
+                   @ended="handleVideoEnd()"
+                   @loadedmetadata="initVideoPlayer()"
+                   controls
+                   class="w-full rounded-xl shadow-lg">
+            </video>
+        </div>
+
+        <!-- Video Controls -->
+        <div class="mb-6">
+            <!-- Play/Pause Button -->
+            <div class="flex justify-center mb-4">
+                <button @click="togglePlayPause()"
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-xl font-semibold transition-colors">
+                    <span x-show="!isPlaying">▶️ Play</span>
+                    <span x-show="isPlaying">⏸️ Pause</span>
+                </button>
+            </div>
+
+            <!-- Progress Bar with Click-to-Seek -->
+            <div class="relative w-full h-3 bg-gray-200 rounded-full cursor-pointer mb-2"
+                 @click="seekToPosition($event)">
+                <!-- Current Progress -->
+                <div class="absolute h-full bg-blue-500 rounded-full transition-all"
+                     :style="`width: ${progressPercentage}%`"></div>
+                
+                <!-- Loop Segment Indicator -->
+                <div x-show="isLooping && loopStart >= 0"
+                     class="absolute h-full bg-green-300 opacity-50 rounded-full"
+                     :style="`left: ${loopStartPercentage}%; width: ${loopSegmentWidth}%`">
+                </div>
+            </div>
+
+            <!-- Time Display -->
+            <div class="flex justify-between text-sm text-gray-600">
+                <span x-text="formatTime(currentTime)"></span>
+                <span x-text="formatTime(videoDuration)"></span>
+            </div>
+        </div>
+
+        <!-- Loop Controls -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">🔁 Loop Controls</h3>
+                <button @click="toggleLoop()"
+                        :class="isLooping ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'"
+                        class="text-white px-4 py-2 rounded-lg font-semibold transition-colors">
+                    <span x-show="!isLooping">Enable Loop</span>
+                    <span x-show="isLooping">Disable Loop</span>
+                </button>
+            </div>
+
+            <!-- Loop Adjustment Controls -->
+            <div x-show="isLooping" x-cloak class="space-y-3">
+                <!-- Loop Start -->
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700">Loop Start:</span>
+                    <div class="flex items-center space-x-2">
+                        <button @click="adjustLoopStart(-1)"
+                                class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            -1s
+                        </button>
+                        <span class="text-lg font-mono font-bold text-purple-600 w-16 text-center" 
+                              x-text="formatTime(loopStart)"></span>
+                        <button @click="adjustLoopStart(1)"
+                                class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            +1s
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loop End -->
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700">Loop End:</span>
+                    <div class="flex items-center space-x-2">
+                        <button @click="adjustLoopEnd(-1)"
+                                class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            -1s
+                        </button>
+                        <span class="text-lg font-mono font-bold text-pink-600 w-16 text-center" 
+                              x-text="formatTime(loopEnd)"></span>
+                        <button @click="adjustLoopEnd(1)"
+                                class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                            +1s
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loop Duration -->
+                <div class="text-center text-sm text-gray-600 pt-2 border-t border-gray-200">
+                    Loop Duration: <span class="font-bold" x-text="formatTime(loopEnd - loopStart)"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save to Collection Form -->
+        {% if user.is_authenticated %}
+        <div class="border-t-2 border-gray-100 pt-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">💾 Save to Your Collection</h3>
+            <form hx-post="{% url 'collections:save' %}"
+                  hx-trigger="submit"
+                  hx-swap="none"
+                  @htmx:before-request="startSaving()"
+                  @htmx:after-request="handleSaveResponse($event)"
+                  class="space-y-4">
+                {% csrf_token %}
+                
+                <!-- Hidden fields for video data -->
+                <input type="hidden" name="video_path" :value="result?.video_path">
+                <input type="hidden" name="video_filename" :value="result?.video_filename">
+                <input type="hidden" name="duration" :value="result?.sequence_duration">
+                <input type="hidden" name="metadata_path" :value="result?.metadata_path">
+                
+                <!-- Title Input -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Title
+                    </label>
+                    <input type="text" 
+                           name="title" 
+                           required
+                           placeholder="My Awesome Choreography"
+                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all">
+                </div>
+
+                <!-- Difficulty (pre-filled) -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Difficulty
+                    </label>
+                    <select name="difficulty" 
+                            :value="difficulty"
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all">
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+                </div>
+
+                <!-- Save Button -->
+                <button type="submit"
+                        :disabled="isSaving"
+                        :class="isSaving ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'"
+                        class="w-full text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg">
+                    <span x-show="!isSaving">💾 Save to Collection</span>
+                    <span x-show="isSaving">Saving...</span>
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- Generate Another Button -->
+        <div class="mt-6 text-center">
+            <button @click="resetForm()"
+                    class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-colors">
+                🔄 Generate Another Choreography
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+[x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Helper utilities for formatting
+window.HelperUtils = {
+    formatTime: function(seconds) {
+        if (!seconds || seconds < 0) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    },
+    
+    getStageEmoji: function(stage) {
+        const emojis = {
+            'initializing': '⏳',
+            'downloading': '⬇️',
+            'analyzing': '🎵',
+            'selecting': '💃',
+            'generating': '🎬',
+            'finalizing': '✨',
+            'completed': '🎉',
+            'failed': '❌'
+        };
+        return emojis[stage] || '⏳';
+    }
+};
+</script>
+{% endblock %}

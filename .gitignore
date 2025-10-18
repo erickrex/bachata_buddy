@@ -2,6 +2,10 @@
 data/database.db
 data/database.db-shm
 data/database.db-wal
+data/output
+data/user_collections
+data/temp
+
 
 # Generated content directories
 data/output/
@@ -11,6 +15,7 @@ data/choreography_metadata/
 
 # Python
 __pycache__/
+*.__pycache__
 *.py[cod]
 *$py.class
 *.so

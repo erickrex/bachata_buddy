@@ -386,3 +386,114 @@ def collection_cleanup(request):
         return JsonResponse({
             'error': 'Failed to cleanup orphaned files'
         }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_choreography(request, pk):
+    """
+    Delete a single choreography (video file + database entry).
+    Only accessible by the owner.
+    """
+    import logging
+    from pathlib import Path
+    from django.conf import settings
+    from django.contrib import messages
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get choreography (ensures user owns it)
+        choreography = get_object_or_404(SavedChoreography, pk=pk, user=request.user)
+        
+        title = choreography.title
+        video_path = choreography.video_path
+        
+        # Delete video file if it exists
+        if video_path:
+            try:
+                video_file = Path(video_path)
+                if video_file.exists() and video_file.is_file():
+                    video_file.unlink()
+                    logger.info(f"Deleted video file: {video_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete video file {video_path}: {e}")
+        
+        # Delete database entry
+        choreography.delete()
+        logger.info(f"User {request.user.id} deleted choreography '{title}' (ID: {pk})")
+        
+        messages.success(request, f'Successfully deleted "{title}"')
+        return redirect('collections:list')
+        
+    except Exception as e:
+        logger.error(f"Error deleting choreography {pk} for user {request.user.id}: {e}", exc_info=True)
+        messages.error(request, 'Failed to delete choreography')
+        return redirect('collections:list')
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_all_choreographies(request):
+    """
+    Delete ALL choreographies for the current user (video files + database entries).
+    This is a destructive operation with no undo.
+    """
+    import logging
+    from pathlib import Path
+    from django.conf import settings
+    from django.contrib import messages
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get all user's choreographies
+        choreographies = SavedChoreography.objects.filter(user=request.user)
+        count = choreographies.count()
+        
+        if count == 0:
+            messages.info(request, 'No choreographies to delete')
+            return redirect('collections:list')
+        
+        # Track deletion stats
+        files_deleted = 0
+        files_failed = 0
+        
+        # Delete video files
+        for choreography in choreographies:
+            if choreography.video_path:
+                try:
+                    video_file = Path(choreography.video_path)
+                    if video_file.exists() and video_file.is_file():
+                        video_file.unlink()
+                        files_deleted += 1
+                except Exception as e:
+                    logger.warning(f"Failed to delete video file {choreography.video_path}: {e}")
+                    files_failed += 1
+        
+        # Delete all database entries
+        choreographies.delete()
+        
+        # Also clean up user's output directory if empty
+        try:
+            user_output_dir = Path(settings.MEDIA_ROOT) / 'output' / f'user_{request.user.id}'
+            if user_output_dir.exists() and user_output_dir.is_dir():
+                # Check if directory is empty
+                if not any(user_output_dir.iterdir()):
+                    user_output_dir.rmdir()
+                    logger.info(f"Removed empty output directory for user {request.user.id}")
+        except Exception as e:
+            logger.warning(f"Failed to remove output directory: {e}")
+        
+        logger.info(f"User {request.user.id} deleted ALL choreographies: {count} entries, {files_deleted} files deleted, {files_failed} files failed")
+        
+        messages.success(request, f'Successfully deleted all {count} choreographies ({files_deleted} video files removed)')
+        if files_failed > 0:
+            messages.warning(request, f'{files_failed} video files could not be deleted')
+        
+        return redirect('collections:list')
+        
+    except Exception as e:
+        logger.error(f"Error deleting all choreographies for user {request.user.id}: {e}", exc_info=True)
+        messages.error(request, 'Failed to delete choreographies')
+        return redirect('collections:list')

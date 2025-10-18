@@ -72,6 +72,19 @@
                 </a>
             </div>
         </form>
+
+        <!-- Delete All Button -->
+        {% if choreographies %}
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <button onclick="confirmDeleteAll()" 
+                    class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                🗑️ Delete All Videos
+            </button>
+            <span class="ml-3 text-sm text-gray-600">
+                This will permanently delete all {{ page_obj.paginator.count }} choreographies
+            </span>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Choreography Grid -->
@@ -141,6 +154,10 @@
                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                         Edit
                     </a>
+                    <button onclick="confirmDelete('{{ choreography.pk }}', '{{ choreography.title|escapejs }}')" 
+                            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        🗑️
+                    </button>
                 </div>
             </div>
         </div>
@@ -226,4 +243,30 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Hidden form for delete operations -->
+<form id="deleteForm" method="post" style="display: none;">
+    {% csrf_token %}
+</form>
+
+<script>
+function confirmDelete(choreographyId, title) {
+    if (confirm(`Are you sure you want to delete "${title}"?\n\nThis will permanently delete the video file and database entry.`)) {
+        const form = document.getElementById('deleteForm');
+        form.action = `/collections/${choreographyId}/delete/`;
+        form.submit();
+    }
+}
+
+function confirmDeleteAll() {
+    const count = {{ page_obj.paginator.count|default:0 }};
+    if (confirm(`⚠️ WARNING: This will permanently delete ALL ${count} choreographies!\n\nThis includes:\n- All video files\n- All database entries\n- This action CANNOT be undone\n\nAre you absolutely sure?`)) {
+        if (confirm(`Final confirmation: Delete all ${count} choreographies?`)) {
+            const form = document.getElementById('deleteForm');
+            form.action = '{% url "collections:delete_all" %}';
+            form.submit();
+        }
+    }
+}
+</script>
 {% endblock %}

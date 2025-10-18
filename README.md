@@ -1,6 +1,6 @@
-# 🎵 Bachata Choreography Generator
+# 🎵 Bachata Buddy
 
-An AI-powered system that generates personalized Bachata choreographies by analyzing music characteristics and matching them with appropriate dance moves from a curated video library using advanced machine learning techniques.
+An AI-powered Django application that generates personalized Bachata choreographies by analyzing music characteristics and matching them with appropriate dance moves from a curated video library using advanced machine learning techniques.
 
 ## 🤖 Machine Learning Architecture
 
@@ -14,10 +14,9 @@ The system employs a **multi-modal machine learning pipeline** that combines aud
 - **Similarity Matching**: Cosine similarity-based recommendation engine with pre-computed matrices
 - **Sequence Generation**: Temporal alignment algorithm for smooth choreography transitions
 
-## 🏗️ **System Architecture & Data Flow**
+## 🏗️ System Architecture & Data Flow
 
-
-### 1. **Architecture Diagram**
+### Architecture Diagram
 ```mermaid
 graph TB
     A[Audio Input] --> B[Music Analyzer]
@@ -31,9 +30,31 @@ graph TB
     H --> I[Output Video]
 ```
 
-## 🚀 **Technical Implementation Highlights**
+### Project Structure
+```
+bachata_buddy/
+├── bachata_buddy/          # Django project settings
+├── core/                   # Shared services & utilities
+│   ├── services/           # 22 ML/business logic services
+│   ├── models/             # Pydantic data models
+│   └── exceptions.py       # Custom exceptions
+├── choreography/           # Choreography generation app
+├── users/                  # User management app
+├── instructors/            # Instructor features app
+├── user_collections/       # Collection management app
+├── data/                   # Data files
+│   ├── Bachata_steps/      # Video library (38 moves)
+│   ├── songs/              # Audio files
+│   ├── output/             # Generated choreographies
+│   └── cache/              # ML model cache
+├── static/                 # Static files (CSS, JS)
+├── templates/              # Global templates
+└── tests_django/           # Django test suite
+```
 
-### 🔧 **Core Technical Components**
+## 🚀 Technical Implementation Highlights
+
+### 🔧 Core Technical Components
 
 #### 1. **Advanced Audio Analysis Engine** 🎼
 ```python
@@ -88,7 +109,7 @@ class FeatureFusion:
 #### 4. **Optimized Recommendation Engine** 🎯
 ```python
 # High-performance similarity matching with intelligent caching
-class OptimizedRecommendationEngine:
+class RecommendationEngine:
     - Pre-computed similarity matrices for O(1) lookups
     - Multi-factor scoring (audio, tempo, energy, difficulty)
     - Parallel batch processing with thread pools
@@ -104,7 +125,7 @@ class OptimizedRecommendationEngine:
 #### 5. **Intelligent Sequence Generation** 🎬
 ```python
 # Temporal choreography assembly with smooth transitions
-class SequenceGenerator:
+class ChoreographyPipeline:
     - Musical structure mapping to dance move categories
     - Transition optimization for movement flow
     - Energy curve matching throughout choreography
@@ -117,8 +138,7 @@ class SequenceGenerator:
 - **Energy Management**: Maintains appropriate energy levels throughout choreography
 - **Adaptive Timing**: Adjusts move duration based on musical phrasing
 
-
-### 📊 **Production-Ready Performance Metrics**
+### 📊 Production-Ready Performance Metrics
 
 | Component | Metric | Performance | Optimization |
 |-----------|--------|-------------|--------------|
@@ -128,45 +148,69 @@ class SequenceGenerator:
 | **Cache System** | Hit Rate | 80%+ efficiency | Multi-level caching, smart eviction |
 | **Memory Usage** | Peak Consumption | <500MB | Lazy loading, automatic cleanup |
 | **Video Generation** | Rendering Speed | 1-2x realtime | FFmpeg optimization, quality modes |
-| **Overall Pipeline** | End-to-End | 2-8 seconds | Full pipeline optimization |
-
+| **Overall Pipeline** | End-to-End | 25-30 seconds | Full pipeline optimization |
 
 ## 🌟 Features Overview
 
 ### ✅ Implemented Features
 
-#### 1. **Music Analysis Engine** 🎼
+#### 1. **Choreography Generation** 🎬
+- **AI-Powered Generation**: Automatic choreography creation from music
+- **Multiple Difficulty Levels**: Beginner, Intermediate, Advanced
+- **Song Selection**: Pre-loaded songs or YouTube URL input
+- **Real-Time Progress**: Live progress tracking with stage indicators
+- **Video Preview**: Built-in video player with loop controls
+- **Auto-Save**: Automatic saving to user collection
+
+#### 2. **User Management** 👤
+- **Authentication**: Secure login/logout with session management
+- **User Profiles**: Customizable user profiles with preferences
+- **Role-Based Access**: Regular users and instructors
+- **Rate Limiting**: Protection against abuse
+
+#### 3. **Collection Management** 📚
+- **Save Choreographies**: Save generated videos to personal collection
+- **Search & Filter**: Find choreographies by title, difficulty, date
+- **Sorting**: Multiple sorting options (newest, title, difficulty, duration)
+- **Pagination**: Efficient browsing of large collections
+- **Edit Metadata**: Update titles and difficulty levels
+- **Delete Videos**: Individual or bulk deletion with confirmation
+- **Statistics**: View collection stats and insights
+
+#### 4. **Instructor Dashboard** 🎓
+- **Class Planning**: Create and manage class plans
+- **Choreography Selection**: Add choreographies to class sequences
+- **Student Management**: Track student progress (planned)
+- **Analytics**: View teaching statistics (planned)
+
+#### 5. **Video Player** 🎥
+- **Advanced Controls**: Play, pause, seek, loop
+- **Loop Segments**: Select and loop specific sections
+- **Adjustable Loop Points**: Fine-tune loop start/end times
+- **Progress Bar**: Visual progress with click-to-seek
+- **Responsive Design**: Works on desktop and mobile
+
+#### 6. **Music Analysis Engine** 🎼
 - **Tempo Detection**: Accurate BPM analysis using librosa
 - **Energy Level Analysis**: Classifies songs as low, medium, or high energy
 - **Musical Structure Detection**: Identifies verses, choruses, and bridges
-- **Batch Processing**: Analyze multiple songs efficiently
-- **Comprehensive Reporting**: Detailed analysis results with recommendations
+- **Beat Tracking**: Precise beat detection for move synchronization
+- **Comprehensive Reporting**: Detailed analysis results
 
-#### 2. **Video Annotation Framework** 📹
-- **Structured Data Models**: Pydantic-based schemas for move annotations
-- **Quality Validation**: Automated video and annotation quality checks
-- **CSV Import/Export**: Bulk editing capabilities for annotations
-- **Directory Organization**: Automated file organization by move categories
-- **Comprehensive Testing**: Full test suite for all components
-
-#### 3. **YouTube Integration** 📺
-- **Video Download**: Download Bachata songs from YouTube
-- **Audio Extraction**: Extract audio for music analysis
-- **Metadata Handling**: Preserve video information and metadata
-
-### 🚧 Planned Features
-- **AI Choreography Generation**: Match music analysis with move sequences
-- **Web Interface**: User-friendly web application
-- **Move Transition Analysis**: Smart sequencing of dance moves
-- **Personalization**: User skill level and preference adaptation
-
+#### 7. **Video Library** 📹
+- **38 Annotated Moves**: Curated library of Bachata moves
+- **12 Move Categories**: Organized by move type
+- **Quality Validated**: All moves analyzed and validated
+- **Difficulty Levels**: Beginner (26%), Intermediate (21%), Advanced (53%)
+- **Energy Distribution**: Low (5%), Medium (42%), High (53%)
+- **Tempo Range**: 102-150 BPM
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.12+
 - UV (Python package manager)
-- PostgreSQL 14+
+- PostgreSQL 14+ (or SQLite for development)
 - FFmpeg
 
 ### Installation
@@ -174,7 +218,7 @@ class SequenceGenerator:
 1. **Clone the repository**
 ```bash
 git clone <repository-url>
-cd bachata-choreography-generator
+cd bachata_buddy
 ```
 
 2. **Install UV Package Manager**
@@ -188,26 +232,29 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 3. **Install FFmpeg**
 ```bash
-# For macOS
+# macOS
 brew install ffmpeg portaudio libsndfile
 
-# For Ubuntu/Debian
+# Ubuntu/Debian
 sudo apt-get install ffmpeg portaudio19-dev libsndfile1-dev
+
+# Windows
+# Download from https://ffmpeg.org/download.html
 ```
 
 4. **Install Python dependencies**
 ```bash
-# Using UV (recommended)
 uv sync
 ```
 
-5. **Set up PostgreSQL database**
+5. **Set up environment variables**
 ```bash
-# Create database
-createdb bachata_vibes
+# Copy example env file
+cp .env.example .env
 
-# Or using psql
-psql -U postgres -c "CREATE DATABASE bachata_vibes;"
+# Edit .env with your settings
+# For development, SQLite is fine (default)
+# For production, configure PostgreSQL
 ```
 
 6. **Run Django migrations**
@@ -220,113 +267,97 @@ uv run python manage.py migrate
 uv run python manage.py createsuperuser
 ```
 
-8. **Run the Django development server**
+8. **Run the development server**
 ```bash
 uv run python manage.py runserver
 ```
 
 9. **Access the application**
-- Home: http://localhost:8000/
-- Admin: http://localhost:8000/admin/
-- Collection: http://localhost:8000/collection/
+- **Home**: http://localhost:8000/
+- **Admin**: http://localhost:8000/admin/
+- **Collections**: http://localhost:8000/collections/
+- **Generate**: http://localhost:8000/ (main page)
 
-Enjoy! 💃🕺
+**Enjoy! 💃🕺**
 
 ### 📚 Detailed Setup Guide
 
-For comprehensive setup instructions, including:
-- PostgreSQL configuration
-- Production deployment
-- Testing with pytest
-- UV command reference
-- Troubleshooting
+For comprehensive setup instructions, see **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)**
 
-See **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)**
+## 🏗️ Technology Stack
 
-### 📹 Video Annotation 
+### Backend
+- **Framework**: Django 5.2 LTS
+- **Database**: PostgreSQL 14+ (SQLite for development)
+- **ORM**: Django ORM
+- **Authentication**: Django session-based auth
+- **Package Manager**: UV (fast Python package manager)
 
-#### Basic Schema (current)
-```python
-# Add a single annotation
-new_clip_data = {
-    "clip_id": "new_move_1",
-    "video_path": "Bachata_steps/basic_steps/new_move_1.mp4",
-    "move_label": "basic_step",
-    "energy_level": "medium",
-    "estimated_tempo": 120,
-    "difficulty": "beginner",
-    "lead_follow_roles": "both",
-    "notes": "Basic step with hip movement"
-}
+### Frontend
+- **Templates**: Django Template Language
+- **Interactivity**: HTMX + Alpine.js
+- **Styling**: Tailwind CSS
+- **Icons**: Emoji-based (no icon library needed)
 
-interface.add_annotation(new_clip_data)
-```
+### Machine Learning
+- **Audio Analysis**: librosa, numpy, scipy
+- **Computer Vision**: MediaPipe, OpenCV
+- **Video Processing**: FFmpeg, moviepy
+- **Feature Extraction**: Custom ML pipeline
+
+### Testing
+- **Framework**: pytest + pytest-django
+- **Coverage**: 67%+ test coverage
+- **Types**: Unit, integration, and E2E tests
 
 ## 📊 Data Management
 
-### Current Video Library
+### Video Library Statistics
 - **38 annotated move clips** across 12 categories
 - **Quality validated** with comprehensive metadata
 - **Organized by difficulty**: Beginner (26%), Intermediate (21%), Advanced (53%)
 - **Energy distribution**: Low (5%), Medium (42%), High (53%)
 - **Tempo range**: 102-150 BPM
 
-### Annotation Schema
-Each move clip includes:
-- **Basic Info**: clip_id, video_path, move_label
-- **Dance Characteristics**: energy_level, estimated_tempo, difficulty
-- **Role Information**: lead_follow_roles (lead_focus, follow_focus, both)
-- **Descriptive**: notes with detailed move description
-- **Optional Metadata**: duration, quality assessments, compatibility info
+### Move Categories
+1. Basic Steps
+2. Partner Work (Cross Body Leads)
+3. Turns & Spins
+4. Styling & Body Rolls
+5. Footwork Variations
+6. Dips & Drops
+7. Hammerlock Variations
+8. Shadow Position
+9. Hand Styling
+10. Advanced Combinations
+11. Musicality Accents
+12. Social Dancing Moves
 
-## 🏗️ Architecture & Technology Stack
-
-### Current Implementation: Django 5.2 LTS
-
-The application has been migrated from FastAPI to Django 5.2 LTS for improved maintainability, built-in admin interface, and production-ready features.
-
-**Technology Stack:**
-- **Framework**: Django 5.2 LTS
-- **Database**: PostgreSQL 14+
-- **ORM**: Django ORM
-- **Templates**: Django Template Language
-- **Frontend**: HTMX + Alpine.js + Tailwind CSS
-- **Testing**: pytest + pytest-django
-- **Package Manager**: UV (fast Python package manager)
-- **Video Processing**: FFmpeg
-- **Audio Analysis**: librosa
-- **Computer Vision**: MediaPipe
-
-**Key Features:**
-- ✅ Function-Based Views (FBVs) for simplicity
-- ✅ Built-in Django Admin interface
-- ✅ Session-based authentication
-- ✅ PostgreSQL for production-ready database
-- ✅ Comprehensive test suite (67%+ coverage)
-- ✅ Background task processing with progress polling
-- ✅ Video player with advanced loop controls
-- ✅ Collection management with filtering and search
-- ✅ Instructor dashboard for class planning
-
-### Migration from FastAPI
-
-The application was successfully migrated from FastAPI to Django while maintaining 100% feature parity. All 24 services remain unchanged and fully functional.
-
-**Benefits of Django Migration:**
-- Built-in admin interface (no custom admin needed)
-- Mature ORM with extensive features
-- Better long-term support (LTS version)
-- Enhanced security features (CSRF, XSS protection)
-- Larger ecosystem and community
-- Production-ready from the start
-
-For migration details, see **[django_migration.md](django_migration.md)**
+### User Data Storage
+- **Generated Videos**: `data/output/user_{id}/`
+- **Temporary Files**: `data/temp/user_{id}/`
+- **Database**: PostgreSQL (user accounts, choreographies, collections)
 
 ## 🔧 Configuration
 
+### Django Settings
+```python
+# In bachata_buddy/settings.py
+INSTALLED_APPS = [
+    'core',              # Shared services
+    'users',             # User management
+    'choreography',      # Choreography generation
+    'user_collections',  # Collection management
+    'instructors',       # Instructor features
+]
+
+MEDIA_ROOT = BASE_DIR / 'data'
+MEDIA_URL = '/media/'
+```
+
 ### Music Analysis Settings
 ```python
-# In app/services/music_analyzer.py
+# In core/services/music_analyzer.py
 TEMPO_RANGE = (80, 160)  # BPM range for Bachata
 ENERGY_THRESHOLDS = {
     "low": 0.3,
@@ -335,28 +366,115 @@ ENERGY_THRESHOLDS = {
 }
 ```
 
-### Directory Organization
+### Video Generation Settings
 ```python
-# In app/services/directory_organizer.py
-CATEGORY_MAPPING = {
-    "basic_step": "basic_moves",
-    "cross_body_lead": "partner_work",
-    "lady_right_turn": "turns_spins",
-    "body_roll": "styling",
-    "dip": "advanced"
+# In core/services/video_generator.py
+QUALITY_MODES = {
+    "fast": {"fps": 15, "bitrate": "1M"},
+    "balanced": {"fps": 15, "bitrate": "1.5M"},
+    "high_quality": {"fps": 20, "bitrate": "2M"}
 }
 ```
 
+## 🧪 Testing
+
+### Run Tests
+```bash
+# Run all tests
+uv run pytest
+
+# Run with coverage
+uv run pytest --cov=. --cov-report=html
+
+# Run specific test file
+uv run pytest tests_django/test_choreography_views.py
+
+# Run with verbose output
+uv run pytest -v
+```
+
+### Test Coverage
+- **Overall**: 67%+ coverage
+- **Views**: 85%+ coverage
+- **Models**: 90%+ coverage
+- **Services**: 60%+ coverage (ML components)
+
+## 🚀 Deployment
+
+### Production Checklist
+- [ ] Set `DEBUG = False` in settings
+- [ ] Configure PostgreSQL database
+- [ ] Set up static file serving (WhiteNoise or CDN)
+- [ ] Configure media file storage (S3 or similar)
+- [ ] Set up HTTPS/SSL
+- [ ] Configure environment variables
+- [ ] Set up logging and monitoring
+- [ ] Configure backup strategy
+- [ ] Set up CI/CD pipeline
+
+### Environment Variables
+```bash
+# Required
+SECRET_KEY=your-secret-key
+DEBUG=False
+ALLOWED_HOSTS=yourdomain.com
+
+# Database
+DATABASE_URL=postgresql://user:pass@localhost/dbname
+
+# Optional
+MEDIA_ROOT=/path/to/media
+STATIC_ROOT=/path/to/static
+```
+
+## 📖 Documentation
+
+- **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)** - Comprehensive setup guide
+- **[DELETE_FUNCTIONALITY.md](DELETE_FUNCTIONALITY.md)** - Delete feature documentation
+- **[CORE_APP_MIGRATION.md](CORE_APP_MIGRATION.md)** - Core app restructuring
+- **[PROJECT_RESTRUCTURE.md](PROJECT_RESTRUCTURE.md)** - Project rename and flattening
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow PEP 8 style guide
+- Write tests for new features
+- Update documentation
+- Use type hints where appropriate
+- Keep functions focused and small
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
+- **Django** for the excellent web framework
 - **librosa** for music analysis capabilities
+- **MediaPipe** for pose estimation
+- **FFmpeg** for video processing
 - **yt-dlp** for YouTube integration
-- **Pydantic** for data validation
-- **OpenCV** for video processing (optional)
+- **Tailwind CSS** for styling
+- **HTMX** for seamless interactivity
+- **Alpine.js** for reactive components
+
+## 📞 Support
+
+For issues, questions, or suggestions:
+- Open an issue on GitHub
+- Check existing documentation
+- Review closed issues for solutions
+
+---
+
+**Built with ❤️ for the Bachata dance community**
 
 **Happy Dancing! 💃🕺**

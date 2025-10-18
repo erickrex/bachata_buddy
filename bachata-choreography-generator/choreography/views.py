@@ -13,7 +13,7 @@ import json
 
 from .forms import ChoreographyGenerationForm
 from .utils import create_task, get_task, update_task, cleanup_old_tasks, list_all_tasks, delete_task
-from app.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
+from core.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
     """
     try:
         # Import custom exceptions
-        from app.exceptions import (
+        from core.exceptions import (
             YouTubeDownloadError,
             MusicAnalysisError,
             VideoGenerationError,

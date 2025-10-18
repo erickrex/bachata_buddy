@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'django_htmx',
     # Local apps
+    'core',  # Shared services and utilities
     'users',
     'choreography',
     'user_collections',
@@ -138,7 +139,6 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    BASE_DIR / 'app' / 'static',
     BASE_DIR / 'static',
 ]
 

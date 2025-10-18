@@ -1,1 +1,0 @@
-# Bachata Choreography Generator Application

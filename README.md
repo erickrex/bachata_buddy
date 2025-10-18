@@ -244,8 +244,18 @@ sudo apt-get install ffmpeg portaudio19-dev libsndfile1-dev
 
 4. **Install Python dependencies**
 ```bash
+# Install core dependencies via UV
 uv sync
+
+# Install MMPose stack via mim (handles chumpy dependency correctly)
+uv pip install openmim
+mim install mmengine mmcv mmdet mmpose
+
+# Download MMPose model checkpoints
+uv run python scripts/download_mmpose_models.py
 ```
+
+**Note:** MMPose dependencies are installed separately via `mim` due to a build issue with the `chumpy` package. See **[UV_SETUP.md](UV_SETUP.md)** for detailed UV configuration and **[CHUMPY_PRODUCTION_SOLUTION.md](CHUMPY_PRODUCTION_SOLUTION.md)** for production deployment.
 
 5. **Set up environment variables**
 ```bash
@@ -380,18 +390,24 @@ QUALITY_MODES = {
 
 ### Run Tests
 ```bash
-# Run all tests
-uv run pytest
+# Run all tests (use --no-sync for speed)
+uv run --no-sync pytest
 
 # Run with coverage
-uv run pytest --cov=. --cov-report=html
+uv run --no-sync pytest --cov=. --cov-report=html
 
 # Run specific test file
-uv run pytest tests_django/test_choreography_views.py
+uv run --no-sync pytest tests_django/test_choreography_views.py
 
 # Run with verbose output
-uv run pytest -v
+uv run --no-sync pytest -v
+
+# Run verification scripts
+uv run --no-sync python verify_frame_processing.py
+uv run --no-sync python verify_pose_detection.py
 ```
+
+**Note:** Use `--no-sync` flag to skip dependency resolution for faster test execution.
 
 ### Test Coverage
 - **Overall**: 67%+ coverage
@@ -400,6 +416,27 @@ uv run pytest -v
 - **Services**: 60%+ coverage (ML components)
 
 ## 🚀 Deployment
+
+### Production Deployment Options
+
+#### Option 1: Google Cloud Run (Recommended)
+```bash
+# Build and deploy
+gcloud builds submit --tag gcr.io/YOUR_PROJECT/bachata-buddy
+gcloud run deploy bachata-buddy \
+    --image gcr.io/YOUR_PROJECT/bachata-buddy \
+    --region us-central1 \
+    --cpu 4 \
+    --memory 16Gi
+```
+
+#### Option 2: Docker Compose (Local/Staging)
+```bash
+docker-compose up --build
+```
+
+#### Option 3: Kubernetes (Advanced)
+See `PRODUCTION_DEPLOYMENT.md` for detailed instructions.
 
 ### Production Checklist
 - [ ] Set `DEBUG = False` in settings
@@ -411,6 +448,7 @@ uv run pytest -v
 - [ ] Set up logging and monitoring
 - [ ] Configure backup strategy
 - [ ] Set up CI/CD pipeline
+- [ ] **CRITICAL:** Use production-ready Dockerfile (handles chumpy dependency)
 
 ### Environment Variables
 ```bash
@@ -418,19 +456,50 @@ uv run pytest -v
 SECRET_KEY=your-secret-key
 DEBUG=False
 ALLOWED_HOSTS=yourdomain.com
+ENVIRONMENT=cloud  # or 'local'
 
 # Database
 DATABASE_URL=postgresql://user:pass@localhost/dbname
 
+# Elasticsearch
+ELASTICSEARCH_HOST=your-es-host
+ELASTICSEARCH_PORT=9200
+
 # Optional
 MEDIA_ROOT=/path/to/media
 STATIC_ROOT=/path/to/static
+GCP_PROJECT_ID=your-project-id  # For Google Cloud
 ```
+
+### ⚠️ Critical Production Note
+
+**The `uv run --no-sync` workaround only works in local development** with an existing `.venv/`. 
+
+For production deployment:
+- Use the provided `Dockerfile` which handles MMPose installation via `mim`
+- See `CHUMPY_PRODUCTION_SOLUTION.md` for detailed explanation
+- See `PRODUCTION_DEPLOYMENT.md` for deployment guides
+
+**Why this matters:** Docker builds start with a clean slate and must install all dependencies from scratch. The hybrid UV + mim approach in the Dockerfile ensures reliable builds.
 
 ## 📖 Documentation
 
+### Setup & Configuration
 - **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)** - Comprehensive setup guide
+- **[QUICK_START.md](QUICK_START.md)** - Quick reference for common commands
+- **[UV_MMPOSE_SETUP.md](UV_MMPOSE_SETUP.md)** - UV and MMPose setup guide
+
+### Production Deployment
+- **[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md)** - Complete deployment guide
+- **[CHUMPY_PRODUCTION_SOLUTION.md](CHUMPY_PRODUCTION_SOLUTION.md)** - Critical: chumpy dependency solution
+- **[Dockerfile](Dockerfile)** - Production-ready Docker configuration
+
+### Feature Documentation
 - **[DELETE_FUNCTIONALITY.md](DELETE_FUNCTIONALITY.md)** - Delete feature documentation
+- **[MMPOSE_SETUP.md](MMPOSE_SETUP.md)** - MMPose integration guide
+- **[ELASTICSEARCH_IMPLEMENTATION.md](ELASTICSEARCH_IMPLEMENTATION.md)** - Elasticsearch setup
+
+### Architecture & Migration
 - **[CORE_APP_MIGRATION.md](CORE_APP_MIGRATION.md)** - Core app restructuring
 - **[PROJECT_RESTRUCTURE.md](PROJECT_RESTRUCTURE.md)** - Project rename and flattening
 

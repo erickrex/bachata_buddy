@@ -1,6 +1,13 @@
 """
 Multi-factor scoring recommendation system for Bachata choreography generation.
-Combines audio similarity, tempo matching, energy alignment, and difficulty compatibility.
+Uses Elasticsearch-stored embeddings with weighted multimodal similarity computation.
+
+Modality weights:
+- Text semantic: 35%
+- Audio: 35%
+- Lead pose: 10%
+- Follow pose: 10%
+- Interaction: 10%
 """
 
 import numpy as np
@@ -8,45 +15,52 @@ from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 import logging
 
-from .feature_fusion import FeatureFusion, MultiModalEmbedding, SimilarityScore
-from .music_analyzer import MusicFeatures
-from .move_analyzer import MoveAnalysisResult
+from .elasticsearch_service import ElasticsearchService
+from core.config.environment_config import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class MoveCandidate:
-    """Container for a move candidate with its analysis results and metadata."""
-    move_id: str
+    """Container for a move candidate with embeddings and metadata from Elasticsearch."""
+    clip_id: str
     video_path: str
     move_label: str
-    analysis_result: MoveAnalysisResult
-    multimodal_embedding: MultiModalEmbedding
+    
+    # Embeddings (from Elasticsearch)
+    audio_embedding: np.ndarray  # 128D
+    lead_embedding: np.ndarray  # 512D
+    follow_embedding: np.ndarray  # 512D
+    interaction_embedding: np.ndarray  # 256D
+    text_embedding: np.ndarray  # 384D
     
     # Metadata from annotations
     energy_level: str = "medium"  # low/medium/high
     difficulty: str = "intermediate"  # beginner/intermediate/advanced
     estimated_tempo: float = 120.0
     lead_follow_roles: str = "both"  # lead_focus/follow_focus/both
+    quality_score: float = 0.0
+    detection_rate: float = 0.0
 
 
 @dataclass
 class RecommendationScore:
-    """Container for detailed recommendation scoring results."""
+    """Container for detailed recommendation scoring results with multimodal breakdown."""
     move_candidate: MoveCandidate
     overall_score: float
     
-    # Component scores
+    # Multimodal component scores (weighted)
+    text_similarity: float
     audio_similarity: float
-    tempo_compatibility: float
-    energy_alignment: float
-    difficulty_compatibility: float
+    lead_similarity: float
+    follow_similarity: float
+    interaction_similarity: float
     
-    # Detailed breakdown
-    tempo_difference: float
-    energy_match: bool
+    # Metadata matching scores
     difficulty_match: bool
+    energy_match: bool
+    tempo_difference: float
     
     # Weights used
     weights: Dict[str, float]
@@ -55,80 +69,124 @@ class RecommendationScore:
 @dataclass
 class RecommendationRequest:
     """Container for recommendation request parameters."""
-    music_features: MusicFeatures
-    music_embedding: MultiModalEmbedding
+    # Query embeddings (from user's music/input)
+    query_audio_embedding: Optional[np.ndarray] = None  # 128D
+    query_text_embedding: Optional[np.ndarray] = None  # 384D
+    query_lead_embedding: Optional[np.ndarray] = None  # 512D
+    query_follow_embedding: Optional[np.ndarray] = None  # 512D
+    query_interaction_embedding: Optional[np.ndarray] = None  # 256D
     
-    # User preferences
-    target_difficulty: str = "intermediate"  # beginner/intermediate/advanced
-    target_energy: Optional[str] = None  # None for auto-detect, or low/medium/high
-    tempo_tolerance: float = 10.0  # BPM tolerance
+    # Metadata filters
+    difficulty: Optional[str] = None  # beginner/intermediate/advanced
+    energy_level: Optional[str] = None  # low/medium/high
+    move_label: Optional[str] = None  # Specific move type
+    lead_follow_roles: Optional[str] = None  # lead_focus/follow_focus/both
+    min_quality_score: Optional[float] = None  # Minimum quality threshold
     
-    # Scoring weights
+    # Scoring weights (defaults to spec weights if not provided)
     weights: Optional[Dict[str, float]] = None
 
 
 class RecommendationEngine:
     """
-    Multi-factor scoring recommendation system that combines:
-    - Audio similarity (40%)
-    - Tempo matching (30%) 
-    - Energy alignment (20%)
-    - Difficulty compatibility (10%)
+    Multimodal recommendation system using Elasticsearch-stored embeddings.
+    
+    Computes weighted similarity across 5 modalities:
+    - Text semantic: 35%
+    - Audio: 35%
+    - Lead pose: 10%
+    - Follow pose: 10%
+    - Interaction: 10%
     """
     
-    def __init__(self):
-        """Initialize the recommendation engine."""
-        self.feature_fusion = FeatureFusion()
+    def __init__(self, elasticsearch_service: Optional[ElasticsearchService] = None):
+        """
+        Initialize the recommendation engine.
         
-        # Default scoring weights
+        Args:
+            elasticsearch_service: Optional pre-configured Elasticsearch service.
+                                  If None, will create from environment config.
+        """
+        # Initialize Elasticsearch service
+        if elasticsearch_service is None:
+            config = EnvironmentConfig()
+            self.es_service = ElasticsearchService(config.elasticsearch)
+        else:
+            self.es_service = elasticsearch_service
+        
+        # Default modality weights (as per requirements)
         self.default_weights = {
-            'audio_similarity': 0.40,
-            'tempo_matching': 0.30,
-            'energy_alignment': 0.20,
-            'difficulty_compatibility': 0.10
+            'text': 0.35,
+            'audio': 0.35,
+            'lead': 0.10,
+            'follow': 0.10,
+            'interaction': 0.10
         }
         
-        # Tempo compatibility parameters
-        self.tempo_tolerance = 10.0  # ±10 BPM tolerance
-        
-        logger.info("RecommendationEngine initialized with default weights: audio=40%, tempo=30%, energy=20%, difficulty=10%")
+        logger.info(
+            "RecommendationEngine initialized with Elasticsearch integration. "
+            "Weights: text=35%, audio=35%, lead=10%, follow=10%, interaction=10%"
+        )
     
     def recommend_moves(self, 
                        request: RecommendationRequest,
-                       move_candidates: List[MoveCandidate],
                        top_k: int = 10) -> List[RecommendationScore]:
         """
-        Recommend top-k moves based on multi-factor scoring.
+        Recommend top-k moves based on multimodal similarity.
+        
+        Retrieves all embeddings from Elasticsearch, computes weighted similarity
+        across all 5 modalities, and returns top-k ranked results.
         
         Args:
-            request: Recommendation request with music features and preferences
-            move_candidates: List of available move candidates
+            request: Recommendation request with query embeddings and filters
             top_k: Number of top recommendations to return
             
         Returns:
             List of RecommendationScore objects sorted by overall score (descending)
         """
-        logger.info(f"Generating recommendations for {len(move_candidates)} candidates, top_k={top_k}")
+        logger.info(f"Generating recommendations with top_k={top_k}")
+        
+        # Build metadata filters
+        filters = {}
+        if request.difficulty:
+            filters['difficulty'] = request.difficulty
+        if request.energy_level:
+            filters['energy_level'] = request.energy_level
+        if request.move_label:
+            filters['move_label'] = request.move_label
+        if request.lead_follow_roles:
+            filters['lead_follow_roles'] = request.lead_follow_roles
+        
+        # Retrieve all embeddings from Elasticsearch
+        logger.info(f"Retrieving embeddings from Elasticsearch with filters: {filters}")
+        candidate_embeddings = self.es_service.get_all_embeddings(filters=filters if filters else None)
+        
+        if not candidate_embeddings:
+            logger.warning("No candidate embeddings found in Elasticsearch")
+            return []
+        
+        logger.info(f"Retrieved {len(candidate_embeddings)} candidate embeddings")
+        
+        # Filter by quality score if specified
+        if request.min_quality_score is not None:
+            candidate_embeddings = [
+                emb for emb in candidate_embeddings
+                if emb.get('quality_score', 0.0) >= request.min_quality_score
+            ]
+            logger.info(f"After quality filtering: {len(candidate_embeddings)} candidates")
+        
+        # Convert to MoveCandidate objects
+        move_candidates = [self._embedding_to_candidate(emb) for emb in candidate_embeddings]
         
         # Use provided weights or defaults
         weights = request.weights or self.default_weights
         
-        # Auto-detect target energy if not specified
-        target_energy = request.target_energy
-        if target_energy is None:
-            target_energy = self._detect_music_energy_level(request.music_features)
-            logger.info(f"Auto-detected target energy level: {target_energy}")
-        
         # Score all candidates
         scores = []
         for candidate in move_candidates:
-            score = self._score_move_candidate(
-                request.music_features,
-                request.music_embedding,
+            score = self._compute_multimodal_similarity(
+                request,
                 candidate,
-                request.target_difficulty,
-                target_energy,
-                request.tempo_tolerance,
                 weights
             )
             scores.append(score)
@@ -139,289 +197,172 @@ class RecommendationEngine:
         # Return top-k
         top_scores = scores[:top_k]
         
-        logger.info(f"Top recommendation scores: {[f'{s.move_candidate.move_label}={s.overall_score:.3f}' for s in top_scores[:3]]}")
+        if top_scores:
+            logger.info(
+                f"Top 3 recommendations: " +
+                ", ".join([f"{s.move_candidate.move_label}={s.overall_score:.3f}" for s in top_scores[:3]])
+            )
         
         return top_scores
     
-    def _score_move_candidate(self,
-                            music_features: MusicFeatures,
-                            music_embedding: MultiModalEmbedding,
-                            candidate: MoveCandidate,
-                            target_difficulty: str,
-                            target_energy: str,
-                            tempo_tolerance: float,
-                            weights: Dict[str, float]) -> RecommendationScore:
-        """Score a single move candidate using multi-factor scoring."""
+    def _embedding_to_candidate(self, embedding_doc: Dict[str, Any]) -> MoveCandidate:
+        """
+        Convert Elasticsearch embedding document to MoveCandidate.
         
-        # 1. Audio similarity (cosine similarity between embeddings)
-        audio_similarity = self._calculate_audio_similarity(
-            music_embedding, candidate.multimodal_embedding
+        Args:
+            embedding_doc: Document from Elasticsearch with embeddings and metadata
+            
+        Returns:
+            MoveCandidate object
+        """
+        return MoveCandidate(
+            clip_id=embedding_doc['clip_id'],
+            video_path=embedding_doc.get('video_path', ''),
+            move_label=embedding_doc.get('move_label', ''),
+            audio_embedding=embedding_doc['audio_embedding'],
+            lead_embedding=embedding_doc['lead_embedding'],
+            follow_embedding=embedding_doc['follow_embedding'],
+            interaction_embedding=embedding_doc['interaction_embedding'],
+            text_embedding=embedding_doc['text_embedding'],
+            energy_level=embedding_doc.get('energy_level', 'medium'),
+            difficulty=embedding_doc.get('difficulty', 'intermediate'),
+            estimated_tempo=embedding_doc.get('estimated_tempo', 120.0),
+            lead_follow_roles=embedding_doc.get('lead_follow_roles', 'both'),
+            quality_score=embedding_doc.get('quality_score', 0.0),
+            detection_rate=embedding_doc.get('detection_rate', 0.0)
         )
+    
+    def _compute_multimodal_similarity(self,
+                                      request: RecommendationRequest,
+                                      candidate: MoveCandidate,
+                                      weights: Dict[str, float]) -> RecommendationScore:
+        """
+        Compute weighted multimodal similarity between query and candidate.
         
-        # 2. Tempo compatibility (BPM range matching with tolerance)
-        tempo_compatibility, tempo_difference = self._calculate_tempo_compatibility(
-            music_features.tempo, candidate, tempo_tolerance
-        )
+        Args:
+            request: Recommendation request with query embeddings
+            candidate: Move candidate with embeddings
+            weights: Modality weights
+            
+        Returns:
+            RecommendationScore with detailed breakdown
+        """
+        # Compute individual cosine similarities for each modality
+        text_sim = self._cosine_similarity(
+            request.query_text_embedding,
+            candidate.text_embedding
+        ) if request.query_text_embedding is not None else 0.0
         
-        # 3. Energy alignment (low/medium/high matching)
-        energy_alignment, energy_match = self._calculate_energy_alignment(
-            target_energy, candidate.energy_level
-        )
+        audio_sim = self._cosine_similarity(
+            request.query_audio_embedding,
+            candidate.audio_embedding
+        ) if request.query_audio_embedding is not None else 0.0
         
-        # 4. Difficulty compatibility (beginner/intermediate/advanced matching)
-        difficulty_compatibility, difficulty_match = self._calculate_difficulty_compatibility(
-            target_difficulty, candidate.difficulty
-        )
+        lead_sim = self._cosine_similarity(
+            request.query_lead_embedding,
+            candidate.lead_embedding
+        ) if request.query_lead_embedding is not None else 0.0
+        
+        follow_sim = self._cosine_similarity(
+            request.query_follow_embedding,
+            candidate.follow_embedding
+        ) if request.query_follow_embedding is not None else 0.0
+        
+        interaction_sim = self._cosine_similarity(
+            request.query_interaction_embedding,
+            candidate.interaction_embedding
+        ) if request.query_interaction_embedding is not None else 0.0
         
         # Calculate weighted overall score
         overall_score = (
-            weights['audio_similarity'] * audio_similarity +
-            weights['tempo_matching'] * tempo_compatibility +
-            weights['energy_alignment'] * energy_alignment +
-            weights['difficulty_compatibility'] * difficulty_compatibility
+            weights['text'] * text_sim +
+            weights['audio'] * audio_sim +
+            weights['lead'] * lead_sim +
+            weights['follow'] * follow_sim +
+            weights['interaction'] * interaction_sim
         )
+        
+        # Check metadata matches
+        difficulty_match = (request.difficulty == candidate.difficulty) if request.difficulty else False
+        energy_match = (request.energy_level == candidate.energy_level) if request.energy_level else False
+        
+        # Calculate tempo difference (if available)
+        tempo_difference = 0.0
+        if request.query_audio_embedding is not None and candidate.estimated_tempo:
+            # This is a placeholder - actual tempo would come from music analysis
+            tempo_difference = 0.0
         
         return RecommendationScore(
             move_candidate=candidate,
             overall_score=overall_score,
-            audio_similarity=audio_similarity,
-            tempo_compatibility=tempo_compatibility,
-            energy_alignment=energy_alignment,
-            difficulty_compatibility=difficulty_compatibility,
-            tempo_difference=tempo_difference,
-            energy_match=energy_match,
+            text_similarity=text_sim,
+            audio_similarity=audio_sim,
+            lead_similarity=lead_sim,
+            follow_similarity=follow_sim,
+            interaction_similarity=interaction_sim,
             difficulty_match=difficulty_match,
+            energy_match=energy_match,
+            tempo_difference=tempo_difference,
             weights=weights
         )
     
-    def _calculate_audio_similarity(self,
-                                  music_embedding: MultiModalEmbedding,
-                                  move_embedding: MultiModalEmbedding) -> float:
-        """Calculate cosine similarity between music and move audio embeddings."""
-        # Use the audio components of the embeddings for similarity
-        music_audio = music_embedding.audio_embedding
-        move_audio = move_embedding.audio_embedding
+    def _cosine_similarity(self, vec1: Optional[np.ndarray], vec2: Optional[np.ndarray]) -> float:
+        """
+        Compute cosine similarity between two vectors.
+        
+        Args:
+            vec1: First vector (query)
+            vec2: Second vector (candidate)
+            
+        Returns:
+            Cosine similarity in range [0, 1] (normalized from [-1, 1])
+        """
+        if vec1 is None or vec2 is None:
+            return 0.0
+        
+        # Ensure vectors are numpy arrays
+        vec1 = np.asarray(vec1, dtype=np.float32)
+        vec2 = np.asarray(vec2, dtype=np.float32)
         
         # Calculate cosine similarity
-        dot_product = np.dot(music_audio, move_audio)
-        norm_music = np.linalg.norm(music_audio)
-        norm_move = np.linalg.norm(move_audio)
+        dot_product = np.dot(vec1, vec2)
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
         
-        if norm_music > 0 and norm_move > 0:
-            similarity = dot_product / (norm_music * norm_move)
+        if norm1 > 0 and norm2 > 0:
+            similarity = dot_product / (norm1 * norm2)
             # Normalize to 0-1 range (cosine similarity is -1 to 1)
-            return (similarity + 1.0) / 2.0
-        else:
-            return 0.0
+            return float((similarity + 1.0) / 2.0)
+        
+        return 0.0
     
-    def _calculate_tempo_compatibility(self,
-                                     music_tempo: float,
-                                     candidate: MoveCandidate,
-                                     tolerance: float) -> Tuple[float, float]:
+    def get_all_candidates(self, filters: Optional[Dict[str, Any]] = None) -> List[MoveCandidate]:
         """
-        Calculate tempo compatibility with BPM range matching (±tolerance).
+        Retrieve all move candidates from Elasticsearch.
         
-        Returns:
-            Tuple of (compatibility_score, tempo_difference)
-        """
-        # Get move's tempo compatibility range
-        move_tempo_range = candidate.analysis_result.tempo_compatibility_range
-        min_bpm, max_bpm = move_tempo_range
-        
-        # Calculate tempo difference
-        if min_bpm <= music_tempo <= max_bpm:
-            # Music tempo is within move's compatibility range
-            tempo_difference = 0.0
-            compatibility = 1.0
-        else:
-            # Calculate distance to nearest edge of range
-            if music_tempo < min_bpm:
-                tempo_difference = min_bpm - music_tempo
-            else:
-                tempo_difference = music_tempo - max_bpm
+        Args:
+            filters: Optional metadata filters
             
-            # Apply tolerance
-            if tempo_difference <= tolerance:
-                # Within tolerance - linear decay
-                compatibility = 1.0 - (tempo_difference / tolerance)
-            else:
-                # Outside tolerance - exponential decay
-                excess = tempo_difference - tolerance
-                compatibility = np.exp(-excess / 20.0)  # Decay factor
-        
-        return max(0.0, min(1.0, compatibility)), tempo_difference
-    
-    def _calculate_energy_alignment(self,
-                                  target_energy: str,
-                                  move_energy: str) -> Tuple[float, bool]:
-        """
-        Calculate energy level alignment between target and move.
-        
         Returns:
-            Tuple of (alignment_score, exact_match)
+            List of MoveCandidate objects
         """
-        # Energy level mapping to numeric values
-        energy_levels = {'low': 1, 'medium': 2, 'high': 3}
-        
-        target_level = energy_levels.get(target_energy, 2)
-        move_level = energy_levels.get(move_energy, 2)
-        
-        # Calculate alignment score
-        difference = abs(target_level - move_level)
-        
-        if difference == 0:
-            # Exact match
-            return 1.0, True
-        elif difference == 1:
-            # Adjacent level (e.g., medium vs high)
-            return 0.7, False
-        else:
-            # Opposite levels (low vs high)
-            return 0.3, False
+        embeddings = self.es_service.get_all_embeddings(filters=filters)
+        return [self._embedding_to_candidate(emb) for emb in embeddings]
     
-    def _calculate_difficulty_compatibility(self,
-                                          target_difficulty: str,
-                                          move_difficulty: str) -> Tuple[float, bool]:
+    def get_candidate_by_id(self, clip_id: str) -> Optional[MoveCandidate]:
         """
-        Calculate difficulty compatibility between target and move.
-        
-        Returns:
-            Tuple of (compatibility_score, exact_match)
-        """
-        # Difficulty level mapping to numeric values
-        difficulty_levels = {'beginner': 1, 'intermediate': 2, 'advanced': 3}
-        
-        target_level = difficulty_levels.get(target_difficulty, 2)
-        move_level = difficulty_levels.get(move_difficulty, 2)
-        
-        # Calculate compatibility score
-        difference = abs(target_level - move_level)
-        
-        if difference == 0:
-            # Exact match
-            return 1.0, True
-        elif difference == 1:
-            # Adjacent level - still compatible
-            return 0.8, False
-        else:
-            # Two levels apart - less compatible but not impossible
-            return 0.4, False
-    
-    def _detect_music_energy_level(self, music_features: MusicFeatures) -> str:
-        """Auto-detect energy level from music features."""
-        # Use multiple indicators for energy detection
-        
-        # 1. RMS energy statistics
-        avg_rms = np.mean(music_features.rms_energy)
-        
-        # 2. Tempo (higher tempo often indicates higher energy)
-        tempo_factor = music_features.tempo / 130.0  # Normalize around typical Bachata tempo
-        
-        # 3. Spectral centroid (brightness indicator)
-        avg_spectral_centroid = np.mean(music_features.spectral_centroid)
-        brightness_factor = avg_spectral_centroid / 2000.0  # Normalize
-        
-        # 4. Percussive component strength
-        percussive_strength = np.mean(np.abs(music_features.percussive_component))
-        
-        # 5. Energy profile variance (dynamic range)
-        energy_variance = np.var(music_features.energy_profile)
-        
-        # Combine indicators
-        energy_score = (
-            0.3 * min(1.0, avg_rms * 10) +  # RMS energy
-            0.2 * min(1.0, tempo_factor) +   # Tempo factor
-            0.2 * min(1.0, brightness_factor) +  # Brightness
-            0.2 * min(1.0, percussive_strength * 5) +  # Percussion
-            0.1 * min(1.0, energy_variance * 100)  # Dynamics
-        )
-        
-        # Map to energy levels
-        if energy_score < 0.35:
-            return "low"
-        elif energy_score < 0.65:
-            return "medium"
-        else:
-            return "high"
-    
-    def create_move_candidate(self,
-                            move_id: str,
-                            video_path: str,
-                            move_label: str,
-                            analysis_result: MoveAnalysisResult,
-                            music_features: MusicFeatures,
-                            **metadata) -> MoveCandidate:
-        """
-        Create a MoveCandidate with multimodal embedding.
+        Retrieve a specific move candidate by clip_id.
         
         Args:
-            move_id: Unique identifier for the move
-            video_path: Path to the move video file
-            move_label: Human-readable move label
-            analysis_result: Complete move analysis from MoveAnalyzer
-            music_features: Music features for embedding creation
-            **metadata: Additional metadata (energy_level, difficulty, etc.)
-        """
-        # Create multimodal embedding
-        multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
-            music_features, analysis_result
-        )
-        
-        # Create candidate with metadata
-        candidate = MoveCandidate(
-            move_id=move_id,
-            video_path=video_path,
-            move_label=move_label,
-            analysis_result=analysis_result,
-            multimodal_embedding=multimodal_embedding,
-            energy_level=metadata.get('energy_level', 'medium'),
-            difficulty=metadata.get('difficulty', 'intermediate'),
-            estimated_tempo=metadata.get('estimated_tempo', 120.0),
-            lead_follow_roles=metadata.get('lead_follow_roles', 'both')
-        )
-        
-        return candidate
-    
-    def batch_score_moves(self,
-                         music_features: MusicFeatures,
-                         music_embedding: MultiModalEmbedding,
-                         move_candidates: List[MoveCandidate],
-                         scoring_params: Dict[str, Any]) -> List[RecommendationScore]:
-        """
-        Batch score multiple moves with custom parameters.
-        
-        Args:
-            music_features: Music analysis features
-            music_embedding: Music multimodal embedding
-            move_candidates: List of move candidates to score
-            scoring_params: Dictionary with scoring parameters
-                - target_difficulty: str
-                - target_energy: str
-                - tempo_tolerance: float
-                - weights: Dict[str, float]
-        
+            clip_id: Unique clip identifier
+            
         Returns:
-            List of RecommendationScore objects (unsorted)
+            MoveCandidate or None if not found
         """
-        target_difficulty = scoring_params.get('target_difficulty', 'intermediate')
-        target_energy = scoring_params.get('target_energy', 'medium')
-        tempo_tolerance = scoring_params.get('tempo_tolerance', 10.0)
-        weights = scoring_params.get('weights', self.default_weights)
-        
-        scores = []
-        for candidate in move_candidates:
-            score = self._score_move_candidate(
-                music_features,
-                music_embedding,
-                candidate,
-                target_difficulty,
-                target_energy,
-                tempo_tolerance,
-                weights
-            )
-            scores.append(score)
-        
-        return scores
+        embedding = self.es_service.get_embedding_by_id(clip_id)
+        if embedding:
+            return self._embedding_to_candidate(embedding)
+        return None
     
     def get_scoring_explanation(self, score: RecommendationScore) -> Dict[str, str]:
         """
@@ -435,6 +376,16 @@ class RecommendationEngine:
         """
         explanations = {}
         
+        # Text similarity explanation
+        if score.text_similarity > 0.8:
+            explanations['text'] = "Excellent semantic match"
+        elif score.text_similarity > 0.6:
+            explanations['text'] = "Good semantic compatibility"
+        elif score.text_similarity > 0.4:
+            explanations['text'] = "Moderate semantic fit"
+        else:
+            explanations['text'] = "Limited semantic compatibility"
+        
         # Audio similarity explanation
         if score.audio_similarity > 0.8:
             explanations['audio'] = "Excellent musical match"
@@ -445,30 +396,170 @@ class RecommendationEngine:
         else:
             explanations['audio'] = "Limited musical compatibility"
         
-        # Tempo explanation
-        if score.tempo_difference == 0:
-            explanations['tempo'] = "Perfect tempo match"
-        elif score.tempo_difference <= 5:
-            explanations['tempo'] = f"Very close tempo (±{score.tempo_difference:.1f} BPM)"
-        elif score.tempo_difference <= 10:
-            explanations['tempo'] = f"Good tempo fit (±{score.tempo_difference:.1f} BPM)"
+        # Lead pose similarity
+        if score.lead_similarity > 0.7:
+            explanations['lead'] = "Strong lead movement match"
+        elif score.lead_similarity > 0.5:
+            explanations['lead'] = "Good lead movement fit"
         else:
-            explanations['tempo'] = f"Tempo stretch needed (±{score.tempo_difference:.1f} BPM)"
+            explanations['lead'] = "Different lead movement style"
         
-        # Energy explanation
-        if score.energy_match:
-            explanations['energy'] = "Perfect energy level match"
-        elif score.energy_alignment > 0.6:
-            explanations['energy'] = "Compatible energy level"
+        # Follow pose similarity
+        if score.follow_similarity > 0.7:
+            explanations['follow'] = "Strong follow movement match"
+        elif score.follow_similarity > 0.5:
+            explanations['follow'] = "Good follow movement fit"
         else:
-            explanations['energy'] = "Different energy level"
+            explanations['follow'] = "Different follow movement style"
         
-        # Difficulty explanation
+        # Interaction similarity
+        if score.interaction_similarity > 0.7:
+            explanations['interaction'] = "Excellent partner dynamics match"
+        elif score.interaction_similarity > 0.5:
+            explanations['interaction'] = "Good partner dynamics fit"
+        else:
+            explanations['interaction'] = "Different partner dynamics"
+        
+        # Metadata matches
         if score.difficulty_match:
             explanations['difficulty'] = "Perfect difficulty match"
-        elif score.difficulty_compatibility > 0.7:
-            explanations['difficulty'] = "Compatible difficulty level"
         else:
-            explanations['difficulty'] = "Different difficulty level"
+            explanations['difficulty'] = f"Different difficulty ({score.move_candidate.difficulty})"
+        
+        if score.energy_match:
+            explanations['energy'] = "Perfect energy level match"
+        else:
+            explanations['energy'] = f"Different energy ({score.move_candidate.energy_level})"
         
         return explanations
+    
+    def get_detailed_breakdown(self, score: RecommendationScore) -> Dict[str, Any]:
+        """
+        Get detailed numerical breakdown of all scoring components.
+        
+        Args:
+            score: RecommendationScore to analyze
+            
+        Returns:
+            Dictionary with detailed scores and metadata
+        """
+        return {
+            'overall_score': score.overall_score,
+            'modality_scores': {
+                'text': score.text_similarity,
+                'audio': score.audio_similarity,
+                'lead': score.lead_similarity,
+                'follow': score.follow_similarity,
+                'interaction': score.interaction_similarity
+            },
+            'weighted_contributions': {
+                'text': score.text_similarity * score.weights['text'],
+                'audio': score.audio_similarity * score.weights['audio'],
+                'lead': score.lead_similarity * score.weights['lead'],
+                'follow': score.follow_similarity * score.weights['follow'],
+                'interaction': score.interaction_similarity * score.weights['interaction']
+            },
+            'metadata': {
+                'clip_id': score.move_candidate.clip_id,
+                'move_label': score.move_candidate.move_label,
+                'difficulty': score.move_candidate.difficulty,
+                'energy_level': score.move_candidate.energy_level,
+                'estimated_tempo': score.move_candidate.estimated_tempo,
+                'quality_score': score.move_candidate.quality_score,
+                'detection_rate': score.move_candidate.detection_rate
+            },
+            'matches': {
+                'difficulty_match': score.difficulty_match,
+                'energy_match': score.energy_match
+            },
+            'weights': score.weights
+        }
+    
+    def get_moves_by_semantic_group(self, move_label_pattern: str) -> List[MoveCandidate]:
+        """
+        Get all moves matching a semantic pattern (e.g., all "cross_body_lead" variations).
+        
+        This enables semantic grouping where similar move types cluster together
+        based on text embeddings.
+        
+        Args:
+            move_label_pattern: Pattern to match (e.g., "cross_body_lead", "arm_styling")
+            
+        Returns:
+            List of matching MoveCandidate objects
+        """
+        filters = {'move_label': move_label_pattern}
+        return self.get_all_candidates(filters=filters)
+    
+    def get_moves_by_difficulty(self, difficulty: str) -> List[MoveCandidate]:
+        """
+        Get all moves of a specific difficulty level.
+        
+        Enables difficulty-aware recommendations for smooth progression
+        (beginner → intermediate → advanced).
+        
+        Args:
+            difficulty: Difficulty level ('beginner', 'intermediate', 'advanced')
+            
+        Returns:
+            List of MoveCandidate objects at the specified difficulty
+        """
+        filters = {'difficulty': difficulty}
+        return self.get_all_candidates(filters=filters)
+    
+    def get_moves_by_role_focus(self, role_focus: str) -> List[MoveCandidate]:
+        """
+        Get moves filtered by role-specific focus.
+        
+        Enables role-specific matching (lead_focus vs follow_focus vs both).
+        
+        Args:
+            role_focus: Role focus ('lead_focus', 'follow_focus', 'both')
+            
+        Returns:
+            List of MoveCandidate objects with the specified role focus
+        """
+        filters = {'lead_follow_roles': role_focus}
+        return self.get_all_candidates(filters=filters)
+    
+    def get_moves_by_energy_level(self, energy_level: str) -> List[MoveCandidate]:
+        """
+        Get all moves of a specific energy level.
+        
+        Args:
+            energy_level: Energy level ('low', 'medium', 'high')
+            
+        Returns:
+            List of MoveCandidate objects at the specified energy level
+        """
+        filters = {'energy_level': energy_level}
+        return self.get_all_candidates(filters=filters)
+    
+    def recommend_with_filters(self,
+                              request: RecommendationRequest,
+                              difficulty: Optional[str] = None,
+                              energy_level: Optional[str] = None,
+                              role_focus: Optional[str] = None,
+                              move_label: Optional[str] = None,
+                              top_k: int = 10) -> List[RecommendationScore]:
+        """
+        Convenience method for recommendations with common filters.
+        
+        Args:
+            request: Base recommendation request with query embeddings
+            difficulty: Optional difficulty filter
+            energy_level: Optional energy level filter
+            role_focus: Optional role focus filter
+            move_label: Optional move label filter
+            top_k: Number of recommendations to return
+            
+        Returns:
+            List of RecommendationScore objects sorted by overall score
+        """
+        # Update request with filters
+        request.difficulty = difficulty or request.difficulty
+        request.energy_level = energy_level or request.energy_level
+        request.lead_follow_roles = role_focus or request.lead_follow_roles
+        request.move_label = move_label or request.move_label
+        
+        return self.recommend_moves(request, top_k=top_k)

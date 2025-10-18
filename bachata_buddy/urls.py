@@ -1,5 +1,5 @@
 """
-URL configuration for bachata_vibes_django project.
+URL configuration for bachata_buddy project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.2/topics/http/urls/

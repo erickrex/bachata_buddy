@@ -2,34 +2,34 @@
 
 An AI-powered system that generates personalized Bachata choreographies by analyzing music characteristics and matching them with appropriate dance moves from a curated video library using advanced machine learning techniques.
 
-## 🏗️ System Architecture
+## 🤖 Machine Learning Architecture
 
-### Production-Ready MVC Architecture
+### Model Overview
+The system employs a **multi-modal machine learning pipeline** that combines audio analysis, computer vision, and recommendation algorithms to generate contextually appropriate dance choreographies.
+
+**Core ML Components:**
+- **Audio Feature Extraction**: Librosa-based spectral analysis with 128-dimensional embeddings
+- **Pose Estimation**: MediaPipe-based movement analysis with 384-dimensional pose features  
+- **Multi-Modal Fusion**: Feature fusion network combining audio and visual embeddings
+- **Similarity Matching**: Cosine similarity-based recommendation engine with pre-computed matrices
+- **Sequence Generation**: Temporal alignment algorithm for smooth choreography transitions
+
+## 🏗️ **System Architecture & Data Flow**
+
+
+### 1. **Architecture Diagram**
 ```mermaid
 graph TB
-    A[FastAPI App] --> B[Controllers Layer]
-    B --> C[Services Layer]
-    C --> D[Models & Validation]
-    
-    B --> E[AuthController]
-    B --> F[ChoreographyController]
-    B --> G[MediaController]
-    B --> H[CollectionController]
-    B --> I[InstructorController]
-    
-    C --> J[Music Analyzer]
-    C --> K[Move Analyzer]
-    C --> L[Recommendation Engine]
-    C --> M[Resource Manager]
-    C --> N[Pipeline Orchestrator]
+    A[Audio Input] --> B[Music Analyzer]
+    V[Video Library] --> C[Move Analyzer]
+    B --> D[Audio Features]
+    C --> E[Movement Features]
+    D --> F[Multi-Modal Fusion]
+    E --> F
+    F --> G[Recommendation Engine]
+    G --> H[Choreography Generator]
+    H --> I[Output Video]
 ```
-
-### Core ML Pipeline
-- **Audio Analysis**: Librosa-based tempo, energy, and structure detection
-- **Pose Estimation**: MediaPipe movement analysis with 33 pose landmarks
-- **Feature Fusion**: Multi-modal embedding combination (512D vectors)
-- **Recommendation**: Cosine similarity matching with pre-computed matrices
-- **Video Generation**: FFmpeg-based choreography assembly
 
 ## 🚀 **Technical Implementation Highlights**
 
@@ -133,151 +133,219 @@ class SequenceGenerator:
 
 ## 🌟 Features Overview
 
-### ✅ Production Features
+### ✅ Implemented Features
 
-#### 1. **Choreography Generation Pipeline** 🎼
-- **Real-time Processing**: Generate choreographies from YouTube URLs in 2-8 seconds
-- **Quality Modes**: Fast, balanced, and high-quality generation options
-- **Task Management**: Async processing with progress tracking and cancellation
-- **Resource Management**: Automatic cleanup and memory monitoring
-- **Caching System**: Multi-level caching for 80%+ performance improvement
+#### 1. **Music Analysis Engine** 🎼
+- **Tempo Detection**: Accurate BPM analysis using librosa
+- **Energy Level Analysis**: Classifies songs as low, medium, or high energy
+- **Musical Structure Detection**: Identifies verses, choruses, and bridges
+- **Batch Processing**: Analyze multiple songs efficiently
+- **Comprehensive Reporting**: Detailed analysis results with recommendations
 
-#### 2. **Advanced Music Analysis** 🎵
-- **Tempo Detection**: Accurate BPM analysis (80-160 BPM Bachata range)
-- **Energy Classification**: Low/medium/high energy level detection
-- **Structure Analysis**: Verse, chorus, bridge identification
-- **Bachata-Specific**: Custom rhythm pattern recognition
+#### 2. **Video Annotation Framework** 📹
+- **Structured Data Models**: Pydantic-based schemas for move annotations
+- **Quality Validation**: Automated video and annotation quality checks
+- **CSV Import/Export**: Bulk editing capabilities for annotations
+- **Directory Organization**: Automated file organization by move categories
+- **Comprehensive Testing**: Full test suite for all components
 
-#### 3. **Computer Vision & Movement Analysis** 📹
-- **Pose Estimation**: MediaPipe-based 33-point pose detection
-- **Movement Dynamics**: Velocity, acceleration, and spatial analysis
-- **Quality Assessment**: Automatic pose confidence and smoothness scoring
-- **Dance Metrics**: Joint angles and movement complexity calculation
+#### 3. **YouTube Integration** 📺
+- **Video Download**: Download Bachata songs from YouTube
+- **Audio Extraction**: Extract audio for music analysis
+- **Metadata Handling**: Preserve video information and metadata
 
-#### 4. **Production-Ready API** 🚀
-- **RESTful Endpoints**: Complete FastAPI-based API with OpenAPI docs
-- **Authentication Ready**: User management system (extensible)
-- **Collection Management**: Save and organize choreographies
-- **Instructor Tools**: Class planning and analytics dashboard
-- **System Monitoring**: Health checks, resource monitoring, manual cleanup
-
-#### 5. **Comprehensive Testing Framework** 🧪
-- **31+ Test Cases**: Unit, integration, and end-to-end tests
-- **Quality Validation**: Tempo, difficulty, and energy level validation
-- **Resource Testing**: Memory management and cleanup verification
-- **API Testing**: Controller and endpoint validation
-- **Async Testing**: Full async/await pattern coverage
+### 🚧 Planned Features
+- **AI Choreography Generation**: Match music analysis with move sequences
+- **Web Interface**: User-friendly web application
+- **Move Transition Analysis**: Smart sequencing of dance moves
+- **Personalization**: User skill level and preference adaptation
 
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.12+
-- FFmpeg (for video processing)
-- uv (recommended) or pip
+- UV (Python package manager)
+- PostgreSQL 14+
+- FFmpeg
 
 ### Installation
 
-1. **Clone and setup**
+1. **Clone the repository**
 ```bash
 git clone <repository-url>
 cd bachata-choreography-generator
 ```
 
-2. **Install system dependencies**
+2. **Install UV Package Manager**
 ```bash
-# macOS
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+3. **Install FFmpeg**
+```bash
+# For macOS
 brew install ffmpeg portaudio libsndfile
 
-# Ubuntu/Debian
+# For Ubuntu/Debian
 sudo apt-get install ffmpeg portaudio19-dev libsndfile1-dev
 ```
 
-3. **Install Python dependencies**
+4. **Install Python dependencies**
 ```bash
-# Using uv (recommended)
-uv sync && uv run python main.py
-
-# Using pip
-pip install -r requirements.txt
-python main.py
+# Using UV (recommended)
+uv sync
 ```
 
-4. **Access the application**
-- **Web Interface**: http://127.0.0.1:8000
-- **API Documentation**: http://127.0.0.1:8000/docs
-- **Health Check**: http://127.0.0.1:8000/health
-
-### Testing
+5. **Set up PostgreSQL database**
 ```bash
-# Run all tests
-python run_tests.py
+# Create database
+createdb bachata_vibes
 
-# Run specific test suites
-pytest tests/test_resource_management.py -v
-pytest tests/test_basic_functionality.py -v
+# Or using psql
+psql -U postgres -c "CREATE DATABASE bachata_vibes;"
 ```
 
-## 📊 API Usage
-
-### Generate Choreography
+6. **Run Django migrations**
 ```bash
-# Start choreography generation
-curl -X POST "http://localhost:8000/api/choreography" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "youtube_url": "https://www.youtube.com/watch?v=example",
-    "difficulty": "intermediate",
-    "energy_level": "high",
-    "quality_mode": "balanced"
-  }'
-
-# Track progress
-curl "http://localhost:8000/api/task/{task_id}"
-
-# Download result
-curl "http://localhost:8000/api/video/{filename}"
+uv run python manage.py migrate
 ```
 
-### System Monitoring
+7. **Create superuser**
 ```bash
-# Health check
-curl "http://localhost:8000/health"
-
-# System resources
-curl "http://localhost:8000/api/system/resources"
-
-# Manual cleanup
-curl -X POST "http://localhost:8000/api/system/cleanup"
+uv run python manage.py createsuperuser
 ```
 
-## 📊 Performance Metrics
+8. **Run the Django development server**
+```bash
+uv run python manage.py runserver
+```
 
-| Component | Performance | Optimization |
-|-----------|-------------|--------------|
-| **Audio Analysis** | 2-3 sec/song | Vectorized operations, caching |
-| **Pose Detection** | 95%+ accuracy | MediaPipe optimization |
-| **Recommendation** | <100ms response | Pre-computed matrices |
-| **Cache Hit Rate** | 80%+ efficiency | Multi-level caching |
-| **Memory Usage** | <500MB peak | Automatic cleanup |
-| **End-to-End** | 2-8 seconds | Full pipeline optimization |
+9. **Access the application**
+- Home: http://localhost:8000/
+- Admin: http://localhost:8000/admin/
+- Collection: http://localhost:8000/collection/
+
+Enjoy! 💃🕺
+
+### 📚 Detailed Setup Guide
+
+For comprehensive setup instructions, including:
+- PostgreSQL configuration
+- Production deployment
+- Testing with pytest
+- UV command reference
+- Troubleshooting
+
+See **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)**
+
+### 📹 Video Annotation 
+
+#### Basic Schema (current)
+```python
+# Add a single annotation
+new_clip_data = {
+    "clip_id": "new_move_1",
+    "video_path": "Bachata_steps/basic_steps/new_move_1.mp4",
+    "move_label": "basic_step",
+    "energy_level": "medium",
+    "estimated_tempo": 120,
+    "difficulty": "beginner",
+    "lead_follow_roles": "both",
+    "notes": "Basic step with hip movement"
+}
+
+interface.add_annotation(new_clip_data)
+```
+
+## 📊 Data Management
+
+### Current Video Library
+- **38 annotated move clips** across 12 categories
+- **Quality validated** with comprehensive metadata
+- **Organized by difficulty**: Beginner (26%), Intermediate (21%), Advanced (53%)
+- **Energy distribution**: Low (5%), Medium (42%), High (53%)
+- **Tempo range**: 102-150 BPM
+
+### Annotation Schema
+Each move clip includes:
+- **Basic Info**: clip_id, video_path, move_label
+- **Dance Characteristics**: energy_level, estimated_tempo, difficulty
+- **Role Information**: lead_follow_roles (lead_focus, follow_focus, both)
+- **Descriptive**: notes with detailed move description
+- **Optional Metadata**: duration, quality assessments, compatibility info
+
+## 🏗️ Architecture & Technology Stack
+
+### Current Implementation: Django 5.2 LTS
+
+The application has been migrated from FastAPI to Django 5.2 LTS for improved maintainability, built-in admin interface, and production-ready features.
+
+**Technology Stack:**
+- **Framework**: Django 5.2 LTS
+- **Database**: PostgreSQL 14+
+- **ORM**: Django ORM
+- **Templates**: Django Template Language
+- **Frontend**: HTMX + Alpine.js + Tailwind CSS
+- **Testing**: pytest + pytest-django
+- **Package Manager**: UV (fast Python package manager)
+- **Video Processing**: FFmpeg
+- **Audio Analysis**: librosa
+- **Computer Vision**: MediaPipe
+
+**Key Features:**
+- ✅ Function-Based Views (FBVs) for simplicity
+- ✅ Built-in Django Admin interface
+- ✅ Session-based authentication
+- ✅ PostgreSQL for production-ready database
+- ✅ Comprehensive test suite (67%+ coverage)
+- ✅ Background task processing with progress polling
+- ✅ Video player with advanced loop controls
+- ✅ Collection management with filtering and search
+- ✅ Instructor dashboard for class planning
+
+### Migration from FastAPI
+
+The application was successfully migrated from FastAPI to Django while maintaining 100% feature parity. All 24 services remain unchanged and fully functional.
+
+**Benefits of Django Migration:**
+- Built-in admin interface (no custom admin needed)
+- Mature ORM with extensive features
+- Better long-term support (LTS version)
+- Enhanced security features (CSRF, XSS protection)
+- Larger ecosystem and community
+- Production-ready from the start
+
+For migration details, see **[django_migration.md](django_migration.md)**
 
 ## 🔧 Configuration
 
-### Environment Variables
-```bash
-# Optional configuration
-QUALITY_MODE=balanced  # fast, balanced, high
-ENABLE_CACHING=true
-MAX_WORKERS=4
-CLEANUP_INTERVAL_HOURS=6
+### Music Analysis Settings
+```python
+# In app/services/music_analyzer.py
+TEMPO_RANGE = (80, 160)  # BPM range for Bachata
+ENERGY_THRESHOLDS = {
+    "low": 0.3,
+    "medium": 0.7,
+    "high": 1.0
+}
 ```
 
-### Data Management
-- **Video Library**: 38+ annotated Bachata moves
-- **Difficulty Levels**: Beginner (26%), Intermediate (21%), Advanced (53%)
-- **Tempo Range**: 102-150 BPM optimized for Bachata
-- **Quality Validation**: Automated pose detection and movement analysis
+### Directory Organization
+```python
+# In app/services/directory_organizer.py
+CATEGORY_MAPPING = {
+    "basic_step": "basic_moves",
+    "cross_body_lead": "partner_work",
+    "lady_right_turn": "turns_spins",
+    "body_roll": "styling",
+    "dip": "advanced"
+}
+```
 
 
 ## 📄 License

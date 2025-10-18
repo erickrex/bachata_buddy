@@ -1,5 +1,5 @@
 """
-ASGI config for bachata_vibes_django project.
+ASGI config for bachata_buddy project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bachata_vibes_django.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bachata_buddy.settings')
 
 application = get_asgi_application()

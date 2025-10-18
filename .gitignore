@@ -1,33 +1,90 @@
-.env
+# Database files (auto-generated, don't commit)
+data/database.db
+data/database.db-shm
+data/database.db-wal
+
+# Generated content directories
+data/output/
+data/temp/
+data/cache/
+data/choreography_metadata/
+
+# Python
 __pycache__/
-bachata-coreography-generator/__pycache__/
-bachata-coreography-generator/.venv/
-bachata-coreography-generator/.env
-*.__pycache__/
-tests/__pycache__/
-data/Bachata_steps/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-data/choreography_metadata/
-data/songs/
-data/Bachata_steps/
-various/
-sanity_checks/
-bachata-choreography-generator/test_app.py
-bachata-choreography-generator/test_pipeline_simple.py
-bachata-choreography-generator/validate_basic_pipeline.py
-bachata-choreography-generator/validate_clip_timing.py
-bachata-choreography-generator/validate_end_to_end.py
-bachata-choreography-generator/data/demo_import.json
-bachata-choreography-generator/data/monitoring/
-bachata-choreography-generator/data/optimization_results/
-bachata-choreography-generator/data/output/
-bachata-choreography-generator/data/temp/
-bachata-choreography-generator/data/test_import.json
-bachata-choreography-generator/data/test_results/
-bachata-choreography-generator/data/choreography_metadata/
-data/choreography_metadata/
+# Virtual environments
 .env
-.venv/
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-../.DS_Store
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Media files (too large for git)
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mov
+*.webm
+
+# Temporary files
+*.tmp
+*.temp
+temp_*

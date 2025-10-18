@@ -10,7 +10,7 @@ from pathlib import Path
 # Set environment variables for testing
 os.environ["SKIP_DB_INIT"] = "true"
 os.environ["SKIP_SYSTEM_VALIDATION"] = "true"
-os.environ["DJANGO_SETTINGS_MODULE"] = "bachata_vibes_django.settings"
+os.environ["DJANGO_SETTINGS_MODULE"] = "bachata_buddy.settings"
 
 # Django setup for pytest
 import django

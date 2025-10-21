@@ -40,6 +40,7 @@ dependencies = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "sentence-transformers>=2.0.0",
+    "ultralytics>=8.0.0",
 ]
 
 [project.optional-dependencies]
@@ -51,8 +52,3 @@ dev = [
     "pytest-xdist>=3.3.0",
     "pytest-watch>=4.2.0",
 ]
-
-# MMPose dependencies - NOT installable via uv due to chumpy build issues
-# Install manually via mim: pip install openmim && mim install mmengine mmcv mmdet mmpose
-# Required for: mmpose_couple_detector.py, pose_embedding_generator.py
-# NOT required for: text_embedding_service.py, elasticsearch_service.py, recommendation_engine.py

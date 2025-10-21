@@ -27,12 +27,13 @@ class ElasticsearchConfig:
 
 
 @dataclass
-class MMPoseConfig:
-    """MMPose model configuration."""
-    model_checkpoint_path: str
+class YOLOv8Config:
+    """YOLOv8-Pose model configuration."""
+    model_name: str = 'yolov8n-pose.pt'
     confidence_threshold: float = 0.3
-    enable_hand_detection: bool = True
-    device: str = "cpu"  # Always CPU
+    device: str = 'cpu'
+    iou_threshold: float = 0.5
+    max_det: int = 10
 
 
 class EnvironmentConfig:
@@ -85,11 +86,12 @@ class EnvironmentConfig:
             retry_on_timeout=os.getenv("ELASTICSEARCH_RETRY_ON_TIMEOUT", "true").lower() == "true"
         )
         
-        self.mmpose = MMPoseConfig(
-            model_checkpoint_path=os.getenv("MMPOSE_CHECKPOINT_PATH", "./checkpoints"),
-            confidence_threshold=float(os.getenv("MMPOSE_CONFIDENCE", "0.3")),
-            enable_hand_detection=os.getenv("MMPOSE_HAND_DETECTION", "true").lower() == "true",
-            device="cpu"  # Always CPU
+        self.yolov8 = YOLOv8Config(
+            model_name=os.getenv("YOLOV8_MODEL", "yolov8n-pose.pt"),
+            confidence_threshold=float(os.getenv("YOLOV8_CONFIDENCE", "0.3")),
+            device=os.getenv("YOLOV8_DEVICE", "cpu"),
+            iou_threshold=float(os.getenv("YOLOV8_IOU_THRESHOLD", "0.5")),
+            max_det=int(os.getenv("YOLOV8_MAX_DET", "10"))
         )
     
     def _load_cloud_config(self):
@@ -124,17 +126,18 @@ class EnvironmentConfig:
             retry_on_timeout=True
         )
         
-        # MMPose config
-        checkpoint_path = self._get_secret(client, project_id, "mmpose-checkpoint-path")
+        # YOLOv8 config
+        model_name = self._get_secret(client, project_id, "yolov8-model-name", default="yolov8n-pose.pt")
         
-        self.mmpose = MMPoseConfig(
-            model_checkpoint_path=checkpoint_path,
+        self.yolov8 = YOLOv8Config(
+            model_name=model_name,
             confidence_threshold=0.3,
-            enable_hand_detection=True,
-            device="cpu"  # Always CPU
+            device="cpu",
+            iou_threshold=0.5,
+            max_det=10
         )
     
-    def _get_secret(self, client, project_id: str, secret_id: str) -> str:
+    def _get_secret(self, client, project_id: str, secret_id: str, default: Optional[str] = None) -> str:
         """
         Retrieve secret from Google Cloud Secret Manager.
         
@@ -142,18 +145,22 @@ class EnvironmentConfig:
             client: SecretManagerServiceClient instance
             project_id: Google Cloud project ID
             secret_id: Secret identifier
+            default: Default value if secret not found (optional)
             
         Returns:
             Secret value as string
             
         Raises:
-            Exception: If secret cannot be retrieved
+            Exception: If secret cannot be retrieved and no default provided
         """
         try:
             name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
             response = client.access_secret_version(request={"name": name})
             return response.payload.data.decode("UTF-8")
         except Exception as e:
+            if default is not None:
+                logger.warning(f"Secret '{secret_id}' not found, using default: {default}")
+                return default
             raise Exception(
                 f"Failed to retrieve secret '{secret_id}' from Google Cloud Secret Manager. "
                 f"Ensure the secret exists and the service account has access. Error: {e}"
@@ -188,24 +195,31 @@ class EnvironmentConfig:
                 f"Please set ELASTICSEARCH_INDEX in .env file (local) or use default."
             )
         
-        # Validate MMPose configuration
-        if not self.mmpose.model_checkpoint_path:
+        # Validate YOLOv8 configuration
+        if not self.yolov8.model_name:
             raise ValueError(
-                f"MMPose checkpoint path is required. "
+                f"YOLOv8 model name is required. "
                 f"Environment: {self.environment}. "
-                f"Please set MMPOSE_CHECKPOINT_PATH in .env file (local) or Secret Manager (cloud)."
+                f"Please set YOLOV8_MODEL in .env file (local) or use default."
             )
         
-        if not (0.0 <= self.mmpose.confidence_threshold <= 1.0):
+        if not (0.0 <= self.yolov8.confidence_threshold <= 1.0):
             raise ValueError(
-                f"MMPose confidence threshold must be between 0.0 and 1.0. "
+                f"YOLOv8 confidence threshold must be between 0.0 and 1.0. "
                 f"Environment: {self.environment}. "
-                f"Got: {self.mmpose.confidence_threshold}"
+                f"Got: {self.yolov8.confidence_threshold}"
             )
         
-        if self.mmpose.device != "cpu":
+        if not (0.0 <= self.yolov8.iou_threshold <= 1.0):
             raise ValueError(
-                f"MMPose device must be 'cpu' (GPU not supported). "
+                f"YOLOv8 IoU threshold must be between 0.0 and 1.0. "
                 f"Environment: {self.environment}. "
-                f"Got: {self.mmpose.device}"
+                f"Got: {self.yolov8.iou_threshold}"
+            )
+        
+        if self.yolov8.device not in ["cpu", "cuda"]:
+            raise ValueError(
+                f"YOLOv8 device must be 'cpu' or 'cuda'. "
+                f"Environment: {self.environment}. "
+                f"Got: {self.yolov8.device}"
             )

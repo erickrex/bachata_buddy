@@ -15,7 +15,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import logging
 
-from .mmpose_couple_detector import CouplePose, PersonPose
+from .yolov8_couple_detector import CouplePose, PersonPose
 from .pose_feature_extractor import PoseFeatures, PoseFeatureExtractor
 
 logger = logging.getLogger(__name__)
@@ -159,8 +159,8 @@ class CoupleInteractionAnalyzer:
         if not couple_pose.has_both_dancers:
             return None
         
-        lead = couple_pose.lead
-        follow = couple_pose.follow
+        lead = couple_pose.lead_pose
+        follow = couple_pose.follow_pose
         
         # Extract pose features for both dancers
         lead_features = self.pose_extractor.extract_features(lead)
@@ -241,10 +241,10 @@ class CoupleInteractionAnalyzer:
         connections = []
         
         # Get wrist keypoints (index 9=left_wrist, 10=right_wrist)
-        lead_left_wrist = lead.body_keypoints[9]
-        lead_right_wrist = lead.body_keypoints[10]
-        follow_left_wrist = follow.body_keypoints[9]
-        follow_right_wrist = follow.body_keypoints[10]
+        lead_left_wrist = lead.keypoints[9]
+        lead_right_wrist = lead.keypoints[10]
+        follow_left_wrist = follow.keypoints[9]
+        follow_right_wrist = follow.keypoints[10]
         
         # Frame diagonal for normalization
         frame_diagonal = np.sqrt(frame_width**2 + frame_height**2)
@@ -299,10 +299,10 @@ class CoupleInteractionAnalyzer:
             Position type string
         """
         # Get shoulder keypoints to determine body orientation
-        lead_left_shoulder = lead.body_keypoints[5]
-        lead_right_shoulder = lead.body_keypoints[6]
-        follow_left_shoulder = follow.body_keypoints[5]
-        follow_right_shoulder = follow.body_keypoints[6]
+        lead_left_shoulder = lead.keypoints[5]
+        lead_right_shoulder = lead.keypoints[6]
+        follow_left_shoulder = follow.keypoints[5]
+        follow_right_shoulder = follow.keypoints[6]
         
         # Check confidence
         if (lead_left_shoulder[2] < self.confidence_threshold or
@@ -475,8 +475,8 @@ class CoupleInteractionAnalyzer:
         
         for idx in valid_indices:
             couple_pose = couple_poses[idx]
-            lead_feat = self.pose_extractor.extract_features(couple_pose.lead)
-            follow_feat = self.pose_extractor.extract_features(couple_pose.follow)
+            lead_feat = self.pose_extractor.extract_features(couple_pose.lead_pose)
+            follow_feat = self.pose_extractor.extract_features(couple_pose.follow_pose)
             lead_pose_features.append(lead_feat)
             follow_pose_features.append(follow_feat)
         

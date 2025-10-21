@@ -14,7 +14,7 @@ from typing import List, Optional
 import numpy as np
 import logging
 
-from .mmpose_couple_detector import CouplePose
+from .yolov8_couple_detector import CouplePose
 from .pose_feature_extractor import PoseFeatureExtractor, TemporalPoseSequence
 from .couple_interaction_analyzer import CoupleInteractionAnalyzer, TemporalInteractionSequence
 

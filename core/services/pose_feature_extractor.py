@@ -15,7 +15,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import logging
 
-from .mmpose_couple_detector import PersonPose, CouplePose
+from .yolov8_couple_detector import PersonPose, CouplePose
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +69,22 @@ class TemporalPoseSequence:
         feature_components = []
         
         # 1. Mean and std of joint angles
+        # Define expected angle keys to ensure consistent shape
+        angle_keys = ['left_elbow', 'right_elbow', 'left_knee', 'right_knee', 'torso']
         all_angles = []
         for feat in self.features:
-            angles = list(feat.joint_angles.values())
-            all_angles.append(angles)
+            # Create fixed-size angle vector with NaN for missing angles
+            angle_vector = [feat.joint_angles.get(key, np.nan) for key in angle_keys]
+            all_angles.append(angle_vector)
         
         if all_angles:
             all_angles = np.array(all_angles)  # (frames, num_angles)
-            mean_angles = np.mean(all_angles, axis=0)
-            std_angles = np.std(all_angles, axis=0)
+            # Use nanmean/nanstd to handle missing values
+            mean_angles = np.nanmean(all_angles, axis=0)
+            std_angles = np.nanstd(all_angles, axis=0)
+            # Replace any remaining NaN with 0
+            mean_angles = np.nan_to_num(mean_angles, nan=0.0)
+            std_angles = np.nan_to_num(std_angles, nan=0.0)
             feature_components.extend([mean_angles, std_angles])
         
         # 2. Mean and std of center of mass
@@ -170,7 +177,7 @@ class PoseFeatureExtractor:
         Returns:
             PoseFeatures object
         """
-        keypoints = person_pose.body_keypoints  # (17, 3) - x, y, confidence
+        keypoints = person_pose.keypoints  # (17, 3) - x, y, confidence
         
         # Extract positions and confidences
         positions = keypoints[:, :2]  # (17, 2)
@@ -396,9 +403,9 @@ class PoseFeatureExtractor:
         for couple_pose in couple_poses:
             # Get person pose based on person_id
             if person_id == 1:
-                person_pose = couple_pose.lead
+                person_pose = couple_pose.lead_pose
             elif person_id == 2:
-                person_pose = couple_pose.follow
+                person_pose = couple_pose.follow_pose
             else:
                 raise ValueError(f"Invalid person_id: {person_id}. Must be 1 (lead) or 2 (follow)")
             

@@ -1,5 +1,5 @@
 # Production Dockerfile for Bachata Choreography Generator
-# Handles MMPose/chumpy dependency issues correctly
+# Simplified with YOLOv8-Pose (no complex dependencies!)
 
 FROM python:3.12-slim
 
@@ -22,23 +22,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml ./
 
-# Install core dependencies (excluding mmpose group)
-# This avoids the chumpy build issue
+# Install all dependencies (including YOLOv8)
+# Much simpler than MMPose - no special handling needed!
 RUN uv pip install --system --no-cache -e .
-
-# Install MMPose stack via mim (handles chumpy correctly)
-# mim uses pip internally with proper build isolation workarounds
-RUN uv pip install --system --no-cache openmim && \
-    mim install --no-cache-dir mmengine && \
-    mim install --no-cache-dir "mmcv>=2.0.0" && \
-    mim install --no-cache-dir "mmdet>=3.0.0" && \
-    mim install --no-cache-dir "mmpose>=1.0.0"
 
 # Copy application code
 COPY . .
 
-# Download MMPose model checkpoints
-RUN python scripts/download_mmpose_models.py
+# YOLOv8 models download automatically on first use - no manual download needed!
 
 # Collect static files (Django)
 RUN python manage.py collectstatic --noinput || true

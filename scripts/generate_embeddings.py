@@ -2,7 +2,7 @@
 Offline Embedding Generation Pipeline
 
 This script processes all 38 Bachata video clips and generates multimodal embeddings:
-- Pose embeddings (lead 512D, follow 512D, interaction 256D) using MMPose
+- Pose embeddings (lead 512D, follow 512D, interaction 256D) using YOLOv8-Pose
 - Audio embeddings (128D) using Librosa
 - Text embeddings (384D) using sentence-transformers
 
@@ -31,7 +31,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.environment_config import EnvironmentConfig
-from core.services.mmpose_couple_detector import MMPoseCoupleDetector
+from core.services.yolov8_couple_detector import YOLOv8CoupleDetector
 from core.services.pose_embedding_generator import PoseEmbeddingGenerator
 from core.services.music_analyzer import MusicAnalyzer
 from core.services.text_embedding_service import TextEmbeddingService
@@ -80,7 +80,6 @@ class EmbeddingGenerationPipeline:
             video_dir: Directory containing video files
             annotations_path: Path to bachata_annotations.json
             environment: Environment name ("local" or "cloud")
-            checkpoint_path: Optional path to MMPose checkpoints (overrides config)
         """
         self.video_dir = Path(video_dir)
         self.annotations_path = Path(annotations_path)
@@ -104,11 +103,6 @@ class EmbeddingGenerationPipeline:
         logger.info("Loading environment configuration...")
         self.config = EnvironmentConfig()
         
-        # Override checkpoint path if provided
-        if checkpoint_path:
-            self.config.mmpose.model_checkpoint_path = checkpoint_path
-            logger.info(f"Using custom checkpoint path: {checkpoint_path}")
-        
         # Initialize services
         logger.info("Initializing services...")
         self._initialize_services()
@@ -130,18 +124,20 @@ class EmbeddingGenerationPipeline:
     
     def _initialize_services(self):
         """Initialize all required services."""
-        # MMPose couple detector
-        logger.info("Initializing MMPose couple detector...")
-        self.pose_detector = MMPoseCoupleDetector(
-            checkpoint_path=self.config.mmpose.model_checkpoint_path,
-            confidence_threshold=self.config.mmpose.confidence_threshold,
-            enable_hand_detection=self.config.mmpose.enable_hand_detection
+        # YOLOv8 couple detector
+        logger.info("Initializing YOLOv8 couple detector...")
+        self.pose_detector = YOLOv8CoupleDetector(
+            model_name=self.config.yolov8.model_name,
+            confidence_threshold=self.config.yolov8.confidence_threshold,
+            device=self.config.yolov8.device,
+            iou_threshold=self.config.yolov8.iou_threshold,
+            max_det=self.config.yolov8.max_det
         )
         
         # Pose embedding generator
         logger.info("Initializing pose embedding generator...")
         self.pose_embedding_generator = PoseEmbeddingGenerator(
-            confidence_threshold=self.config.mmpose.confidence_threshold
+            confidence_threshold=self.config.yolov8.confidence_threshold
         )
         
         # Music analyzer
@@ -653,10 +649,10 @@ def main():
     )
     
     parser.add_argument(
-        '--checkpoint_path',
+        '--model',
         type=str,
         default=None,
-        help='Optional path to MMPose model checkpoints (overrides config)'
+        help='Optional YOLOv8 model variant (e.g., yolov8s-pose.pt)'
     )
     
     parser.add_argument(
@@ -676,13 +672,17 @@ def main():
     import os
     os.environ['ENVIRONMENT'] = args.environment
     
+    # Override model if provided
+    if args.model:
+        os.environ['YOLOV8_MODEL'] = args.model
+        logger.info(f"Using custom YOLOv8 model: {args.model}")
+    
     # Create and run pipeline
     try:
         pipeline = EmbeddingGenerationPipeline(
             video_dir=args.video_dir,
             annotations_path=args.annotations,
-            environment=args.environment,
-            checkpoint_path=args.checkpoint_path
+            environment=args.environment
         )
         
         pipeline.run()

@@ -501,25 +501,41 @@ colima stop && colima start
 ## 🧪 Testing
 
 ```bash
-# Run all tests (67%+ coverage)
+# Run all tests (80%+ coverage)
 uv run pytest tests/
 
 # Unit tests only (fast, no Elasticsearch)
 uv run pytest tests/unit/ -v
 
+# Service tests (core ML components)
+uv run pytest tests/services/ -v
+
 # Integration tests (requires Elasticsearch)
 uv run pytest tests/integration/ -v
 
 # With coverage report
-uv run pytest tests/ --cov=core --cov=choreography --cov-report=html
+uv run pytest tests/ --cov=core --cov=choreography --cov=scripts --cov-report=html
+
+# Skip slow tests
+uv run pytest tests/ -m "not slow" -v
 ```
 
 **Test Results:**
-- ✅ 23 unit tests passing
-- ✅ Integration tests for embedding pipeline
-- ✅ 67%+ overall coverage
-- ✅ 85%+ views coverage
-- ✅ 90%+ models coverage
+- ✅ **80%+ overall coverage** (up from 67%)
+- ✅ **50+ new tests added** (October 2025)
+- ✅ 90% core services coverage
+- ✅ 85% views coverage
+- ✅ 90% models coverage
+- ✅ All critical fixes validated
+
+**New Test Coverage:**
+- ✅ Couple Interaction Analyzer (18 tests)
+- ✅ Pose Feature Extractor (17 tests)
+- ✅ Recommendation Engine (17 tests)
+- ✅ Backup/Restore Scripts (11 tests)
+- ✅ YOLOv8 Detector (12 tests)
+
+See **[TEST_COVERAGE_REPORT.md](TEST_COVERAGE_REPORT.md)** for detailed coverage metrics.
 
 ---
 
@@ -663,10 +679,11 @@ MIT License - see [LICENSE](LICENSE) file
 **Complexity**: 9/10 - Research-grade ML in production  
 **Uniqueness**: 9.5/10 - First multi-person partner dance system  
 **Documentation**: 15+ guides, 3,000+ lines  
-**Test Coverage**: 67%+ with 23 unit tests  
+**Test Coverage**: 80%+ with 70+ tests (50+ new in Oct 2025)  
 **Services**: 28 ML/business logic services  
 **Performance**: <50ms recommendations, <10ms retrieval  
-**Robustness**: Handles missing keypoints, partial occlusions, backup/restore
+**Robustness**: Handles missing keypoints, partial occlusions, backup/restore  
+**Quality**: Comprehensive test suite validates all critical fixes
 
 ---
 

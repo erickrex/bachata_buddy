@@ -7,6 +7,7 @@ import asyncio
 import logging
 import time
 import json
+import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
@@ -648,17 +649,22 @@ class ChoreoGenerationPipeline:
                     )
                     self._cache_misses += 1
                 
-                # Create candidate
+                # Create candidate with individual embeddings
                 candidate = MoveCandidate(
-                    move_id=clip.clip_id,
+                    clip_id=clip.clip_id,
                     video_path=str(video_path),
                     move_label=clip.move_label,
-                    analysis_result=analysis_result,
-                    multimodal_embedding=multimodal_embedding,
+                    audio_embedding=multimodal_embedding.audio_embedding,
+                    lead_embedding=multimodal_embedding.lead_embedding if hasattr(multimodal_embedding, 'lead_embedding') else np.zeros(512),
+                    follow_embedding=multimodal_embedding.follow_embedding if hasattr(multimodal_embedding, 'follow_embedding') else np.zeros(512),
+                    interaction_embedding=multimodal_embedding.interaction_embedding if hasattr(multimodal_embedding, 'interaction_embedding') else np.zeros(256),
+                    text_embedding=multimodal_embedding.text_embedding if hasattr(multimodal_embedding, 'text_embedding') else np.zeros(384),
                     energy_level=clip.energy_level,
                     difficulty=clip.difficulty,
                     estimated_tempo=clip.estimated_tempo,
-                    lead_follow_roles=clip.lead_follow_roles
+                    lead_follow_roles=clip.lead_follow_roles,
+                    quality_score=analysis_result.quality_score if hasattr(analysis_result, 'quality_score') else 0.0,
+                    detection_rate=analysis_result.detection_rate if hasattr(analysis_result, 'detection_rate') else 0.0
                 )
                 
                 return candidate
@@ -728,15 +734,20 @@ class ChoreoGenerationPipeline:
                     self._cache_misses += 1
                 
                 candidate = MoveCandidate(
-                    move_id=clip.clip_id,
+                    clip_id=clip.clip_id,
                     video_path=str(video_path),
                     move_label=clip.move_label,
-                    analysis_result=analysis_result,
-                    multimodal_embedding=multimodal_embedding,
+                    audio_embedding=multimodal_embedding.audio_embedding,
+                    lead_embedding=multimodal_embedding.lead_embedding if hasattr(multimodal_embedding, 'lead_embedding') else np.zeros(512),
+                    follow_embedding=multimodal_embedding.follow_embedding if hasattr(multimodal_embedding, 'follow_embedding') else np.zeros(512),
+                    interaction_embedding=multimodal_embedding.interaction_embedding if hasattr(multimodal_embedding, 'interaction_embedding') else np.zeros(256),
+                    text_embedding=multimodal_embedding.text_embedding if hasattr(multimodal_embedding, 'text_embedding') else np.zeros(384),
                     energy_level=clip.energy_level,
                     difficulty=clip.difficulty,
                     estimated_tempo=clip.estimated_tempo,
-                    lead_follow_roles=clip.lead_follow_roles
+                    lead_follow_roles=clip.lead_follow_roles,
+                    quality_score=analysis_result.quality_score if hasattr(analysis_result, 'quality_score') else 0.0,
+                    detection_rate=analysis_result.detection_rate if hasattr(analysis_result, 'detection_rate') else 0.0
                 )
                 
                 move_candidates.append(candidate)
@@ -790,19 +801,18 @@ class ChoreoGenerationPipeline:
         start_time = time.time()
         
         try:
-            # Use first candidate's embedding as reference for music embedding
-            reference_embedding = move_candidates[0].multimodal_embedding
+            # Use first candidate's audio embedding as query reference
+            # (since we're matching music to moves)
+            query_audio = move_candidates[0].audio_embedding if move_candidates else None
             
             request = RecommendationRequest(
-                music_features=music_features,
-                music_embedding=reference_embedding,
-                target_difficulty=difficulty,
-                target_energy=energy_level,
-                tempo_tolerance=15.0
+                query_audio_embedding=query_audio,
+                difficulty=difficulty,
+                energy_level=energy_level
             )
             
             recommendations = self.recommendation_engine.recommend_moves(
-                request, move_candidates, top_k=len(move_candidates)
+                request, top_k=len(move_candidates)
             )
             
             logger.info(f"Generated {len(recommendations)} recommendations")

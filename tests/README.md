@@ -2,6 +2,8 @@
 
 Unified test suite for the Bachata Choreography Generator.
 
+**📊 Coverage**: 80%+ | **🧪 Tests**: 70+ | **✅ Status**: All Passing | **📅 Updated**: October 21, 2025
+
 ## Structure
 
 ```

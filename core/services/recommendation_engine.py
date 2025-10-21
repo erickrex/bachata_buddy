@@ -215,9 +215,14 @@ class RecommendationEngine:
         Returns:
             MoveCandidate object
         """
+        # Get video path and ensure it has the data/ prefix
+        video_path = embedding_doc.get('video_path', '')
+        if video_path and not video_path.startswith('data/'):
+            video_path = f"data/{video_path}"
+        
         return MoveCandidate(
             clip_id=embedding_doc['clip_id'],
-            video_path=embedding_doc.get('video_path', ''),
+            video_path=video_path,
             move_label=embedding_doc.get('move_label', ''),
             audio_embedding=embedding_doc['audio_embedding'],
             lead_embedding=embedding_doc['lead_embedding'],

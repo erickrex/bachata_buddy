@@ -31,6 +31,18 @@
                     </a>
                 </div>
                 
+                <!-- Choreography Creation Methods -->
+                <div class="flex items-center space-x-2 border-r border-gray-300 pr-4">
+                    <a href="{% url 'choreography:select-song' %}" 
+                       class="{% if request.path == '/choreography/select-song/' %}bg-purple-100 text-purple-700{% else %}text-gray-700 hover:text-purple-600{% endif %} px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                        🎵 Select Song
+                    </a>
+                    <a href="{% url 'choreography:describe-choreo' %}" 
+                       class="{% if request.path == '/choreography/describe-choreo/' %}bg-purple-100 text-purple-700{% else %}text-gray-700 hover:text-purple-600{% endif %} px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                        🤖 Describe Choreo
+                    </a>
+                </div>
+                
                 <div class="flex items-center space-x-4">
                     {% if user.is_authenticated %}
                         <a href="{% url 'collections:list' %}" 

@@ -24,6 +24,8 @@ class ElasticsearchConfig:
     max_connections: int = 10
     timeout: int = 30
     retry_on_timeout: bool = True
+    # Serverless API key authentication
+    api_key: Optional[str] = None
 
 
 @dataclass
@@ -73,18 +75,46 @@ class EnvironmentConfig:
         
         load_dotenv()
         
-        self.elasticsearch = ElasticsearchConfig(
-            host=os.getenv("ELASTICSEARCH_HOST", "localhost"),
-            port=int(os.getenv("ELASTICSEARCH_PORT", "9200")),
-            index_name=os.getenv("ELASTICSEARCH_INDEX", "bachata_move_embeddings"),
-            username=os.getenv("ELASTICSEARCH_USERNAME"),
-            password=os.getenv("ELASTICSEARCH_PASSWORD"),
-            use_ssl=os.getenv("ELASTICSEARCH_USE_SSL", "false").lower() == "true",
-            verify_certs=os.getenv("ELASTICSEARCH_VERIFY_CERTS", "true").lower() == "true",
-            max_connections=int(os.getenv("ELASTICSEARCH_MAX_CONNECTIONS", "10")),
-            timeout=int(os.getenv("ELASTICSEARCH_TIMEOUT", "30")),
-            retry_on_timeout=os.getenv("ELASTICSEARCH_RETRY_ON_TIMEOUT", "true").lower() == "true"
-        )
+        # Elasticsearch configuration
+        # Serverless (host + api_key) or Local (host + port)
+        
+        api_key = os.getenv("ELASTICSEARCH_API_KEY")
+        host = os.getenv("ELASTICSEARCH_HOST", "localhost")
+        port_str = os.getenv("ELASTICSEARCH_PORT", "443" if api_key else "9200")
+        
+        # Parse port
+        try:
+            port = int(port_str) if port_str else 443
+        except ValueError:
+            port = 443 if api_key else 9200
+        
+        if api_key:
+            # Serverless mode (endpoint URL + API key)
+            self.elasticsearch = ElasticsearchConfig(
+                host=host,
+                port=port,
+                index_name=os.getenv("ELASTICSEARCH_INDEX", "bachata_move_embeddings"),
+                api_key=api_key,
+                use_ssl=True,  # Always true for serverless
+                verify_certs=True,
+                max_connections=int(os.getenv("ELASTICSEARCH_MAX_CONNECTIONS", "10")),
+                timeout=int(os.getenv("ELASTICSEARCH_TIMEOUT", "30")),
+                retry_on_timeout=os.getenv("ELASTICSEARCH_RETRY_ON_TIMEOUT", "true").lower() == "true"
+            )
+        else:
+            # Local mode (host + port, optional basic auth)
+            self.elasticsearch = ElasticsearchConfig(
+                host=host,
+                port=port,
+                index_name=os.getenv("ELASTICSEARCH_INDEX", "bachata_move_embeddings"),
+                username=os.getenv("ELASTICSEARCH_USERNAME"),
+                password=os.getenv("ELASTICSEARCH_PASSWORD"),
+                use_ssl=os.getenv("ELASTICSEARCH_USE_SSL", "false").lower() == "true",
+                verify_certs=os.getenv("ELASTICSEARCH_VERIFY_CERTS", "true").lower() == "true",
+                max_connections=int(os.getenv("ELASTICSEARCH_MAX_CONNECTIONS", "10")),
+                timeout=int(os.getenv("ELASTICSEARCH_TIMEOUT", "30")),
+                retry_on_timeout=os.getenv("ELASTICSEARCH_RETRY_ON_TIMEOUT", "true").lower() == "true"
+            )
         
         self.yolov8 = YOLOv8Config(
             model_name=os.getenv("YOLOV8_MODEL", "yolov8n-pose.pt"),
@@ -176,11 +206,14 @@ class EnvironmentConfig:
         # Validate Elasticsearch configuration
         if not self.elasticsearch.host:
             raise ValueError(
-                f"Elasticsearch host is required. "
+                f"Elasticsearch connection is required. "
                 f"Environment: {self.environment}. "
-                f"Please set ELASTICSEARCH_HOST in .env file (local) or Secret Manager (cloud)."
+                f"Please set:\n"
+                f"  - ELASTICSEARCH_HOST + ELASTICSEARCH_API_KEY (Serverless)\n"
+                f"  - ELASTICSEARCH_HOST + ELASTICSEARCH_PORT (Local)"
             )
         
+        # Port validation
         if not isinstance(self.elasticsearch.port, int) or self.elasticsearch.port <= 0:
             raise ValueError(
                 f"Elasticsearch port must be a positive integer. "

@@ -36,11 +36,13 @@ dependencies = [
     "aiohttp>=3.9.0",
     "python-dotenv>=1.1.1",
     "google-cloud-secret-manager>=2.0.0",
-    "elasticsearch>=8.0.0",
+    "elasticsearch>=8.11.0",
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "sentence-transformers>=2.0.0",
     "ultralytics>=8.0.0",
+    "google-generativeai>=0.3.0",
+    "elastic-apm>=6.19.0",
 ]
 
 [project.optional-dependencies]

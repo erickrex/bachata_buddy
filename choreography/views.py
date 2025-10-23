@@ -19,11 +19,180 @@ logger = logging.getLogger(__name__)
 
 
 def index(request):
-    """Main choreography generation page"""
+    """Main choreography generation page - redirects to legacy template"""
+    # Redirect to legacy template for backward compatibility
+    from django.shortcuts import redirect
+    return redirect('choreography:select-song')
+
+
+def select_song(request):
+    """
+    Legacy template - Traditional song selection with dropdowns.
+    UNCHANGED except Elasticsearch connection (uses serverless cloud).
+    """
     form = ChoreographyGenerationForm()
     return render(request, 'choreography/index.html', {
         'form': form
     })
+
+
+def describe_choreo(request):
+    """
+    NEW AI template - Natural language choreography creation with Gemini.
+    
+    Handles:
+    - Natural language query input
+    - Gemini API parsing
+    - Parameter confirmation
+    - AI-generated explanations
+    """
+    from core.services.gemini_service import GeminiService, ChoreographyParameters
+    
+    context = {}
+    
+    if request.method == 'POST':
+        query = request.POST.get('query', '').strip()
+        confirmed = request.POST.get('confirmed', 'false') == 'true'
+        parameters_json = request.POST.get('parameters', None)
+        
+        if not query:
+            return JsonResponse({
+                'error': 'Please describe your choreography'
+            }, status=400)
+        
+        try:
+            # Initialize Gemini service
+            gemini_service = GeminiService()
+            
+            if not confirmed:
+                # Step 1: Parse query and return parameters for confirmation
+                try:
+                    parameters = gemini_service.parse_choreography_request(query)
+                    
+                    return JsonResponse({
+                        'parameters': parameters.to_dict(),
+                        'query': query
+                    })
+                    
+                except Exception as parse_error:
+                    logger.error(f"Failed to parse query: {parse_error}")
+                    
+                    # Try to get suggestions
+                    try:
+                        available_metadata = {
+                            'difficulties': ['beginner', 'intermediate', 'advanced'],
+                            'styles': ['romantic', 'energetic', 'sensual', 'playful']
+                        }
+                        suggestions = gemini_service.suggest_alternatives(query, available_metadata)
+                    except:
+                        suggestions = []
+                    
+                    return JsonResponse({
+                        'error': f'Could not understand your query. Please try rephrasing.',
+                        'suggestions': suggestions
+                    }, status=400)
+            
+            else:
+                # Step 2: Generate choreography with confirmed parameters
+                if parameters_json:
+                    try:
+                        params_dict = json.loads(parameters_json)
+                        parameters = ChoreographyParameters.from_dict(params_dict)
+                    except:
+                        return JsonResponse({
+                            'error': 'Invalid parameters'
+                        }, status=400)
+                else:
+                    # Re-parse if parameters not provided
+                    parameters = gemini_service.parse_choreography_request(query)
+                
+                # TODO: Integrate with choreography generation pipeline (Task 6)
+                # For now, return placeholder
+                return JsonResponse({
+                    'result': {
+                        'video_filename': 'placeholder.mp4',
+                        'explanations': [
+                            'This is a placeholder explanation for move 1.',
+                            'This is a placeholder explanation for move 2.'
+                        ],
+                        'parameters': parameters.to_dict()
+                    }
+                })
+        
+        except ValueError as e:
+            # Handle missing API key or configuration errors
+            logger.error(f"Gemini service error: {e}")
+            return JsonResponse({
+                'error': 'AI service is not configured. Please contact administrator.',
+                'details': str(e)
+            }, status=500)
+        
+        except Exception as e:
+            logger.error(f"Unexpected error in describe_choreo: {e}", exc_info=True)
+            return JsonResponse({
+                'error': 'An unexpected error occurred. Please try again.',
+                'details': str(e)
+            }, status=500)
+    
+    # GET request - render template
+    return render(request, 'choreography/describe_choreo.html', context)
+
+
+@require_http_methods(["POST"])
+def api_parse_query(request):
+    """
+    AJAX endpoint for parsing natural language queries.
+    
+    Allows real-time parameter preview before submission.
+    """
+    from core.services.gemini_service import GeminiService
+    
+    try:
+        # Get query from request body
+        data = json.loads(request.body) if request.body else {}
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return JsonResponse({
+                'error': 'Query is required'
+            }, status=400)
+        
+        # Initialize Gemini service
+        gemini_service = GeminiService()
+        
+        # Parse query
+        parameters = gemini_service.parse_choreography_request(query)
+        
+        return JsonResponse({
+            'success': True,
+            'parameters': parameters.to_dict()
+        })
+        
+    except ValueError as e:
+        logger.error(f"Gemini service error: {e}")
+        return JsonResponse({
+            'error': 'AI service is not configured',
+            'details': str(e)
+        }, status=500)
+        
+    except Exception as e:
+        logger.error(f"Failed to parse query: {e}")
+        
+        # Try to provide suggestions
+        try:
+            gemini_service = GeminiService()
+            available_metadata = {
+                'difficulties': ['beginner', 'intermediate', 'advanced'],
+                'styles': ['romantic', 'energetic', 'sensual', 'playful']
+            }
+            suggestions = gemini_service.suggest_alternatives(query, available_metadata)
+        except:
+            suggestions = []
+        
+        return JsonResponse({
+            'error': 'Could not parse query',
+            'suggestions': suggestions
+        }, status=400)
 
 
 @login_required

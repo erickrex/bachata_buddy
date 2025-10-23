@@ -1,0 +1,338 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}AI Choreography Creator - Bachata Vibes{% endblock %}
+
+{% block extra_head %}
+<style>
+[x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="aiChoreographyApp()" x-init="init()" class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <h1 class="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+            🤖 AI Choreography Creator
+        </h1>
+        <p class="text-gray-600 text-lg">
+            Describe your choreography in natural language and let AI create it for you
+        </p>
+    </div>
+
+    <!-- Natural Language Input Form -->
+    <div x-show="!showParameters && !isGenerating && !result" class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <form @submit.prevent="submitQuery()">
+            <!-- Query Input -->
+            <div class="mb-6">
+                <label for="query-input" class="block text-sm font-semibold text-gray-700 mb-2">
+                    💬 Describe Your Choreography
+                </label>
+                <textarea 
+                    id="query-input"
+                    x-model="query"
+                    rows="4"
+                    placeholder="Example: Create a romantic beginner bachata with slow tempo&#10;Example: I need an energetic intermediate routine for a party&#10;Example: Generate a sensual advanced choreography with lots of body rolls"
+                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all resize-none"
+                    required
+                ></textarea>
+                <p class="mt-2 text-sm text-gray-500">
+                    💡 Tip: Include difficulty level, style, energy, and tempo in your description
+                </p>
+            </div>
+
+            <!-- Submit Button -->
+            <button 
+                type="submit"
+                :disabled="!query.trim()"
+                :class="query.trim() ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700' : 'bg-gray-400 cursor-not-allowed'"
+                class="w-full text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-105 shadow-lg">
+                ✨ Parse with AI
+            </button>
+        </form>
+
+        <!-- Example Queries -->
+        <div class="mt-6 p-4 bg-gray-50 rounded-xl">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">📝 Example Queries:</h3>
+            <div class="space-y-2">
+                <button 
+                    @click="query = 'Create a romantic beginner bachata with slow tempo'"
+                    class="block w-full text-left text-sm text-gray-600 hover:text-purple-600 hover:bg-purple-50 px-3 py-2 rounded-lg transition-colors">
+                    "Create a romantic beginner bachata with slow tempo"
+                </button>
+                <button 
+                    @click="query = 'I need an energetic intermediate routine for a party'"
+                    class="block w-full text-left text-sm text-gray-600 hover:text-purple-600 hover:bg-purple-50 px-3 py-2 rounded-lg transition-colors">
+                    "I need an energetic intermediate routine for a party"
+                </button>
+                <button 
+                    @click="query = 'Generate a sensual advanced choreography with body rolls'"
+                    class="block w-full text-left text-sm text-gray-600 hover:text-purple-600 hover:bg-purple-50 px-3 py-2 rounded-lg transition-colors">
+                    "Generate a sensual advanced choreography with body rolls"
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parameter Confirmation -->
+    <div x-show="showParameters && !isGenerating && !result" x-cloak class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <div class="text-center mb-6">
+            <div class="text-6xl mb-4">🎯</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">AI Extracted Parameters</h2>
+            <p class="text-gray-600">Review and confirm the parameters extracted from your query</p>
+        </div>
+
+        <!-- Original Query -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-xl">
+            <p class="text-sm font-semibold text-gray-700 mb-2">Your Query:</p>
+            <p class="text-gray-800 italic" x-text="query"></p>
+        </div>
+
+        <!-- Extracted Parameters -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="p-4 bg-purple-50 rounded-xl">
+                <p class="text-sm font-semibold text-purple-700 mb-1">Difficulty</p>
+                <p class="text-lg font-bold text-purple-900" x-text="parameters.difficulty || 'Not specified'"></p>
+            </div>
+            <div class="p-4 bg-pink-50 rounded-xl">
+                <p class="text-sm font-semibold text-pink-700 mb-1">Energy Level</p>
+                <p class="text-lg font-bold text-pink-900" x-text="parameters.energy_level || 'Not specified'"></p>
+            </div>
+            <div class="p-4 bg-blue-50 rounded-xl">
+                <p class="text-sm font-semibold text-blue-700 mb-1">Style</p>
+                <p class="text-lg font-bold text-blue-900" x-text="parameters.style || 'Not specified'"></p>
+            </div>
+            <div class="p-4 bg-green-50 rounded-xl">
+                <p class="text-sm font-semibold text-green-700 mb-1">Tempo</p>
+                <p class="text-lg font-bold text-green-900" x-text="parameters.tempo || 'Not specified'"></p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4">
+            <button 
+                @click="confirmParameters()"
+                class="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg">
+                ✅ Confirm & Generate
+            </button>
+            <button 
+                @click="editQuery()"
+                class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-4 px-6 rounded-xl transition-colors">
+                ✏️ Edit Query
+            </button>
+        </div>
+    </div>
+
+    <!-- Generation Progress -->
+    <div x-show="isGenerating" x-cloak class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <div class="text-center mb-6">
+            <div class="text-6xl mb-4">⏳</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Generating Your Choreography</h2>
+            <p class="text-gray-600" x-text="progressMessage"></p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden mb-4">
+            <div class="absolute h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+                 :style="`width: ${progress}%`"></div>
+        </div>
+
+        <!-- Progress Percentage -->
+        <div class="text-center">
+            <span class="text-2xl font-bold text-purple-600" x-text="`${Math.round(progress)}%`"></span>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    <div x-show="error" x-cloak class="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-6">
+        <div class="flex items-start">
+            <div class="text-3xl mr-4">❌</div>
+            <div class="flex-1">
+                <h3 class="text-lg font-bold text-red-800 mb-2">Error</h3>
+                <p class="text-red-700 mb-4" x-text="errorMessage"></p>
+                
+                <!-- Suggestions if available -->
+                <div x-show="suggestions.length > 0" class="mt-4">
+                    <p class="text-sm font-semibold text-red-800 mb-2">💡 Try these instead:</p>
+                    <div class="space-y-2">
+                        <template x-for="suggestion in suggestions" :key="suggestion">
+                            <button 
+                                @click="query = suggestion; error = false; submitQuery()"
+                                class="block w-full text-left text-sm text-red-700 hover:text-red-900 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"
+                                x-text="suggestion">
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <button @click="resetForm()" 
+                        class="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results with AI Explanations -->
+    <div x-show="result" x-cloak class="bg-white rounded-2xl shadow-xl p-8 border-2 border-purple-100">
+        <div class="text-center mb-6">
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">🎉 Your AI-Generated Choreography!</h2>
+            <p class="text-gray-600">
+                Generated with AI explanations
+            </p>
+        </div>
+
+        <!-- Video Player -->
+        <div class="mb-6">
+            <video 
+                x-ref="videoPlayer"
+                :src="result ? `/choreography/video/${result.video_filename}/` : ''"
+                controls
+                class="w-full rounded-xl shadow-lg">
+            </video>
+        </div>
+
+        <!-- AI Explanations Section -->
+        <div x-show="result && result.explanations && result.explanations.length > 0" class="mb-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">🤖 AI Explanations</h3>
+            <div class="space-y-4">
+                <template x-for="(explanation, index) in result.explanations" :key="index">
+                    <div class="p-4 bg-purple-50 rounded-xl border-l-4 border-purple-500">
+                        <div class="flex items-start">
+                            <div class="text-2xl mr-3">💡</div>
+                            <div>
+                                <p class="text-sm font-semibold text-purple-700 mb-1" x-text="`Move ${index + 1}`"></p>
+                                <p class="text-gray-700" x-text="explanation"></p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Generate Another Button -->
+        <div class="text-center">
+            <button @click="resetForm()"
+                    class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-colors">
+                🔄 Create Another Choreography
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function aiChoreographyApp() {
+    return {
+        query: '',
+        showParameters: false,
+        parameters: {},
+        isGenerating: false,
+        progress: 0,
+        progressMessage: 'Initializing...',
+        error: false,
+        errorMessage: '',
+        suggestions: [],
+        result: null,
+
+        init() {
+            console.log('AI Choreography App initialized');
+        },
+
+        async submitQuery() {
+            if (!this.query.trim()) return;
+
+            this.error = false;
+            this.errorMessage = '';
+            this.suggestions = [];
+
+            try {
+                // Send query to backend for parsing
+                const response = await fetch('{% url "choreography:describe-choreo" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: new URLSearchParams({
+                        'query': this.query,
+                        'confirmed': 'false'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    this.error = true;
+                    this.errorMessage = data.error;
+                    this.suggestions = data.suggestions || [];
+                } else if (data.parameters) {
+                    this.parameters = data.parameters;
+                    this.showParameters = true;
+                }
+            } catch (err) {
+                this.error = true;
+                this.errorMessage = 'Failed to parse query. Please try again.';
+                console.error('Parse error:', err);
+            }
+        },
+
+        async confirmParameters() {
+            this.showParameters = false;
+            this.isGenerating = true;
+            this.progress = 10;
+            this.progressMessage = 'Generating choreography...';
+
+            try {
+                const response = await fetch('{% url "choreography:describe-choreo" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: new URLSearchParams({
+                        'query': this.query,
+                        'confirmed': 'true',
+                        'parameters': JSON.stringify(this.parameters)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    this.error = true;
+                    this.errorMessage = data.error;
+                    this.isGenerating = false;
+                } else if (data.result) {
+                    this.result = data.result;
+                    this.isGenerating = false;
+                    this.progress = 100;
+                }
+            } catch (err) {
+                this.error = true;
+                this.errorMessage = 'Failed to generate choreography. Please try again.';
+                this.isGenerating = false;
+                console.error('Generation error:', err);
+            }
+        },
+
+        editQuery() {
+            this.showParameters = false;
+            this.parameters = {};
+        },
+
+        resetForm() {
+            this.query = '';
+            this.showParameters = false;
+            this.parameters = {};
+            this.isGenerating = false;
+            this.progress = 0;
+            this.error = false;
+            this.errorMessage = '';
+            this.suggestions = [];
+            this.result = null;
+        }
+    };
+}
+</script>
+{% endblock %}

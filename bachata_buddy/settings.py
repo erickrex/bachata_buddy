@@ -33,6 +33,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 # ALLOWED_HOSTS configuration for production
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# CSRF trusted origins for Cloud Run
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{host}' for host in ALLOWED_HOSTS 
+    if host not in ['localhost', '127.0.0.1']
+]
 
 # Application definition
 
@@ -91,17 +96,33 @@ WSGI_APPLICATION = 'bachata_buddy.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'bachata_vibes'),  # Default for local dev
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-        'ATOMIC_REQUESTS': False,
+# Check if running on Cloud Run with Cloud SQL
+if os.environ.get('ENVIRONMENT') == 'cloud' and os.environ.get('CLOUD_SQL_CONNECTION_NAME'):
+    # Use Unix socket for Cloud SQL connection
+    # Cloud Run mounts the socket at /cloudsql/<connection-name>
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'bachata-buddy'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': '/cloudsql/' + os.environ.get('CLOUD_SQL_CONNECTION_NAME'),
+            'ATOMIC_REQUESTS': False,
+        }
     }
-}
+else:
+    # Use TCP/IP for local development or external connections
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'bachata_vibes'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'ATOMIC_REQUESTS': False,
+        }
+    }
 
 
 # Password validation

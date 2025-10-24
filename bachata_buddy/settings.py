@@ -94,7 +94,7 @@ WSGI_APPLICATION = 'bachata_buddy.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'bachata_vibes'),
+        'NAME': os.environ.get('DB_NAME', 'bachata_vibes'),  # Default for local dev
         'USER': os.environ.get('DB_USER', 'postgres'),
         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
         'HOST': os.environ.get('DB_HOST', 'localhost'),

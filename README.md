@@ -567,31 +567,41 @@ gcloud run deploy bachata-buddy \
   --timeout 300
 ```
 
-### Required Environment Variables for Cloud Run
+### Secrets and Environment Variables
 
-Set these in Secret Manager or as environment variables:
+**Sensitive data** (use Secret Manager):
+- `DJANGO_SECRET_KEY` - Django secret key
+- `DB_PASSWORD` - Database password
+- `ELASTICSEARCH_API_KEY` - Elasticsearch API key
+- `GOOGLE_API_KEY` - Gemini API key
+
+**Configuration** (use Environment Variables):
+- `ENVIRONMENT=cloud`
+- `GCP_PROJECT_ID=your-project-id`
+- `GCS_BUCKET_NAME=your-bucket-name`
+- `DB_HOST=your-db-host`
+- `DB_NAME=bachata-buddy`
+- `DB_USER=postgres`
+- `DB_PORT=5432`
+- `ELASTICSEARCH_HOST=your-es-host`
+- `ELASTICSEARCH_PORT=443`
+- `ELASTICSEARCH_INDEX=bachata_move_embeddings`
+- `ALLOWED_HOSTS=your-domain.run.app`
+- `DJANGO_DEBUG=False`
+
+### Quick Setup with Scripts
 
 ```bash
-# Required
-DJANGO_SECRET_KEY=your-secret-key
-DJANGO_DEBUG=False
-ALLOWED_HOSTS=your-domain.run.app
-GOOGLE_API_KEY=your-gemini-api-key
-ELASTICSEARCH_HOST=your-es-host.es.region.gcp.elastic-cloud.com
-ELASTICSEARCH_API_KEY=your-es-api-key
-ELASTICSEARCH_INDEX=bachata_move_embeddings
+# 1. Setup secrets from .env
+chmod +x scripts/setup_secrets.sh
+./scripts/setup_secrets.sh
 
-# Video Storage (Google Cloud Storage)
-GCS_BUCKET_NAME=your-bucket-name
-GCP_PROJECT_ID=your-project-id
-
-# Database
-DB_HOST=your-db-host
-DB_NAME=bachata_vibes
-DB_USER=postgres
-DB_PASSWORD=your-db-password
-DB_PORT=5432
+# 2. Deploy everything
+chmod +x scripts/deploy_to_cloud_run.sh
+./scripts/deploy_to_cloud_run.sh
 ```
+
+See **[SECRETS_MANAGEMENT_GUIDE.md](SECRETS_MANAGEMENT_GUIDE.md)** for detailed instructions.
 
 ### Video Storage
 

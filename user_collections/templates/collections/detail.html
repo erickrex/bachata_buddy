@@ -65,7 +65,7 @@
 
         <!-- Music Info -->
         {% if choreography.music_info %}
-        <div class="bg-purple-50 rounded-lg p-4 mb-4">
+        <div class="bg-gray-100 rounded-lg p-4 mb-4 border border-gray-200">
             <h3 class="text-sm font-semibold text-gray-700 mb-2">🎵 Music Information</h3>
             <div class="grid grid-cols-2 gap-2 text-sm">
                 {% if choreography.music_info.title %}
@@ -128,7 +128,7 @@
             <!-- Play/Pause Button -->
             <div class="flex justify-center mb-4">
                 <button @click="togglePlayPause()"
-                        class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-xl font-semibold transition-colors">
+                        class="bg-black hover:bg-gray-800 text-white px-8 py-3 rounded-full font-semibold transition-colors">
                     <span x-show="!isPlaying">▶️ Play</span>
                     <span x-show="isPlaying">⏸️ Pause</span>
                 </button>
@@ -174,7 +174,7 @@
                     <span class="text-sm font-medium text-gray-700">Loop Start:</span>
                     <div class="flex items-center space-x-2">
                         <button @click="adjustLoopStart(-1)"
-                                class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm transition-colors">
+                                class="bg-black hover:bg-gray-800 text-white px-3 py-1 rounded-lg text-sm transition-colors">
                             -1s
                         </button>
                         <span class="text-lg font-mono font-bold text-purple-600 w-16 text-center" 

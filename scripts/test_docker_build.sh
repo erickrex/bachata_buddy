@@ -88,6 +88,17 @@ else
     exit 1
 fi
 
+# Test system dependencies
+echo ""
+echo "🔍 Verifying system dependencies in container..."
+docker exec bachata-buddy-test python scripts/verify_system_deps.py
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ System dependencies verified${NC}"
+else
+    echo -e "${YELLOW}⚠️  System dependency check reported issues, but continuing...${NC}"
+    echo -e "${YELLOW}    (If critical libraries like librosa, cv2, yt_dlp work, you're good)${NC}"
+fi
+
 # Test home page
 echo ""
 echo "🌐 Testing home page..."

@@ -6,12 +6,14 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (minimal set for YOLOv8 + OpenCV)
+# Install system dependencies for YOLOv8, OpenCV, and audio/video processing
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libgl1 \
     libglib2.0-0 \
+    ffmpeg \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV for fast dependency management

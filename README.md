@@ -381,7 +381,7 @@ bachata_buddy/
 - Python 3.12+
 - Docker/Colima (for Elasticsearch)
 - UV package manager
-- FFmpeg
+- FFmpeg and libsndfile (for audio processing)
 
 ### Installation
 
@@ -390,7 +390,13 @@ bachata_buddy/
 git clone <repository-url>
 cd bachata_buddy
 curl -LsSf https://astral.sh/uv/install.sh | sh
-brew install ffmpeg portaudio libsndfile  # macOS
+
+# Install system dependencies (macOS)
+brew install ffmpeg libsndfile
+
+# Install system dependencies (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install ffmpeg libsndfile1
 
 # 2. Install Python dependencies
 uv sync
@@ -524,7 +530,23 @@ uv run pytest tests/ -m "not slow" -v
 
 ## 🚀 Deployment to Google Cloud Run
 
-Bachata Buddy is production-ready and can be deployed to Google Cloud Run in minutes.
+Bachata Buddy is production-ready and can be deployed to Google Cloud Run in minutes. The Docker container includes all required system dependencies (ffmpeg, libsndfile) and has been tested for Cloud Run compatibility.
+
+### Test Docker Build Locally (Recommended)
+
+```bash
+# Test the full Docker build before deploying
+cd bachata_buddy
+chmod +x scripts/test_docker_build.sh
+./scripts/test_docker_build.sh
+
+# This will:
+# 1. Build the Docker image
+# 2. Start the container
+# 3. Verify all system dependencies (ffmpeg, libsndfile, librosa, etc.)
+# 4. Test health check endpoint
+# 5. Confirm the app is ready for Cloud Run
+```
 
 ### Quick Deploy
 
@@ -535,13 +557,14 @@ gcloud config set project YOUR_PROJECT_ID
 # 2. Enable required APIs
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
 
-# 3. Deploy
+# 3. Deploy (Cloud Build will use the Dockerfile)
 gcloud run deploy bachata-buddy \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
   --memory 2Gi \
-  --cpu 2
+  --cpu 2 \
+  --timeout 300
 ```
 
 ### Required Environment Variables for Cloud Run
@@ -578,6 +601,16 @@ Videos are automatically stored in **Google Cloud Storage** in production:
 - **Cost:** ~$0.02/GB/month
 - **Setup:** See [VIDEO_STORAGE_GUIDE.md](VIDEO_STORAGE_GUIDE.md)
 
+### System Dependencies in Production
+
+The Dockerfile automatically installs all required system dependencies:
+- **ffmpeg** (7.1.2+) - For audio/video processing with yt-dlp and librosa
+- **libsndfile1** - For audio file I/O with librosa
+- **gcc/g++** - For compiling Python extensions
+- **OpenCV dependencies** - For YOLOv8 pose detection
+
+**Note:** portaudio is NOT needed (we only do offline audio analysis, no real-time streaming).
+
 ### Detailed Deployment Guide
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for:
@@ -587,5 +620,14 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 - Monitoring and logging
 - Troubleshooting tips
 - CI/CD with Cloud Build
+
+### Docker Build Verification
+
+The included `scripts/test_docker_build.sh` script validates:
+- ✅ Docker image builds successfully
+- ✅ All system dependencies are installed (ffmpeg, libsndfile)
+- ✅ Python libraries can import (librosa, cv2, yt_dlp, ultralytics)
+- ✅ Health check endpoint responds
+- ✅ Container is ready for Cloud Run deployment
 
 

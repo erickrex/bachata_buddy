@@ -18,10 +18,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 
 from choreography import views as choreography_views
 
+def health_check(request):
+    """Simple health check endpoint for Cloud Run"""
+    return JsonResponse({"status": "healthy", "service": "bachata-buddy"})
+
 urlpatterns = [
+    path('health', health_check, name='health_check'),  # Health check for Cloud Run
     path('admin/', admin.site.urls),
     path('', include('choreography.urls')),
     path('api/', include('choreography.urls')),  # API endpoints with /api/ prefix

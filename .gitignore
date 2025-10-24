@@ -1,7 +1,4 @@
-# Database files (auto-generated, don't commit)
-data/database.db
-data/database.db-shm
-data/database.db-wal
+.env
 data/output
 data/user_collections
 data/temp
@@ -38,7 +35,6 @@ wheels/
 MANIFEST
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -78,7 +74,6 @@ htmlcov/
 .coverage.*
 coverage.xml
 *.cover
-.hypothesis/
 .pytest_cache/
 
 # Media files (too large for git)

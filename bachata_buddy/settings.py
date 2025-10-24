@@ -25,12 +25,13 @@ load_dotenv(BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+fmq=zy&$!pdc-*qb#1rqy2x!$ff0=8lo6otp&zy$o6$s1jk(3'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-+fmq=zy&$!pdc-*qb#1rqy2x!$ff0=8lo6otp&zy$o6$s1jk(3')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS configuration for production
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -54,6 +55,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -107,16 +109,10 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'OPTIONS': {
+            'min_length': 6,
+        }
     },
 ]
 
@@ -142,9 +138,34 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-# Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'data'
+# Whitenoise configuration for serving static files in production
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media files configuration
+# Supports both local development and Google Cloud Storage in production
+
+# Check if running in cloud environment with GCS bucket configured
+USE_GCS = os.environ.get('GCS_BUCKET_NAME') and os.environ.get('ENVIRONMENT') == 'cloud'
+
+if USE_GCS:
+    # Google Cloud Storage configuration for production
+    GS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME')
+    GS_PROJECT_ID = os.environ.get('GCP_PROJECT_ID')
+    GS_DEFAULT_ACL = 'publicRead'  # Make videos publicly accessible
+    GS_FILE_OVERWRITE = False  # Don't overwrite files with same name
+    GS_LOCATION = 'media'  # Folder within bucket
+    
+    # Use GCS for media files
+    DEFAULT_FILE_STORAGE = 'storages.backends.gcs.GSGoogleCloudStorage'
+    MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/media/'
+    
+    # For local temp files during processing (Cloud Run has /tmp)
+    TEMP_ROOT = '/tmp'
+else:
+    # Local development configuration
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'data'
+    TEMP_ROOT = BASE_DIR / 'data' / 'temp'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

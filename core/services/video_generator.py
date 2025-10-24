@@ -273,6 +273,13 @@ class VideoGenerator:
         
         logger.info(f"Creating pre-trimmed clips for {len(sequence.moves)} moves")
         
+        # CRITICAL DEBUG: Log all video paths in sequence
+        unique_paths_in_sequence = set(move.video_path for move in sequence.moves)
+        logger.info(f"  Unique video paths in sequence: {len(unique_paths_in_sequence)}")
+        logger.info(f"  First 10 video paths:")
+        for i, move in enumerate(sequence.moves[:10]):
+            logger.info(f"    [{i}] {move.video_path}")
+        
         trimmed_clips = []
         
         with open(concat_file_path, 'w') as f:
@@ -284,9 +291,10 @@ class VideoGenerator:
                     abs_path = os.path.abspath(trimmed_clip_path)
                     f.write(f"file '{abs_path}'\n")
                     trimmed_clips.append(trimmed_clip_path)
-                    logger.debug(f"Move {i+1}: {Path(move.video_path).name} -> {move.duration:.1f}s trimmed")
+                    if i < 10:  # Log first 10 for debugging
+                        logger.info(f"Move {i+1}: {Path(move.video_path).name} -> {move.duration:.1f}s trimmed -> {Path(trimmed_clip_path).name}")
                 else:
-                    logger.error(f"Failed to create trimmed clip for move {i+1}")
+                    logger.error(f"Failed to create trimmed clip for move {i+1}: {move.video_path}")
         
         logger.info(f"Created concatenation file with {len(trimmed_clips)} pre-trimmed clips")
         logger.info(f"Total expected duration: {sequence.total_duration:.1f}s")
@@ -354,9 +362,14 @@ class VideoGenerator:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)  # Reduced timeout
             
             if result.returncode == 0 and os.path.exists(trimmed_path):
+                # Verify the trimmed clip was created successfully
+                file_size = os.path.getsize(trimmed_path)
+                if file_size < 1000:  # Less than 1KB is suspicious
+                    logger.warning(f"Trimmed clip {index+1} is suspiciously small: {file_size} bytes")
                 return trimmed_path
             else:
-                logger.error(f"Failed to trim clip {index+1}: {result.stderr}")
+                logger.error(f"Failed to trim clip {index+1} from {move.video_path}")
+                logger.error(f"FFmpeg stderr: {result.stderr[:500]}")  # Log first 500 chars of error
                 return ""
                 
         except Exception as e:

@@ -183,14 +183,23 @@
             </p>
         </div>
 
-        <!-- Video Player -->
-        <div class="mb-6">
+        <!-- Video Player (only show if video exists) -->
+        <div x-show="result && result.video_filename && result.video_filename !== 'placeholder.mp4'" class="mb-6">
             <video 
                 x-ref="videoPlayer"
-                :src="result ? `/choreography/video/${result.video_filename}/` : ''"
+                :src="result ? `/video/${result.video_filename}/` : ''"
                 controls
                 class="w-full rounded-xl shadow-lg">
             </video>
+        </div>
+        
+        <!-- Placeholder message when video not yet generated -->
+        <div x-show="result && (!result.video_filename || result.video_filename === 'placeholder.mp4')" class="mb-6 p-8 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-center">
+            <div class="text-6xl mb-4">🚧</div>
+            <h3 class="text-xl font-bold text-yellow-800 mb-2">Video Generation Coming Soon</h3>
+            <p class="text-yellow-700">
+                Your parameters have been successfully parsed! Video generation will be integrated in the next phase.
+            </p>
         </div>
 
         <!-- AI Explanations Section -->
@@ -234,6 +243,7 @@ function aiChoreographyApp() {
         errorMessage: '',
         suggestions: [],
         result: null,
+        taskId: null,
 
         init() {
             console.log('AI Choreography App initialized');
@@ -281,7 +291,7 @@ function aiChoreographyApp() {
             this.showParameters = false;
             this.isGenerating = true;
             this.progress = 10;
-            this.progressMessage = 'Generating choreography...';
+            this.progressMessage = 'Starting AI choreography generation...';
 
             try {
                 const response = await fetch('{% url "choreography:describe-choreo" %}', {
@@ -303,16 +313,61 @@ function aiChoreographyApp() {
                     this.error = true;
                     this.errorMessage = data.error;
                     this.isGenerating = false;
-                } else if (data.result) {
-                    this.result = data.result;
-                    this.isGenerating = false;
-                    this.progress = 100;
+                } else if (data.task_id) {
+                    // Start polling for task status
+                    this.taskId = data.task_id;
+                    this.pollTaskStatus();
                 }
             } catch (err) {
                 this.error = true;
-                this.errorMessage = 'Failed to generate choreography. Please try again.';
+                this.errorMessage = 'Failed to start choreography generation. Please try again.';
                 this.isGenerating = false;
                 console.error('Generation error:', err);
+            }
+        },
+
+        async pollTaskStatus() {
+            if (!this.taskId) return;
+
+            try {
+                const response = await fetch(`/api/task/${this.taskId}/`, {
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    this.error = true;
+                    this.errorMessage = data.error;
+                    this.isGenerating = false;
+                    return;
+                }
+
+                // Update progress
+                this.progress = data.progress || 0;
+                this.progressMessage = data.message || 'Processing...';
+
+                if (data.status === 'completed') {
+                    // Generation complete
+                    this.result = data.result;
+                    this.isGenerating = false;
+                    this.progress = 100;
+                } else if (data.status === 'failed') {
+                    // Generation failed
+                    this.error = true;
+                    this.errorMessage = data.error || 'Generation failed';
+                    this.isGenerating = false;
+                } else {
+                    // Still running, poll again
+                    setTimeout(() => this.pollTaskStatus(), 2000);
+                }
+            } catch (err) {
+                this.error = true;
+                this.errorMessage = 'Failed to check generation status. Please try again.';
+                this.isGenerating = false;
+                console.error('Polling error:', err);
             }
         },
 
@@ -331,6 +386,7 @@ function aiChoreographyApp() {
             this.errorMessage = '';
             this.suggestions = [];
             this.result = null;
+            this.taskId = null;
         }
     };
 }

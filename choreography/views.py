@@ -106,18 +106,33 @@ def describe_choreo(request):
                     # Re-parse if parameters not provided
                     parameters = gemini_service.parse_choreography_request(query)
                 
-                # TODO: Integrate with choreography generation pipeline (Task 6)
-                # For now, return placeholder
-                return JsonResponse({
-                    'result': {
-                        'video_filename': 'placeholder.mp4',
-                        'explanations': [
-                            'This is a placeholder explanation for move 1.',
-                            'This is a placeholder explanation for move 2.'
-                        ],
+                # Integrate with choreography generation pipeline
+                try:
+                    # Create task for choreography generation
+                    task_id = str(uuid.uuid4())
+                    create_task(task_id, request.user.id)
+                    
+                    # Start background generation with AI explanations
+                    thread = threading.Thread(
+                        target=generate_choreography_with_ai_explanations,
+                        args=(task_id, request.user.id, parameters, query, gemini_service),
+                        daemon=True
+                    )
+                    thread.start()
+                    
+                    # Return task ID for polling
+                    return JsonResponse({
+                        'task_id': task_id,
+                        'status': 'started',
                         'parameters': parameters.to_dict()
-                    }
-                })
+                    })
+                    
+                except Exception as gen_error:
+                    logger.error(f"Failed to start choreography generation: {gen_error}")
+                    return JsonResponse({
+                        'error': 'Failed to start choreography generation',
+                        'details': str(gen_error)
+                    }, status=500)
         
         except ValueError as e:
             # Handle missing API key or configuration errors
@@ -195,10 +210,16 @@ def api_parse_query(request):
         }, status=400)
 
 
-@login_required
 @require_http_methods(["POST"])
 def create_choreography(request):
     """Start choreography generation task"""
+    # Check authentication for AJAX requests
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': 'Please log in first',
+            'message': 'Please log in first'
+        }, status=401)
+    
     try:
         form = ChoreographyGenerationForm(request.POST)
         
@@ -543,6 +564,211 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
             stage='failed',
             message='An unexpected error occurred',
             error=error_msg
+        )
+
+
+def generate_choreography_with_ai_explanations(
+    task_id: str,
+    user_id: int,
+    parameters,  # ChoreographyParameters from Gemini
+    original_query: str,
+    gemini_service
+):
+    """
+    Background function to generate choreography with AI explanations.
+    
+    This function:
+    1. Converts AI-parsed parameters to pipeline format
+    2. Generates choreography using the pipeline
+    3. Generates AI explanations for each selected move
+    4. Returns results with explanations
+    """
+    try:
+        from core.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
+        
+        # Create user-specific output directory
+        user_output_dir = Path(settings.MEDIA_ROOT) / 'output' / f'user_{user_id}'
+        user_temp_dir = Path(settings.MEDIA_ROOT) / 'temp' / f'user_{user_id}'
+        user_output_dir.mkdir(parents=True, exist_ok=True)
+        user_temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Stage 1: Initializing (10%)
+        update_task(
+            task_id,
+            status='running',
+            progress=10,
+            stage='initializing',
+            message='Initializing AI choreography generation...'
+        )
+        
+        # Convert parameters to pipeline format
+        difficulty = parameters.difficulty or 'intermediate'
+        energy_level = parameters.energy_level or 'medium'
+        
+        # CRITICAL DEBUG: Log AI parameters
+        logger.info("=" * 80)
+        logger.info("AI CHOREOGRAPHY PARAMETERS:")
+        logger.info(f"  Difficulty: {difficulty}")
+        logger.info(f"  Energy level: {energy_level}")
+        logger.info(f"  Style: {parameters.style}")
+        logger.info(f"  Tempo: {parameters.tempo}")
+        logger.info(f"  Original query: {original_query}")
+        logger.info("=" * 80)
+        
+        # Use a default song from available songs
+        # TODO: Add song selection to AI template
+        audio_input = "data/songs/Aventura.mp3"  # Default song for AI template
+        
+        # Stage 2: Generating choreography (30%)
+        update_task(
+            task_id,
+            progress=30,
+            stage='generating',
+            message='Generating choreography based on your preferences...'
+        )
+        
+        # Initialize pipeline with user-specific directories
+        config = PipelineConfig(
+            output_directory=str(user_output_dir),
+            temp_directory=str(user_temp_dir),
+            quality_mode='balanced'
+        )
+        pipeline = ChoreoGenerationPipeline(config)
+        
+        # Run the pipeline
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(
+                pipeline.generate_choreography(
+                    audio_input=audio_input,
+                    difficulty=difficulty,
+                    energy_level=energy_level
+                )
+            )
+        finally:
+            loop.close()
+        
+        if not result.success or not result.output_path:
+            update_task(
+                task_id,
+                status='failed',
+                progress=0,
+                stage='failed',
+                message='Choreography generation failed',
+                error=result.error_message or 'Unknown error'
+            )
+            return
+        
+        # Stage 3: Generating AI explanations (70%)
+        update_task(
+            task_id,
+            progress=70,
+            stage='explaining',
+            message='Generating AI explanations for your choreography...'
+        )
+        
+        # Load metadata to get move information
+        metadata_path = result.metadata_path
+        explanations = []
+        
+        if metadata_path and Path(metadata_path).exists():
+            try:
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                
+                moves_used = metadata.get('moves_used', [])
+                
+                # Generate explanations for each move (limit to first 10 for performance)
+                for i, move in enumerate(moves_used[:10]):
+                    try:
+                        # Create context for explanation
+                        context = {
+                            'difficulty': difficulty,
+                            'energy_level': energy_level,
+                            'style': parameters.style or 'romantic',
+                            'tempo': parameters.tempo or 'medium',
+                            'move_position': i + 1,
+                            'total_moves': len(moves_used),
+                            'original_query': original_query
+                        }
+                        
+                        # Generate explanation
+                        explanation = gemini_service.explain_move_selection(move, context)
+                        explanations.append(explanation)
+                        
+                        # Update progress
+                        progress = 70 + int((i + 1) / min(len(moves_used), 10) * 20)
+                        update_task(
+                            task_id,
+                            progress=progress,
+                            message=f'Generating explanations... ({i + 1}/{min(len(moves_used), 10)})'
+                        )
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to generate explanation for move {i}: {e}")
+                        # Use fallback explanation
+                        explanations.append(
+                            f"This move was selected to match your {difficulty} difficulty "
+                            f"and {energy_level} energy preferences."
+                        )
+                
+            except Exception as e:
+                logger.error(f"Failed to load metadata for explanations: {e}")
+                # Use generic explanations
+                explanations = [
+                    f"This choreography was generated based on your preferences: "
+                    f"{difficulty} difficulty, {energy_level} energy, {parameters.style or 'romantic'} style."
+                ]
+        else:
+            # No metadata available, use generic explanation
+            explanations = [
+                f"This choreography was generated based on your preferences: "
+                f"{difficulty} difficulty, {energy_level} energy, {parameters.style or 'romantic'} style."
+            ]
+        
+        # Stage 4: Finalizing (95%)
+        update_task(
+            task_id,
+            progress=95,
+            stage='finalizing',
+            message='Finalizing your AI-generated choreography...'
+        )
+        
+        # Extract filename from path
+        video_filename = Path(result.output_path).name
+        
+        # Complete
+        update_task(
+            task_id,
+            status='completed',
+            progress=100,
+            stage='completed',
+            message='AI choreography generated successfully!',
+            result={
+                'video_path': result.output_path,
+                'video_filename': video_filename,
+                'processing_time': result.processing_time,
+                'sequence_duration': result.sequence_duration,
+                'moves_analyzed': result.moves_analyzed,
+                'metadata_path': result.metadata_path,
+                'explanations': explanations,
+                'parameters': parameters.to_dict(),
+                'original_query': original_query
+            }
+        )
+        
+        logger.info(f"AI choreography task {task_id} completed successfully with {len(explanations)} explanations")
+        
+    except Exception as e:
+        logger.error(f"AI choreography generation failed for task {task_id}: {e}", exc_info=True)
+        update_task(
+            task_id,
+            status='failed',
+            progress=0,
+            stage='failed',
+            message='AI choreography generation failed',
+            error=str(e)
         )
 
 

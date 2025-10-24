@@ -1,18 +1,16 @@
 # Production Dockerfile for Bachata Choreography Generator
-# Simplified with YOLOv8-Pose (no complex dependencies!)
+# Uses YOLOv8-Pose for couple detection and Gemini for AI features
 
 FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (minimal set for YOLOv8 + OpenCV)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    git \
-    libopencv-dev \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,14 +20,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml ./
 
-# Install all dependencies (including YOLOv8)
-# Much simpler than MMPose - no special handling needed!
+# Install dependencies (optimized for Cloud Run)
 RUN uv pip install --system --no-cache -e .
 
 # Copy application code
 COPY . .
-
-# YOLOv8 models download automatically on first use - no manual download needed!
 
 # Collect static files (Django)
 RUN python manage.py collectstatic --noinput || true

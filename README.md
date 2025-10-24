@@ -520,187 +520,72 @@ uv run pytest tests/ --cov=core --cov=choreography --cov=scripts --cov-report=ht
 uv run pytest tests/ -m "not slow" -v
 ```
 
-**Test Results:**
-- ✅ **80%+ overall coverage** (up from 67%)
-- ✅ **50+ new tests added** (October 2025)
-- ✅ 90% core services coverage
-- ✅ 85% views coverage
-- ✅ 90% models coverage
-- ✅ All critical fixes validated
-
-**New Test Coverage:**
-- ✅ Couple Interaction Analyzer (18 tests)
-- ✅ Pose Feature Extractor (17 tests)
-- ✅ Recommendation Engine (17 tests)
-- ✅ Backup/Restore Scripts (11 tests)
-- ✅ YOLOv8 Detector (12 tests)
-
-See **[TEST_COVERAGE_REPORT.md](TEST_COVERAGE_REPORT.md)** for detailed coverage metrics.
-
 ---
 
-## 🏗️ Technology Stack
+## 🚀 Deployment to Google Cloud Run
 
-### Backend
-- **Framework**: Django 5.2 LTS
-- **Database**: PostgreSQL 14+ (SQLite for dev)
-- **Package Manager**: UV (fast Python package manager)
+Bachata Buddy is production-ready and can be deployed to Google Cloud Run in minutes.
 
-### Machine Learning & AI
-- **Computer Vision**: YOLOv8-Pose (Ultralytics), OpenCV
-- **Audio Analysis**: Librosa, NumPy, SciPy
-- **NLP**: Sentence-Transformers (all-MiniLM-L6-v2)
-- **Vector Search**: Elasticsearch 9.1 with kNN
-- **Deep Learning**: PyTorch, TorchVision
-- **Video Processing**: FFmpeg, MoviePy
+### Quick Deploy
 
-### Frontend
-- **Templates**: Django Template Language
-- **Interactivity**: HTMX + Alpine.js
-- **Styling**: Tailwind CSS
+```bash
+# 1. Set your GCP project
+gcloud config set project YOUR_PROJECT_ID
 
-### Testing & DevOps
-- **Testing**: pytest, pytest-django, pytest-cov
-- **Deployment**: Docker, Google Cloud Run
-- **CI/CD**: Cloud Build
-- **Monitoring**: Performance monitoring, quality metrics
+# 2. Enable required APIs
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
 
----
+# 3. Deploy
+gcloud run deploy bachata-buddy \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 2Gi \
+  --cpu 2
+```
 
-## 📖 Comprehensive Documentation
+### Required Environment Variables for Cloud Run
 
-### Setup & Configuration (4 guides)
-- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Complete setup (local + cloud)
-- **[USAGE_GUIDE.md](USAGE_GUIDE.md)** - Detailed usage instructions
-- **[DJANGO_SETUP_GUIDE.md](DJANGO_SETUP_GUIDE.md)** - Django-specific setup
-- **[CONFIGURATION_SETUP.md](CONFIGURATION_SETUP.md)** - Environment config
+Set these in Secret Manager or as environment variables:
 
-### Production Deployment (2 guides)
-- **[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md)** - Deployment guide
-- **[Dockerfile](Dockerfile)** - Production-ready container
+```bash
+# Required
+DJANGO_SECRET_KEY=your-secret-key
+DJANGO_DEBUG=False
+ALLOWED_HOSTS=your-domain.run.app
+GOOGLE_API_KEY=your-gemini-api-key
+ELASTICSEARCH_HOST=your-es-host.es.region.gcp.elastic-cloud.com
+ELASTICSEARCH_API_KEY=your-es-api-key
+ELASTICSEARCH_INDEX=bachata_move_embeddings
 
-### Feature Documentation (5 guides)
-- **[ELASTICSEARCH_IMPLEMENTATION.md](ELASTICSEARCH_IMPLEMENTATION.md)** - Vector search
-- **[RECOMMENDATION_ENGINE_USAGE.md](RECOMMENDATION_ENGINE_USAGE.md)** - Recommendations
-- **[EMBEDDING_REGENERATION_GUIDE.md](EMBEDDING_REGENERATION_GUIDE.md)** - Embedding workflow
-- **[YOLOV8_MIGRATION.md](YOLOV8_MIGRATION.md)** - YOLOv8 migration details
-- **[scripts/README_EMBEDDING_GENERATION.md](scripts/README_EMBEDDING_GENERATION.md)** - Embeddings
+# Video Storage (Google Cloud Storage)
+GCS_BUCKET_NAME=your-bucket-name
+GCP_PROJECT_ID=your-project-id
 
-### Testing & Architecture (3 guides)
-- **[tests/README.md](tests/README.md)** - Testing guide
-- **[TEST_UNIFICATION_COMPLETE.md](TEST_UNIFICATION_COMPLETE.md)** - Test structure
-- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Complete index
+# Database
+DB_HOST=your-db-host
+DB_NAME=bachata_vibes
+DB_USER=postgres
+DB_PASSWORD=your-db-password
+DB_PORT=5432
+```
 
----
+### Video Storage
 
-## 🎓 Academic & Research Context
+Videos are automatically stored in **Google Cloud Storage** in production:
+- **Local dev:** Videos saved to `data/` directory
+- **Cloud Run:** Videos saved to GCS bucket
+- **Cost:** ~$0.02/GB/month
+- **Setup:** See [VIDEO_STORAGE_GUIDE.md](VIDEO_STORAGE_GUIDE.md)
 
-### Novel Contributions
+### Detailed Deployment Guide
 
-1. **Multi-Person Pose Detection for Partner Dancing**
-   - First open-source system to track both dancers simultaneously
-   - Analyzes partner interactions (hand connections, synchronization)
-   - Generates couple-specific embeddings (lead + follow + interaction)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for:
+- Step-by-step deployment instructions
+- Secret Manager setup
+- Cloud SQL configuration
+- Monitoring and logging
+- Troubleshooting tips
+- CI/CD with Cloud Build
 
-2. **Trimodal Learning for Dance**
-   - Novel combination: Audio (35%) + Pose (30%) + Text (35%)
-   - No compression - full dimensionality (1792D total)
-   - Semantic understanding enables intelligent move grouping
 
-3. **Production-Ready Research System**
-   - Research-grade ML (MMPose) in production web app
-   - Comprehensive testing and documentation
-   - Real-world deployment (Google Cloud Run)
-
-### Potential Publications
-
-This work could be published at:
-- **ACM Multimedia** (multi-modal systems)
-- **CVPR/ICCV** (computer vision for dance)
-- **ISMIR** (music information retrieval)
-- **CHI** (human-computer interaction)
-
-### Research Areas
-
-- Computer Vision (multi-person pose estimation)
-- Music Information Retrieval (audio analysis)
-- Natural Language Processing (semantic embeddings)
-- Recommender Systems (multi-modal fusion)
-- Human-Computer Interaction (dance technology)
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! This is a research-grade project with high standards:
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Write tests (maintain 67%+ coverage)
-4. Update documentation
-5. Submit Pull Request
-
-### Development Guidelines
-- Follow PEP 8 style guide
-- Use type hints
-- Write comprehensive tests
-- Document complex algorithms
-- Keep functions focused (<50 lines)
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file
-
----
-
-## 🙏 Acknowledgments
-
-- **Ultralytics** - YOLOv8-Pose for modern pose estimation
-- **Sentence-Transformers** - Semantic embeddings
-- **Elasticsearch** - Vector similarity search
-- **Django** - Web framework
-- **Librosa** - Audio analysis
-- **FFmpeg** - Video processing
-
----
-
-## 📞 Support
-
-- **Issues**: Open GitHub issue
-- **Documentation**: Check 15+ guides
-- **Questions**: Review closed issues
-
----
-
-## 🌟 Project Highlights
-
-**Complexity**: 9/10 - Research-grade ML in production  
-**Uniqueness**: 9.5/10 - First multi-person partner dance system  
-**Documentation**: 15+ guides, 3,000+ lines  
-**Test Coverage**: 80%+ with 70+ tests (50+ new in Oct 2025)  
-**Services**: 28 ML/business logic services  
-**Performance**: <50ms recommendations, <10ms retrieval  
-**Robustness**: Handles missing keypoints, partial occlusions, backup/restore  
-**Quality**: Comprehensive test suite validates all critical fixes
-
----
-
-## 🐛 Recent Bug Fixes (October 2025)
-
-### Critical Fixes Applied ✅
-1. **CouplePose Attribute Error** - Fixed incorrect attribute access (`lead` → `lead_pose`, `follow` → `follow_pose`)
-2. **Angle Array Shape Inconsistency** - Implemented consistent 5-angle vectors with NaN padding for missing joints
-3. **Numpy Serialization in Backup** - Added automatic numpy-to-list conversion for JSON backup
-4. **Missing Keypoint Handling** - Robust NaN handling throughout the pose feature extraction pipeline
-
-These fixes ensure the embedding generation pipeline runs smoothly from start to finish.
-
----
-
-**Built with ❤️ for the Bachata dance community**
-
-**This is not just a project - it's a research contribution to dance AI.** 🎯
-
-**Happy Dancing! 💃🕺**

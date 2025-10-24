@@ -292,6 +292,225 @@ class ElasticsearchService:
             logger.error(f"Bulk indexing failed: {e}")
             raise TransportError(f"Failed to bulk index embeddings: {e}")
     
+    def hybrid_search(
+        self,
+        query_embeddings: Optional[Dict[str, np.ndarray]] = None,
+        query_text: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: int = 10,
+        embedding_weights: Optional[Dict[str, float]] = None,
+        text_boost: float = 1.0,
+        max_retries: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Hybrid search combining vector similarity and text search.
+        
+        This method combines:
+        1. kNN vector search on multiple embedding fields (audio, lead, follow, interaction, text)
+        2. Text search on move_label and description fields
+        3. Metadata filtering (difficulty, energy_level, style)
+        
+        Args:
+            query_embeddings: Dict of embedding type to numpy array:
+                - 'audio': 128D audio embedding
+                - 'lead': 512D lead pose embedding
+                - 'follow': 512D follow pose embedding
+                - 'interaction': 256D interaction embedding
+                - 'text': 384D text embedding
+            query_text: Optional text query for move_label search
+            filters: Optional metadata filters (difficulty, energy_level, etc.)
+            top_k: Number of results to return
+            embedding_weights: Optional weights for each embedding type (default: equal weights)
+            text_boost: Boost factor for text search score (default: 1.0)
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            List of results with combined scores, sorted by relevance
+            
+        Raises:
+            TransportError: If search fails after all retries
+        """
+        if not query_embeddings and not query_text:
+            raise ValueError("Must provide either query_embeddings or query_text")
+        
+        # Default embedding weights (equal weights)
+        if embedding_weights is None:
+            embedding_weights = {
+                'audio': 0.2,
+                'lead': 0.2,
+                'follow': 0.2,
+                'interaction': 0.2,
+                'text': 0.2
+            }
+        
+        # Build query
+        query_clauses = []
+        
+        # Add kNN vector searches for each embedding type
+        if query_embeddings:
+            for emb_type, emb_array in query_embeddings.items():
+                if emb_array is not None and len(emb_array) > 0:
+                    field_name = f"{emb_type}_embedding"
+                    weight = embedding_weights.get(emb_type, 0.2)
+                    
+                    # kNN query for this embedding type
+                    # Ensure num_candidates >= k (Elasticsearch requirement)
+                    k_value = top_k * 2
+                    num_candidates_value = max(k_value, min(100, top_k * 10))
+                    
+                    knn_query = {
+                        "field": field_name,
+                        "query_vector": emb_array.tolist() if isinstance(emb_array, np.ndarray) else emb_array,
+                        "k": k_value,  # Get more candidates for better ranking
+                        "num_candidates": num_candidates_value,  # Search space (must be >= k)
+                        "boost": weight
+                    }
+                    
+                    # Add filters to kNN query if provided
+                    if filters:
+                        filter_clauses = []
+                        for key, value in filters.items():
+                            if value is not None:
+                                filter_clauses.append({"term": {key: value}})
+                        if filter_clauses:
+                            knn_query["filter"] = {"bool": {"must": filter_clauses}}
+                    
+                    query_clauses.append({"knn": knn_query})
+        
+        # Add text search if provided
+        if query_text:
+            text_query = {
+                "multi_match": {
+                    "query": query_text,
+                    "fields": ["move_label^2", "difficulty", "energy_level"],  # Boost move_label
+                    "type": "best_fields",
+                    "boost": text_boost
+                }
+            }
+            query_clauses.append({"query": text_query})
+        
+        # Combine queries with should (OR logic, scores are summed)
+        if len(query_clauses) == 1:
+            # Single query type
+            if "knn" in query_clauses[0]:
+                search_body = {"knn": query_clauses[0]["knn"]}
+            else:
+                search_body = {"query": query_clauses[0]["query"]}
+        else:
+            # Multiple query types - use bool should for score combination
+            search_body = {
+                "query": {
+                    "bool": {
+                        "should": [q.get("query") for q in query_clauses if "query" in q]
+                    }
+                }
+            }
+            # Add kNN queries separately (Elasticsearch 8.x syntax)
+            if any("knn" in q for q in query_clauses):
+                search_body["knn"] = [q["knn"] for q in query_clauses if "knn" in q]
+        
+        # Add metadata filters to query if not already in kNN
+        if filters and "knn" not in search_body:
+            filter_clauses = []
+            for key, value in filters.items():
+                if value is not None:
+                    filter_clauses.append({"term": {key: value}})
+            
+            if filter_clauses:
+                if "query" in search_body:
+                    # Add filter to existing query
+                    if "bool" not in search_body["query"]:
+                        search_body["query"] = {"bool": {"must": [search_body["query"]]}}
+                    search_body["query"]["bool"]["filter"] = filter_clauses
+                else:
+                    # Create query with just filters
+                    search_body["query"] = {"bool": {"filter": filter_clauses}}
+        
+        # Retry logic with exponential backoff
+        for attempt in range(max_retries):
+            try:
+                # Execute search
+                response = self.client.search(
+                    index=self.index_name,
+                    body={
+                        **search_body,
+                        "fields": [
+                            "clip_id", "audio_embedding", "lead_embedding", "follow_embedding",
+                            "interaction_embedding", "text_embedding", "move_label", "difficulty",
+                            "energy_level", "lead_follow_roles", "estimated_tempo", "video_path",
+                            "quality_score", "detection_rate", "frame_count", "processing_time", "version"
+                        ],
+                        "_source": False,
+                        "size": top_k
+                    }
+                )
+                
+                # Convert response to list of results
+                results = []
+                for hit in response["hits"]["hits"]:
+                    fields = hit["fields"]
+                    
+                    def get_scalar_field(name):
+                        val = fields.get(name, [None])
+                        return val[0] if isinstance(val, list) and len(val) > 0 else val
+                    
+                    def get_vector_field(name):
+                        return fields.get(name, [])
+                    
+                    result = {
+                        "clip_id": get_scalar_field("clip_id"),
+                        "audio_embedding": np.array(get_vector_field("audio_embedding"), dtype=np.float32),
+                        "lead_embedding": np.array(get_vector_field("lead_embedding"), dtype=np.float32),
+                        "follow_embedding": np.array(get_vector_field("follow_embedding"), dtype=np.float32),
+                        "interaction_embedding": np.array(get_vector_field("interaction_embedding"), dtype=np.float32),
+                        "text_embedding": np.array(get_vector_field("text_embedding"), dtype=np.float32),
+                        
+                        # Metadata
+                        "move_label": get_scalar_field("move_label"),
+                        "difficulty": get_scalar_field("difficulty"),
+                        "energy_level": get_scalar_field("energy_level"),
+                        "lead_follow_roles": get_scalar_field("lead_follow_roles"),
+                        "estimated_tempo": get_scalar_field("estimated_tempo"),
+                        "video_path": get_scalar_field("video_path"),
+                        "quality_score": get_scalar_field("quality_score"),
+                        "detection_rate": get_scalar_field("detection_rate"),
+                        "frame_count": get_scalar_field("frame_count"),
+                        "processing_time": get_scalar_field("processing_time"),
+                        "version": get_scalar_field("version"),
+                        
+                        # Search score
+                        "score": hit["_score"]
+                    }
+                    results.append(result)
+                
+                logger.info(f"Hybrid search returned {len(results)} results")
+                
+                # CRITICAL DEBUG: Log unique video paths from Elasticsearch
+                unique_paths_from_es = set(r["video_path"] for r in results)
+                logger.info("=" * 80)
+                logger.info(f"CRITICAL DEBUG - ELASTICSEARCH RESULTS:")
+                logger.info(f"  Total results: {len(results)}")
+                logger.info(f"  Unique video paths: {len(unique_paths_from_es)}")
+                for i, result in enumerate(results[:10]):
+                    logger.info(f"  [{i}] {result['clip_id']}: {result['video_path']} (ES score: {result['score']:.3f})")
+                logger.info("=" * 80)
+                
+                return results
+                
+            except (ConnectionError, TransportError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"Hybrid search failed (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {wait_time}s... Error: {e}"
+                    )
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Hybrid search failed after {max_retries} attempts: {e}")
+                    raise TransportError(
+                        f"Failed to execute hybrid search after {max_retries} attempts: {e}"
+                    )
+    
     def get_all_embeddings(
         self,
         filters: Optional[Dict[str, Any]] = None,

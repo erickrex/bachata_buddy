@@ -130,21 +130,23 @@ class RecommendationEngine:
     
     def recommend_moves(self, 
                        request: RecommendationRequest,
-                       top_k: int = 10) -> List[RecommendationScore]:
+                       top_k: int = 10,
+                       use_hybrid_search: bool = True) -> List[RecommendationScore]:
         """
         Recommend top-k moves based on multimodal similarity.
         
-        Retrieves all embeddings from Elasticsearch, computes weighted similarity
-        across all 5 modalities, and returns top-k ranked results.
+        Uses hybrid search (vector + text) when available, falls back to
+        retrieving all embeddings and computing similarity in Python.
         
         Args:
             request: Recommendation request with query embeddings and filters
             top_k: Number of top recommendations to return
+            use_hybrid_search: Whether to use Elasticsearch hybrid search (default: True)
             
         Returns:
             List of RecommendationScore objects sorted by overall score (descending)
         """
-        logger.info(f"Generating recommendations with top_k={top_k}")
+        logger.info(f"Generating recommendations with top_k={top_k}, hybrid_search={use_hybrid_search}")
         
         # Build metadata filters
         filters = {}
@@ -157,15 +159,59 @@ class RecommendationEngine:
         if request.lead_follow_roles:
             filters['lead_follow_roles'] = request.lead_follow_roles
         
-        # Retrieve all embeddings from Elasticsearch
-        logger.info(f"Retrieving embeddings from Elasticsearch with filters: {filters}")
-        candidate_embeddings = self.es_service.get_all_embeddings(filters=filters if filters else None)
+        # Use provided weights or defaults
+        weights = request.weights or self.default_weights
         
-        if not candidate_embeddings:
-            logger.warning("No candidate embeddings found in Elasticsearch")
-            return []
+        # Try hybrid search if enabled and we have query embeddings
+        if use_hybrid_search and self._has_query_embeddings(request):
+            try:
+                # Prepare query embeddings dict
+                query_embeddings = {}
+                if request.query_audio_embedding is not None:
+                    query_embeddings['audio'] = request.query_audio_embedding
+                if request.query_text_embedding is not None:
+                    query_embeddings['text'] = request.query_text_embedding
+                if request.query_lead_embedding is not None:
+                    query_embeddings['lead'] = request.query_lead_embedding
+                if request.query_follow_embedding is not None:
+                    query_embeddings['follow'] = request.query_follow_embedding
+                if request.query_interaction_embedding is not None:
+                    query_embeddings['interaction'] = request.query_interaction_embedding
+                
+                # Prepare text query (use move_label if provided)
+                query_text = request.move_label if request.move_label else None
+                
+                # Execute hybrid search
+                logger.info(f"Using hybrid search with {len(query_embeddings)} embedding types")
+                candidate_embeddings = self.es_service.hybrid_search(
+                    query_embeddings=query_embeddings,
+                    query_text=query_text,
+                    filters=filters if filters else None,
+                    top_k=top_k * 2,  # Get more candidates for re-ranking
+                    embedding_weights=weights,
+                    text_boost=1.0
+                )
+                
+                if not candidate_embeddings:
+                    logger.warning("Hybrid search returned no results")
+                    return []
+                
+                logger.info(f"Hybrid search returned {len(candidate_embeddings)} candidates")
+                
+            except Exception as e:
+                logger.warning(f"Hybrid search failed, falling back to get_all_embeddings: {e}")
+                use_hybrid_search = False
         
-        logger.info(f"Retrieved {len(candidate_embeddings)} candidate embeddings")
+        # Fallback: retrieve all embeddings and compute similarity in Python
+        if not use_hybrid_search or not self._has_query_embeddings(request):
+            logger.info(f"Retrieving all embeddings from Elasticsearch with filters: {filters}")
+            candidate_embeddings = self.es_service.get_all_embeddings(filters=filters if filters else None)
+            
+            if not candidate_embeddings:
+                logger.warning("No candidate embeddings found in Elasticsearch")
+                return []
+            
+            logger.info(f"Retrieved {len(candidate_embeddings)} candidate embeddings")
         
         # Filter by quality score if specified
         if request.min_quality_score is not None:
@@ -178,10 +224,16 @@ class RecommendationEngine:
         # Convert to MoveCandidate objects
         move_candidates = [self._embedding_to_candidate(emb) for emb in candidate_embeddings]
         
-        # Use provided weights or defaults
-        weights = request.weights or self.default_weights
+        # CRITICAL DEBUG: Log candidate video paths BEFORE scoring
+        logger.info("=" * 80)
+        logger.info(f"CRITICAL DEBUG - CANDIDATES BEFORE SCORING ({len(move_candidates)} total):")
+        unique_paths_before = set(c.video_path for c in move_candidates)
+        logger.info(f"  Unique video paths: {len(unique_paths_before)}")
+        for i, candidate in enumerate(move_candidates[:10]):
+            logger.info(f"  [{i}] {candidate.clip_id}: {candidate.video_path}")
+        logger.info("=" * 80)
         
-        # Score all candidates
+        # Score all candidates (re-rank with Python-based similarity)
         scores = []
         for candidate in move_candidates:
             score = self._compute_multimodal_similarity(
@@ -204,6 +256,24 @@ class RecommendationEngine:
             )
         
         return top_scores
+    
+    def _has_query_embeddings(self, request: RecommendationRequest) -> bool:
+        """
+        Check if request has at least one query embedding.
+        
+        Args:
+            request: Recommendation request
+            
+        Returns:
+            True if at least one query embedding is provided
+        """
+        return any([
+            request.query_audio_embedding is not None,
+            request.query_text_embedding is not None,
+            request.query_lead_embedding is not None,
+            request.query_follow_embedding is not None,
+            request.query_interaction_embedding is not None
+        ])
     
     def _embedding_to_candidate(self, embedding_doc: Dict[str, Any]) -> MoveCandidate:
         """

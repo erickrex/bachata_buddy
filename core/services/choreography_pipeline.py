@@ -18,13 +18,13 @@ import hashlib
 import pickle
 
 from .music_analyzer import MusicAnalyzer, MusicFeatures
-from .move_analyzer import MoveAnalyzer, MoveAnalysisResult
+from .yolov8_couple_detector import YOLOv8CoupleDetector
+from .pose_embedding_generator import PoseEmbeddingGenerator
 from .recommendation_engine import (
     RecommendationEngine, RecommendationRequest, MoveCandidate, RecommendationScore
 )
 from .video_generator import VideoGenerator, VideoGenerationConfig
 from .annotation_interface import AnnotationInterface
-from .feature_fusion import FeatureFusion, MultiModalEmbedding
 from .youtube_service import YouTubeService
 from core.models.video_models import ChoreographySequence
 
@@ -240,7 +240,6 @@ class ChoreoGenerationPipeline:
         self._recommendation_engine = None
         self._video_generator = None
         self._annotation_interface = None
-        self._feature_fusion = None
         self._youtube_service = None
         
         # Thread pool for parallel processing
@@ -292,20 +291,27 @@ class ChoreoGenerationPipeline:
         return self._music_analyzer
     
     @property
-    def move_analyzer(self) -> MoveAnalyzer:
-        """Lazy-loaded move analyzer with optimizations."""
+    def pose_detector(self) -> YOLOv8CoupleDetector:
+        """Lazy-loaded YOLOv8 pose detector."""
         if self._move_analyzer is None:
-            logger.debug("Initializing optimized MoveAnalyzer")
-            # OPTIMIZATION: Enable optimizations for faster processing
-            enable_optimizations = self.config.quality_mode in ["fast", "balanced"]
+            logger.debug("Initializing YOLOv8 pose detector")
+            # Use lightweight model for faster processing
+            model_name = 'yolov8n-pose.pt' if self.config.quality_mode == "fast" else 'yolov8s-pose.pt'
             
-            self._move_analyzer = MoveAnalyzer(
-                target_fps=self.config.target_fps,
-                min_detection_confidence=self.config.min_detection_confidence,
-                min_tracking_confidence=self.config.min_detection_confidence,
-                enable_optimizations=enable_optimizations
+            self._move_analyzer = YOLOv8CoupleDetector(
+                model_name=model_name,
+                confidence_threshold=self.config.min_detection_confidence,
+                device='cpu'  # Cloud Run uses CPU
             )
         return self._move_analyzer
+    
+    @property
+    def pose_embedding_generator(self) -> PoseEmbeddingGenerator:
+        """Lazy-loaded pose embedding generator."""
+        if not hasattr(self, '_pose_embedding_generator') or self._pose_embedding_generator is None:
+            logger.debug("Initializing PoseEmbeddingGenerator")
+            self._pose_embedding_generator = PoseEmbeddingGenerator()
+        return self._pose_embedding_generator
     
     @property
     def recommendation_engine(self) -> RecommendationEngine:
@@ -359,14 +365,6 @@ class ChoreoGenerationPipeline:
                 data_dir=self.config.annotation_data_dir
             )
         return self._annotation_interface
-    
-    @property
-    def feature_fusion(self) -> FeatureFusion:
-        """Lazy-loaded feature fusion."""
-        if self._feature_fusion is None:
-            logger.debug("Initializing FeatureFusion")
-            self._feature_fusion = FeatureFusion()
-        return self._feature_fusion
     
     @property
     def youtube_service(self) -> YouTubeService:
@@ -427,23 +425,28 @@ class ChoreoGenerationPipeline:
                 return result
             result.music_analysis_time = music_time
             
-            # Step 3: Analyze moves (with parallel processing and caching)
-            move_candidates, moves_time = await self._analyze_moves_parallel(music_features)
-            if not move_candidates:
-                result.error_message = "Move analysis failed"
-                return result
-            result.move_analysis_time = moves_time
-            result.moves_analyzed = len(move_candidates)
-            
-            # Step 4: Generate recommendations (optimized)
-            recommendations, rec_time = await self._generate_recommendations_optimized(
-                music_features, move_candidates, difficulty, energy_level
+            # Step 3: Get recommended moves from Elasticsearch (FAST!)
+            recommendations, rec_time = await self._get_recommended_moves_from_elasticsearch(
+                music_features, difficulty, energy_level, top_k=100  # Request more moves for diversity
             )
             if not recommendations:
-                result.error_message = "Recommendation generation failed"
+                result.error_message = "No matching moves found in database"
                 return result
+            
+            # Log unique video paths for debugging
+            unique_paths = set(rec.move_candidate.video_path for rec in recommendations)
+            logger.info(f"Got {len(recommendations)} recommendations with {len(unique_paths)} unique video paths")
+            
+            # CRITICAL DEBUG: Log all video paths to identify the problem
+            logger.info("=" * 80)
+            logger.info("CRITICAL DEBUG - ALL RECOMMENDATION VIDEO PATHS:")
+            for i, rec in enumerate(recommendations[:10]):  # Log first 10
+                logger.info(f"  [{i}] {rec.move_candidate.clip_id}: {rec.move_candidate.video_path} (score: {rec.overall_score:.3f})")
+            logger.info("=" * 80)
+            
             result.recommendation_time = rec_time
             result.recommendations_generated = len(recommendations)
+            result.moves_analyzed = len(recommendations)
             
             # Step 5: Create sequence for full song
             sequence = await self._create_optimized_sequence(
@@ -563,11 +566,22 @@ class ChoreoGenerationPipeline:
             logger.error(f"Music analysis failed: {e}")
             return None, time.time() - start_time
     
+    # ============================================================================
+    # DEPRECATED METHODS - NO LONGER USED AT RUNTIME
+    # These methods analyzed videos at runtime, which was slow and unnecessary.
+    # Now we query pre-computed embeddings from Elasticsearch instead.
+    # Kept for reference only - can be deleted after verification.
+    # ============================================================================
+    
     async def _analyze_moves_parallel(
         self, 
         music_features: MusicFeatures
     ) -> Tuple[Optional[List[MoveCandidate]], float]:
-        """Analyze moves with parallel processing and caching."""
+        """
+        DEPRECATED: This method analyzed videos at runtime (SLOW!).
+        Now replaced by _get_recommended_moves_from_elasticsearch() which queries
+        pre-computed embeddings from Elasticsearch (FAST!).
+        """
         start_time = time.time()
         
         try:
@@ -630,41 +644,84 @@ class ChoreoGenerationPipeline:
                 if self.cache:
                     cached_result = self.cache.get("move_analysis", cache_key)
                     if cached_result:
-                        analysis_result, multimodal_embedding = cached_result
+                        couple_poses, multimodal_embedding = cached_result
                         self._cache_hits += 1
                     else:
-                        # Perform optimized analysis
-                        analysis_result = self.move_analyzer.analyze_move_clip(str(video_path))
-                        multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
-                            music_features, analysis_result
+                        # Perform YOLOv8 pose detection and embedding generation
+                        couple_poses = self.pose_detector.detect_couple_poses(str(video_path), target_fps=15)
+                        
+                        # Get frame dimensions from video
+                        import cv2
+                        cap = cv2.VideoCapture(str(video_path))
+                        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        cap.release()
+                        
+                        # Generate pose embeddings
+                        pose_embeddings = self.pose_embedding_generator.generate_embeddings(
+                            couple_poses, frame_width, frame_height
                         )
+                        
+                        # Create multimodal embedding structure
+                        multimodal_embedding = type('MultiModalEmbedding', (), {
+                            'audio_embedding': music_features.audio_embedding if hasattr(music_features, 'audio_embedding') else np.zeros(128),
+                            'lead_embedding': pose_embeddings.lead_embedding,
+                            'follow_embedding': pose_embeddings.follow_embedding,
+                            'interaction_embedding': pose_embeddings.interaction_embedding,
+                            'text_embedding': np.zeros(384)  # Placeholder
+                        })()
+                        
                         # Cache the result
-                        self.cache.set("move_analysis", cache_key, (analysis_result, multimodal_embedding))
+                        self.cache.set("move_analysis", cache_key, (couple_poses, multimodal_embedding))
                         self._cache_misses += 1
                 else:
-                    # No caching - perform optimized analysis
-                    analysis_result = self.move_analyzer.analyze_move_clip(str(video_path))
-                    multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
-                        music_features, analysis_result
+                    # No caching - perform YOLOv8 pose detection and embedding generation
+                    couple_poses = self.pose_detector.detect_couple_poses(str(video_path), target_fps=15)
+                    
+                    # Get frame dimensions from video
+                    import cv2
+                    cap = cv2.VideoCapture(str(video_path))
+                    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    cap.release()
+                    
+                    # Generate pose embeddings
+                    pose_embeddings = self.pose_embedding_generator.generate_embeddings(
+                        couple_poses, frame_width, frame_height
                     )
+                    
+                    # Create multimodal embedding structure
+                    multimodal_embedding = type('MultiModalEmbedding', (), {
+                        'audio_embedding': music_features.audio_embedding if hasattr(music_features, 'audio_embedding') else np.zeros(128),
+                        'lead_embedding': pose_embeddings.lead_embedding,
+                        'follow_embedding': pose_embeddings.follow_embedding,
+                        'interaction_embedding': pose_embeddings.interaction_embedding,
+                        'text_embedding': np.zeros(384)  # Placeholder
+                    })()
+                    
                     self._cache_misses += 1
                 
                 # Create candidate with individual embeddings
+                # Calculate quality metrics from couple_poses
+                total_frames = len(couple_poses)
+                frames_with_both = sum(1 for cp in couple_poses if cp.has_both_dancers)
+                detection_rate = frames_with_both / total_frames if total_frames > 0 else 0.0
+                
                 candidate = MoveCandidate(
                     clip_id=clip.clip_id,
                     video_path=str(video_path),
                     move_label=clip.move_label,
                     audio_embedding=multimodal_embedding.audio_embedding,
-                    lead_embedding=multimodal_embedding.lead_embedding if hasattr(multimodal_embedding, 'lead_embedding') else np.zeros(512),
-                    follow_embedding=multimodal_embedding.follow_embedding if hasattr(multimodal_embedding, 'follow_embedding') else np.zeros(512),
-                    interaction_embedding=multimodal_embedding.interaction_embedding if hasattr(multimodal_embedding, 'interaction_embedding') else np.zeros(256),
-                    text_embedding=multimodal_embedding.text_embedding if hasattr(multimodal_embedding, 'text_embedding') else np.zeros(384),
+                    lead_embedding=multimodal_embedding.lead_embedding,
+                    follow_embedding=multimodal_embedding.follow_embedding,
+                    interaction_embedding=multimodal_embedding.interaction_embedding,
+                    text_embedding=multimodal_embedding.text_embedding,
                     energy_level=clip.energy_level,
                     difficulty=clip.difficulty,
                     estimated_tempo=clip.estimated_tempo,
                     lead_follow_roles=clip.lead_follow_roles,
-                    quality_score=analysis_result.quality_score if hasattr(analysis_result, 'quality_score') else 0.0,
-                    detection_rate=analysis_result.detection_rate if hasattr(analysis_result, 'detection_rate') else 0.0
+                    quality_score=detection_rate,  # Use detection rate as quality score
+                    detection_rate=detection_rate
                 )
                 
                 return candidate
@@ -717,37 +774,80 @@ class ChoreoGenerationPipeline:
                 if self.cache:
                     cached_result = self.cache.get("move_analysis", cache_key)
                     if cached_result:
-                        analysis_result, multimodal_embedding = cached_result
+                        couple_poses, multimodal_embedding = cached_result
                         self._cache_hits += 1
                     else:
-                        analysis_result = self.move_analyzer.analyze_move_clip(str(video_path))
-                        multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
-                            music_features, analysis_result
+                        couple_poses = self.pose_detector.detect_couple_poses(str(video_path), target_fps=15)
+                        
+                        # Get frame dimensions from video
+                        import cv2
+                        cap = cv2.VideoCapture(str(video_path))
+                        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        cap.release()
+                        
+                        # Generate pose embeddings
+                        pose_embeddings = self.pose_embedding_generator.generate_embeddings(
+                            couple_poses, frame_width, frame_height
                         )
-                        self.cache.set("move_analysis", cache_key, (analysis_result, multimodal_embedding))
+                        
+                        # Create multimodal embedding structure
+                        multimodal_embedding = type('MultiModalEmbedding', (), {
+                            'audio_embedding': music_features.audio_embedding if hasattr(music_features, 'audio_embedding') else np.zeros(128),
+                            'lead_embedding': pose_embeddings.lead_embedding,
+                            'follow_embedding': pose_embeddings.follow_embedding,
+                            'interaction_embedding': pose_embeddings.interaction_embedding,
+                            'text_embedding': np.zeros(384)  # Placeholder
+                        })()
+                        
+                        self.cache.set("move_analysis", cache_key, (couple_poses, multimodal_embedding))
                         self._cache_misses += 1
                 else:
-                    analysis_result = self.move_analyzer.analyze_move_clip(str(video_path))
-                    multimodal_embedding = self.feature_fusion.create_multimodal_embedding(
-                        music_features, analysis_result
+                    couple_poses = self.pose_detector.detect_couple_poses(str(video_path), target_fps=15)
+                    
+                    # Get frame dimensions from video
+                    import cv2
+                    cap = cv2.VideoCapture(str(video_path))
+                    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    cap.release()
+                    
+                    # Generate pose embeddings
+                    pose_embeddings = self.pose_embedding_generator.generate_embeddings(
+                        couple_poses, frame_width, frame_height
                     )
+                    
+                    # Create multimodal embedding structure
+                    multimodal_embedding = type('MultiModalEmbedding', (), {
+                        'audio_embedding': music_features.audio_embedding if hasattr(music_features, 'audio_embedding') else np.zeros(128),
+                        'lead_embedding': pose_embeddings.lead_embedding,
+                        'follow_embedding': pose_embeddings.follow_embedding,
+                        'interaction_embedding': pose_embeddings.interaction_embedding,
+                        'text_embedding': np.zeros(384)  # Placeholder
+                    })()
+                    
                     self._cache_misses += 1
+                
+                # Calculate quality metrics from couple_poses
+                total_frames = len(couple_poses)
+                frames_with_both = sum(1 for cp in couple_poses if cp.has_both_dancers)
+                detection_rate = frames_with_both / total_frames if total_frames > 0 else 0.0
                 
                 candidate = MoveCandidate(
                     clip_id=clip.clip_id,
                     video_path=str(video_path),
                     move_label=clip.move_label,
                     audio_embedding=multimodal_embedding.audio_embedding,
-                    lead_embedding=multimodal_embedding.lead_embedding if hasattr(multimodal_embedding, 'lead_embedding') else np.zeros(512),
-                    follow_embedding=multimodal_embedding.follow_embedding if hasattr(multimodal_embedding, 'follow_embedding') else np.zeros(512),
-                    interaction_embedding=multimodal_embedding.interaction_embedding if hasattr(multimodal_embedding, 'interaction_embedding') else np.zeros(256),
-                    text_embedding=multimodal_embedding.text_embedding if hasattr(multimodal_embedding, 'text_embedding') else np.zeros(384),
+                    lead_embedding=multimodal_embedding.lead_embedding,
+                    follow_embedding=multimodal_embedding.follow_embedding,
+                    interaction_embedding=multimodal_embedding.interaction_embedding,
+                    text_embedding=multimodal_embedding.text_embedding,
                     energy_level=clip.energy_level,
                     difficulty=clip.difficulty,
                     estimated_tempo=clip.estimated_tempo,
                     lead_follow_roles=clip.lead_follow_roles,
-                    quality_score=analysis_result.quality_score if hasattr(analysis_result, 'quality_score') else 0.0,
-                    detection_rate=analysis_result.detection_rate if hasattr(analysis_result, 'detection_rate') else 0.0
+                    quality_score=detection_rate,  # Use detection rate as quality score
+                    detection_rate=detection_rate
                 )
                 
                 move_candidates.append(candidate)
@@ -790,36 +890,102 @@ class ChoreoGenerationPipeline:
         
         return selected[:max_count]
     
-    async def _generate_recommendations_optimized(
+    async def _get_recommended_moves_from_elasticsearch(
         self,
         music_features: MusicFeatures,
-        move_candidates: List[MoveCandidate],
         difficulty: str,
-        energy_level: Optional[str]
+        energy_level: Optional[str],
+        top_k: int = 50
     ) -> Tuple[Optional[List[RecommendationScore]], float]:
-        """Generate recommendations with optimized scoring."""
+        """
+        Get recommended moves directly from Elasticsearch using pre-computed embeddings.
+        
+        This is the CORRECT approach - query Elasticsearch with the user's music features
+        to find similar pre-computed move embeddings.
+        
+        Args:
+            music_features: Analyzed features from user's song
+            difficulty: Target difficulty level
+            energy_level: Target energy level
+            top_k: Number of moves to retrieve
+            
+        Returns:
+            Tuple of (recommendations, time_taken)
+        """
         start_time = time.time()
         
         try:
-            # Use first candidate's audio embedding as query reference
-            # (since we're matching music to moves)
-            query_audio = move_candidates[0].audio_embedding if move_candidates else None
+            # Convert music audio_embedding to numpy array
+            audio_embedding = np.array(music_features.audio_embedding, dtype=np.float32)
             
+            logger.info(f"Querying Elasticsearch for moves matching user's music (audio_embedding: {audio_embedding.shape})")
+            
+            # Create recommendation request with user's music features
             request = RecommendationRequest(
-                query_audio_embedding=query_audio,
+                query_audio_embedding=audio_embedding,
                 difficulty=difficulty,
-                energy_level=energy_level
+                energy_level=energy_level,
+                min_quality_score=0.5  # Only get high-quality moves
             )
             
+            # Query Elasticsearch - this retrieves pre-computed embeddings
             recommendations = self.recommendation_engine.recommend_moves(
-                request, top_k=len(move_candidates)
+                request, 
+                top_k=top_k,
+                use_hybrid_search=True  # Use Elasticsearch hybrid search for best results
             )
             
-            logger.info(f"Generated {len(recommendations)} recommendations")
+            # FALLBACK STRATEGY: If too few recommendations, relax filters progressively
+            if len(recommendations) < 10:
+                logger.warning(f"Only {len(recommendations)} recommendations found with difficulty={difficulty}, energy_level={energy_level}")
+                logger.warning("Applying fallback strategy: removing energy_level filter...")
+                
+                # Try again without energy_level filter
+                fallback_request = RecommendationRequest(
+                    query_audio_embedding=audio_embedding,
+                    difficulty=difficulty,
+                    energy_level=None,  # Remove energy filter
+                    min_quality_score=0.5
+                )
+                recommendations = self.recommendation_engine.recommend_moves(
+                    fallback_request,
+                    top_k=top_k,
+                    use_hybrid_search=True
+                )
+                logger.info(f"After removing energy filter: {len(recommendations)} recommendations")
+            
+            if len(recommendations) < 10:
+                logger.warning(f"Still only {len(recommendations)} recommendations with difficulty={difficulty}")
+                logger.warning("Applying fallback strategy: removing difficulty filter...")
+                
+                # Try again without difficulty filter
+                fallback_request = RecommendationRequest(
+                    query_audio_embedding=audio_embedding,
+                    difficulty=None,  # Remove difficulty filter
+                    energy_level=None,
+                    min_quality_score=0.5
+                )
+                recommendations = self.recommendation_engine.recommend_moves(
+                    fallback_request,
+                    top_k=top_k,
+                    use_hybrid_search=True
+                )
+                logger.info(f"After removing all filters: {len(recommendations)} recommendations")
+            
+            if not recommendations:
+                logger.error("CRITICAL: No recommendations found even after removing all filters!")
+                logger.error("  This indicates a problem with Elasticsearch or embeddings.")
+                return None, time.time() - start_time
+            
+            if len(recommendations) < 5:
+                logger.warning(f"WARNING: Only {len(recommendations)} recommendations found after fallback!")
+                logger.warning("  This may result in limited variety in the choreography.")
+            
+            logger.info(f"Retrieved {len(recommendations)} moves from Elasticsearch in {time.time() - start_time:.2f}s")
             return recommendations, time.time() - start_time
             
         except Exception as e:
-            logger.error(f"Recommendation generation failed: {e}")
+            logger.error(f"Elasticsearch query failed: {e}", exc_info=True)
             return None, time.time() - start_time
     
     async def _create_optimized_sequence(
@@ -863,9 +1029,26 @@ class ChoreoGenerationPipeline:
         
         logger.info(f"Generating sequence for {target_duration:.1f}s song - need ~{num_moves_needed} moves")
         
+        # First, ensure we have diverse video paths by deduplicating
+        unique_videos = {}
+        for rec in recommendations:
+            video_path = rec.move_candidate.video_path
+            if video_path not in unique_videos:
+                unique_videos[video_path] = rec
+        
+        unique_recommendations = list(unique_videos.values())
+        logger.info(f"Using {len(unique_recommendations)} unique video clips from {len(recommendations)} recommendations")
+        
+        # CRITICAL DEBUG: Log unique video paths
+        logger.info("=" * 80)
+        logger.info("CRITICAL DEBUG - UNIQUE VIDEO PATHS AFTER DEDUPLICATION:")
+        for i, rec in enumerate(unique_recommendations[:10]):
+            logger.info(f"  [{i}] {rec.move_candidate.clip_id}: {rec.move_candidate.video_path}")
+        logger.info("=" * 80)
+        
         # Group by move type for diversity
         move_groups = {}
-        for rec in recommendations:
+        for rec in unique_recommendations:
             move_type = rec.move_candidate.move_label
             if move_type not in move_groups:
                 move_groups[move_type] = []
@@ -876,6 +1059,8 @@ class ChoreoGenerationPipeline:
         # Cycle through move types to create variety throughout the song
         move_types = list(move_groups.keys())
         type_index = 0
+        
+        logger.info(f"Move groups: {len(move_groups)} types - {list(move_groups.keys())}")
         
         while len(selected) < num_moves_needed:
             # Get next move type in rotation
@@ -889,18 +1074,29 @@ class ChoreoGenerationPipeline:
             
             if available_moves:
                 selected.append(available_moves[0])
+                logger.debug(f"  Selected {current_type}: {available_moves[0].move_candidate.video_path}")
             else:
                 # If no more moves of this type, get best remaining overall
-                remaining_recs = [rec for rec in recommendations if rec not in selected]
+                remaining_recs = [rec for rec in unique_recommendations if rec not in selected]
                 if remaining_recs:
                     selected.append(remaining_recs[0])
+                    logger.debug(f"  Selected remaining: {remaining_recs[0].move_candidate.video_path}")
                 else:
-                    # If we've used all unique moves, start repeating the best ones
-                    selected.append(recommendations[len(selected) % len(recommendations)])
+                    # If we've used all unique moves, start repeating them in order
+                    repeat_move = unique_recommendations[len(selected) % len(unique_recommendations)]
+                    selected.append(repeat_move)
+                    logger.debug(f"  Repeating move: {repeat_move.move_candidate.video_path}")
             
             type_index += 1
         
         logger.info(f"Selected {len(selected)} moves for full song choreography")
+        
+        # CRITICAL DEBUG: Show selected video paths
+        selected_paths = [rec.move_candidate.video_path for rec in selected]
+        unique_selected = set(selected_paths)
+        logger.info(f"  Unique video paths in selection: {len(unique_selected)}")
+        logger.info(f"  First 10 selected paths: {selected_paths[:10]}")
+        
         return selected
     
     def _select_sequence_moves(
@@ -957,10 +1153,18 @@ class ChoreoGenerationPipeline:
                 logger.warning(f"Could not get duration for {video_path}: {e}")
                 clip_durations[video_path] = 8.0  # Default fallback
         
+        # CRITICAL DEBUG: Log input video paths
+        logger.info(f"Creating sequence from {len(video_paths)} video paths")
+        logger.info(f"  Unique paths: {len(set(video_paths))}")
+        logger.info(f"  First 10 paths: {video_paths[:10]}")
+        
         # Keep adding moves until we reach the target duration
         while current_time < target_duration:
             # Cycle through available moves
             video_path = video_paths[move_index % len(video_paths)]
+            
+            if move_index < 10:  # Log first 10 selections
+                logger.debug(f"  Move {move_index}: using {video_path}")
             
             # Get the actual clip duration
             clip_duration = clip_durations.get(video_path, 8.0)

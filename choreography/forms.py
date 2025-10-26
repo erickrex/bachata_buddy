@@ -8,12 +8,6 @@ logger = logging.getLogger(__name__)
 class ChoreographyGenerationForm(forms.Form):
     """Form for choreography generation with song selection and difficulty"""
     
-    # Song choices will be populated dynamically
-    SONG_CHOICES = [
-        ('', 'Choose a song...'),
-        ('new_song', 'New song (YouTube URL)'),
-    ]
-    
     @staticmethod
     def get_song_choices():
         """Dynamically load available songs from storage"""
@@ -53,7 +47,6 @@ class ChoreographyGenerationForm(forms.Form):
                 ('Veneno.mp3', 'Veneno'),
             ])
         
-        choices.append(('new_song', 'New song (YouTube URL)'))
         return choices
     
     DIFFICULTY_CHOICES = [
@@ -75,16 +68,6 @@ class ChoreographyGenerationForm(forms.Form):
         # Dynamically load song choices
         self.fields['song_selection'].choices = self.get_song_choices()
     
-    youtube_url = forms.URLField(
-        required=False,
-        widget=forms.URLInput(attrs={
-            'class': 'w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all',
-            'x-model': 'youtubeUrl',
-            'x-show': "selectedSong === 'new_song'",
-            'placeholder': 'Enter YouTube URL...',
-        })
-    )
-    
     difficulty = forms.ChoiceField(
         choices=DIFFICULTY_CHOICES,
         initial='intermediate',
@@ -96,16 +79,8 @@ class ChoreographyGenerationForm(forms.Form):
     )
     
     def clean(self):
-        """Validate that youtube_url is provided when song_selection is 'new_song'"""
+        """Validate form data"""
         cleaned_data = super().clean()
-        song_selection = cleaned_data.get('song_selection')
-        youtube_url = cleaned_data.get('youtube_url')
-        
-        if song_selection == 'new_song' and not youtube_url:
-            raise forms.ValidationError(
-                'YouTube URL is required when selecting "New song (YouTube URL)"'
-            )
-        
         return cleaned_data
 
 

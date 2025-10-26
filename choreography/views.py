@@ -290,33 +290,27 @@ def create_choreography(request):
         # Get form data
         cleaned_data = form.cleaned_data
         song_selection = cleaned_data.get('song_selection')
-        youtube_url = cleaned_data.get('youtube_url')
         difficulty = cleaned_data.get('difficulty')
         
-        logger.info(f"[Legacy Template] Task {task_id} parameters: song={song_selection}, youtube={youtube_url}, difficulty={difficulty}")
+        logger.info(f"[Legacy Template] Task {task_id} parameters: song={song_selection}, difficulty={difficulty}")
         
         # Get auto_save preference (default True)
         auto_save = request.POST.get('auto_save', 'true').lower() in ('true', '1', 'yes', 'on')
         logger.info(f"[Legacy Template] Task {task_id} auto_save={auto_save}")
         
-        # Determine audio input
-        if song_selection == 'new_song':
-            audio_input = youtube_url
-            logger.info(f"[Legacy Template] Task {task_id} using YouTube URL: {youtube_url}")
-        else:
-            # Convert song filename to local path using audio storage service
-            from core.services.audio_storage_service import AudioStorageService
-            try:
-                logger.info(f"[Legacy Template] Task {task_id} loading song from storage: {song_selection}")
-                audio_storage = AudioStorageService()
-                audio_input = audio_storage.get_local_path(song_selection)
-                logger.info(f"[Legacy Template] Task {task_id} resolved audio path: {audio_input}")
-            except FileNotFoundError as e:
-                logger.error(f"[Legacy Template] Song not found for task {task_id}: {song_selection} - {e}")
-                return JsonResponse({
-                    'error': f'Song not found: {song_selection}. Please upload songs to cloud storage.',
-                    'details': str(e)
-                }, status=404)
+        # Convert song filename to local path using audio storage service
+        from core.services.audio_storage_service import AudioStorageService
+        try:
+            logger.info(f"[Legacy Template] Task {task_id} loading song from storage: {song_selection}")
+            audio_storage = AudioStorageService()
+            audio_input = audio_storage.get_local_path(song_selection)
+            logger.info(f"[Legacy Template] Task {task_id} resolved audio path: {audio_input}")
+        except FileNotFoundError as e:
+            logger.error(f"[Legacy Template] Song not found for task {task_id}: {song_selection} - {e}")
+            return JsonResponse({
+                'error': f'Song not found: {song_selection}. Please upload songs to cloud storage.',
+                'details': str(e)
+            }, status=404)
         
         # TEMPORARY FIX: Process synchronously instead of background thread
         # Background threads don't work reliably in Cloud Run's stateless environment
@@ -875,13 +869,54 @@ def generate_choreography_with_ai_explanations(
         # Extract filename from path
         video_filename = Path(result.output_path).name
         
+        # Auto-save to collection
+        saved_choreography_id = None
+        auto_saved = False
+        
+        try:
+            from django.contrib.auth import get_user_model
+            from choreography.models import SavedChoreography
+            
+            User = get_user_model()
+            user = User.objects.get(id=user_id)
+            
+            # Auto-save the choreography
+            choreography = SavedChoreography.objects.create(
+                user=user,
+                title=f'AI Choreography: {original_query[:50]}',
+                video_path=result.output_path,
+                difficulty=difficulty,
+                duration=result.sequence_duration or 0,
+                music_info={
+                    'source': audio_input,
+                    'difficulty': difficulty,
+                    'energy_level': energy_level,
+                    'style': parameters.style,
+                    'tempo': parameters.tempo
+                },
+                generation_parameters={
+                    'difficulty': difficulty,
+                    'energy_level': energy_level,
+                    'style': parameters.style,
+                    'tempo': parameters.tempo,
+                    'original_query': original_query,
+                    'task_id': task_id
+                }
+            )
+            saved_choreography_id = str(choreography.id)
+            auto_saved = True
+            logger.info(f"[AI Generation] Auto-saved choreography {saved_choreography_id} for user {user_id}")
+        except Exception as save_error:
+            logger.error(f"[AI Generation] Auto-save failed for task {task_id}: {save_error}", exc_info=True)
+            # Don't fail the entire task if auto-save fails
+        
         # Complete
         update_task(
             task_id,
             status='completed',
             progress=100,
             stage='completed',
-            message='AI choreography generated successfully!',
+            message='AI choreography generated successfully!' + (' (Auto-saved to collection)' if auto_saved else ''),
             result={
                 'video_path': result.output_path,
                 'video_filename': video_filename,
@@ -891,11 +926,13 @@ def generate_choreography_with_ai_explanations(
                 'metadata_path': result.metadata_path,
                 'explanations': explanations,
                 'parameters': parameters.to_dict(),
-                'original_query': original_query
+                'original_query': original_query,
+                'saved_choreography_id': saved_choreography_id,
+                'auto_saved': auto_saved
             }
         )
         
-        logger.info(f"AI choreography task {task_id} completed successfully with {len(explanations)} explanations")
+        logger.info(f"[AI Generation] Task {task_id} completed successfully with {len(explanations)} explanations (auto_saved={auto_saved})")
         
     except Exception as e:
         logger.error(f"AI choreography generation failed for task {task_id}: {e}", exc_info=True)
@@ -1053,97 +1090,6 @@ def cancel_task(request, task_id):
 
 @login_required
 @require_http_methods(["POST"])
-def validate_youtube_url(request):
-    """
-    Validate a YouTube URL without starting generation.
-    
-    FastAPI parity: POST /api/validate/youtube
-    Returns video info, duration, availability status.
-    """
-    try:
-        data = json.loads(request.body)
-        url = data.get('url', '').strip()
-        
-        if not url:
-            return JsonResponse({
-                'valid': False,
-                'message': 'URL is required',
-                'error_type': 'missing_url'
-            }, status=400)
-        
-        # Basic YouTube URL validation
-        import re
-        youtube_regex = r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/'
-        if not re.match(youtube_regex, url):
-            return JsonResponse({
-                'valid': False,
-                'message': 'Invalid YouTube URL format',
-                'error_type': 'invalid_format',
-                'details': {}
-            })
-        
-        # Try to extract video ID
-        video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
-        if not video_id_match:
-            return JsonResponse({
-                'valid': False,
-                'message': 'Could not extract video ID from URL',
-                'error_type': 'invalid_video_id',
-                'details': {}
-            })
-        
-        video_id = video_id_match.group(1)
-        
-        # Try to get video info using yt-dlp
-        try:
-            import yt_dlp
-            
-            ydl_opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'extract_flat': True
-            }
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                
-                return JsonResponse({
-                    'valid': True,
-                    'message': 'Valid YouTube URL',
-                    'details': {
-                        'video_id': video_id,
-                        'title': info.get('title', 'Unknown'),
-                        'duration': info.get('duration', 0),
-                        'uploader': info.get('uploader', 'Unknown'),
-                        'view_count': info.get('view_count', 0)
-                    }
-                })
-                
-        except Exception as yt_error:
-            return JsonResponse({
-                'valid': False,
-                'message': f'Could not access video: {str(yt_error)}',
-                'error_type': 'access_error',
-                'details': {
-                    'video_id': video_id
-                }
-            })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'valid': False,
-            'message': 'Invalid JSON',
-            'error_type': 'invalid_json'
-        }, status=400)
-    except Exception as e:
-        logger.error(f"YouTube validation error: {e}", exc_info=True)
-        return JsonResponse({
-            'valid': False,
-            'message': 'Error validating YouTube URL',
-            'error_type': 'server_error'
-        }, status=500)
-
-
 def task_progress(request):
     """
     Get progress for the most recent active task (for HTMX polling).

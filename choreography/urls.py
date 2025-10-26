@@ -25,7 +25,4 @@ urlpatterns = [
     path('tasks/', views.list_tasks, name='list_tasks'),
     path('task/<str:task_id>/cancel/', views.cancel_task, name='cancel_task'),
     path('task/progress/', views.task_progress, name='task_progress'),  # HTMX polling endpoint
-    
-    # YouTube validation endpoint (FastAPI parity)
-    path('validate/youtube/', views.validate_youtube_url, name='validate_youtube'),
 ]

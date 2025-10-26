@@ -320,11 +320,19 @@ bachata_buddy/
 - **Robust Processing**: Handles missing keypoints with NaN handling
 
 ### Production Infrastructure ✅
-- **Elasticsearch 9.1**: Vector similarity search
+- **Elasticsearch 9.1**: Vector similarity search (Serverless compatible)
+- **Google Cloud Deployment**: Compute Engine with local storage optimization
 - **Quality Validation**: NaN/Inf detection, dimension checks
 - **Backup/Restore**: Full embedding backup with numpy serialization support
 - **Comprehensive Testing**: 67%+ coverage, unified structure
 - **Extensive Documentation**: 15+ guides (3,000+ lines)
+
+### Video Generation Fixes (October 2025) ✅
+- **GCS Path Resolution**: Fixed 404 errors by stripping `data/` prefix from blob names
+- **Local Storage Optimization**: Switched to local disk for 10x faster video access
+- **Song Filtering**: Removed macOS metadata files (`._*`) from song dropdown
+- **AI Template Auto-Save**: Videos from describe-choreo now save to collections
+- **Performance**: 40-50 second generation time, 51MB output videos (1280x720, 24fps)
 
 ---
 
@@ -528,9 +536,38 @@ uv run pytest tests/ -m "not slow" -v
 
 ---
 
-## 🚀 Deployment to Google Cloud Run
+## 🚀 Deployment Options
 
-Bachata Buddy is production-ready and can be deployed to Google Cloud Run in minutes. The Docker container includes all required system dependencies (ffmpeg, libsndfile) and has been tested for Cloud Run compatibility.
+Bachata Buddy supports two production deployment options:
+
+### Option 1: Google Compute Engine (Recommended) ✅
+
+**Currently deployed and tested** - Optimized for video generation workloads.
+
+**Advantages:**
+- Local storage for fast video access (no GCS download latency)
+- Persistent disk for training videos and songs
+- Better performance for FFmpeg video processing
+- Lower costs for video-heavy workloads
+- Full control over system resources
+
+**Quick Deploy:**
+```bash
+# See scripts/deploy_to_compute_engine.sh for automated deployment
+./scripts/deploy_to_compute_engine.sh
+```
+
+**Current Production Setup:**
+- **Instance:** e2-medium (2 vCPU, 4GB RAM)
+- **Storage:** Local disk (training videos: 81MB, songs: 78MB)
+- **Performance:** 40-50 second video generation
+- **Status:** ✅ Fully operational
+
+See **[COMPUTE_ENGINE_DEPLOYMENT.md](COMPUTE_ENGINE_DEPLOYMENT.md)** for detailed instructions.
+
+### Option 2: Google Cloud Run (Serverless)
+
+Bachata Buddy can also be deployed to Google Cloud Run for serverless scaling. The Docker container includes all required system dependencies (ffmpeg, libsndfile) and has been tested for Cloud Run compatibility.
 
 ### Test Docker Build Locally (Recommended)
 
@@ -605,11 +642,17 @@ See **[SECRETS_MANAGEMENT_GUIDE.md](SECRETS_MANAGEMENT_GUIDE.md)** for detailed 
 
 ### Video Storage
 
-Videos are automatically stored in **Google Cloud Storage** in production:
+Videos are stored based on deployment environment:
 - **Local dev:** Videos saved to `data/` directory
-- **Cloud Run:** Videos saved to GCS bucket
-- **Cost:** ~$0.02/GB/month
-- **Setup:** See [VIDEO_STORAGE_GUIDE.md](VIDEO_STORAGE_GUIDE.md)
+- **Compute Engine:** Videos saved to local disk (fast, no GCS costs)
+- **Cloud Run:** Videos saved to GCS bucket (~$0.02/GB/month)
+- **Setup:** Automatic based on `ENVIRONMENT` variable
+
+**Current Production (Compute Engine):**
+- Training videos: `/opt/bachata-buddy/data/training_videos/` (81MB)
+- Songs: `/opt/bachata-buddy/data/songs/` (78MB)
+- Generated videos: `/opt/bachata-buddy/data/output/user_<id>/`
+- No GCS downloads needed - instant access
 
 ### System Dependencies in Production
 
@@ -621,15 +664,19 @@ The Dockerfile automatically installs all required system dependencies:
 
 **Note:** portaudio is NOT needed (we only do offline audio analysis, no real-time streaming).
 
-### Detailed Deployment Guide
+### Detailed Deployment Guides
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for:
-- Step-by-step deployment instructions
-- Secret Manager setup
-- Cloud SQL configuration
-- Monitoring and logging
-- Troubleshooting tips
-- CI/CD with Cloud Build
+**Compute Engine (Recommended):**
+- [COMPUTE_ENGINE_DEPLOYMENT.md](COMPUTE_ENGINE_DEPLOYMENT.md) - Full setup guide
+- [VIDEO_GENERATION_FIXES.md](VIDEO_GENERATION_FIXES.md) - Recent optimizations
+
+**Cloud Run (Serverless):**
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Step-by-step Cloud Run instructions
+- [SECRETS_MANAGEMENT_GUIDE.md](SECRETS_MANAGEMENT_GUIDE.md) - Secret Manager setup
+
+**Common Resources:**
+- [VIDEO_STORAGE_GUIDE.md](VIDEO_STORAGE_GUIDE.md) - Storage configuration
+- [ELASTICSEARCH_CLOUD_SETUP.md](ELASTICSEARCH_CLOUD_SETUP.md) - Elasticsearch Serverless
 
 ### Docker Build Verification
 
@@ -638,6 +685,15 @@ The included `scripts/test_docker_build.sh` script validates:
 - ✅ All system dependencies are installed (ffmpeg, libsndfile)
 - ✅ Python libraries can import (librosa, cv2, yt_dlp, ultralytics)
 - ✅ Health check endpoint responds
-- ✅ Container is ready for Cloud Run deployment
+- ✅ Container is ready for deployment
+
+### Recent Production Fixes (October 2025)
+
+See **[VIDEO_GENERATION_FIXES.md](VIDEO_GENERATION_FIXES.md)** for details on:
+- GCS path resolution fixes
+- Local storage optimization
+- Song dropdown filtering
+- AI template auto-save implementation
+- Performance improvements (40-50s generation time)
 
 

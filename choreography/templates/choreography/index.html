@@ -41,17 +41,6 @@
                 {% endif %}
             </div>
 
-            <!-- YouTube URL (conditional) -->
-            <div class="mb-6" x-show="selectedSong === 'new_song'" x-cloak>
-                <label for="{{ form.youtube_url.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
-                    🔗 YouTube URL
-                </label>
-                {{ form.youtube_url }}
-                {% if form.youtube_url.errors %}
-                <p class="mt-2 text-sm text-red-600">{{ form.youtube_url.errors.0 }}</p>
-                {% endif %}
-            </div>
-
             <!-- Difficulty Selection -->
             <div class="mb-8">
                 <label for="{{ form.difficulty.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">

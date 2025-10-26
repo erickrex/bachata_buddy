@@ -7,7 +7,6 @@ function choreographyApp() {
     return {
         // Form state
         selectedSong: '',
-        youtubeUrl: '',
         difficulty: 'intermediate',
         
         // Generation state
@@ -97,32 +96,7 @@ function choreographyApp() {
             
             if (!isAuthenticated) return false;
             
-            if (this.selectedSong === 'new_song') {
-                return this.youtubeUrl.trim() && this.isValidYouTubeUrl(this.youtubeUrl);
-            }
             return this.selectedSong !== '' && this.selectedSong !== null;
-        },
-        
-        isValidYouTubeUrl(url) {
-            return window.ValidationUtils?.isValidYouTubeUrl(url) || 
-                   /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/.test(url);
-        },
-        
-        toggleYouTubeInput() {
-            if (this.selectedSong !== 'new_song') this.youtubeUrl = '';
-        },
-        
-        updateHiddenField() {
-            const field = document.querySelector('#hidden_youtube_url');
-            if (field) field.value = this.getYoutubeUrl();
-        },
-        
-        prepareFormSubmission() {
-            this.updateHiddenField();
-        },
-        
-        getYoutubeUrl() {
-            return this.selectedSong === 'new_song' ? this.youtubeUrl : this.selectedSong;
         },
         
         getStageEmoji() {
@@ -462,7 +436,7 @@ function choreographyApp() {
         
         resetForm() {
             Object.assign(this, {
-                selectedSong: '', youtubeUrl: '', difficulty: 'intermediate',
+                selectedSong: '', difficulty: 'intermediate',
                 isGenerating: false, result: null, error: false, progress: 0,
                 progressMessage: 'Starting...', currentStage: 'initializing',
                 currentTaskId: null, isSaving: false, isCheckingProgress: false,

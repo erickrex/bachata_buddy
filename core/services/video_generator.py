@@ -7,6 +7,7 @@ import subprocess
 import os
 import time
 import logging
+import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 import json
@@ -43,6 +44,21 @@ class VideoGenerator:
         self.config = config or VideoGenerationConfig(output_path="data/temp/output.mp4")
         self._ensure_temp_directory()
         self._check_ffmpeg_availability()
+        
+        # Initialize GCS support if in cloud environment
+        self.use_gcs = os.environ.get('ENVIRONMENT') == 'cloud' and os.environ.get('GCS_BUCKET_NAME')
+        if self.use_gcs:
+            self.gcs_bucket_name = os.environ.get('GCS_BUCKET_NAME')
+            try:
+                from google.cloud import storage
+                self.storage_client = storage.Client()
+                self.bucket = self.storage_client.bucket(self.gcs_bucket_name)
+                logger.info(f"GCS support enabled: gs://{self.gcs_bucket_name}/")
+            except Exception as e:
+                logger.error(f"Failed to initialize GCS client: {e}")
+                self.use_gcs = False
+        else:
+            logger.info("Using local file storage")
     
     def _ensure_temp_directory(self) -> None:
         """Ensure the temporary directory exists."""
@@ -63,6 +79,57 @@ class VideoGenerator:
             logger.info("FFmpeg is available and working")
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             raise VideoGenerationError(f"FFmpeg is not installed or not in PATH: {e}")
+    
+    def _get_local_video_path(self, video_path: str) -> Optional[str]:
+        """
+        Get local path for video file, downloading from GCS if needed.
+        
+        Args:
+            video_path: Video path (relative path like 'training_videos/...' or absolute path)
+            
+        Returns:
+            Local file path, or None if failed
+        """
+        # If already a local absolute path that exists, return it
+        if os.path.isabs(video_path) and os.path.exists(video_path):
+            return video_path
+        
+        # If using GCS, download the file
+        if self.use_gcs:
+            try:
+                # Construct GCS blob name - strip 'data/' prefix if present
+                blob_name = video_path
+                if blob_name.startswith('data/'):
+                    blob_name = blob_name[5:]  # Remove 'data/' prefix
+                
+                # Create temp file
+                suffix = Path(video_path).suffix or '.mp4'
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir='/tmp')
+                temp_path = temp_file.name
+                temp_file.close()
+                
+                # Download from GCS
+                logger.info(f"Downloading from GCS: {blob_name} -> {temp_path}")
+                blob = self.bucket.blob(blob_name)
+                blob.download_to_filename(temp_path)
+                logger.info(f"✅ Downloaded: {temp_path}")
+                
+                return temp_path
+            except Exception as e:
+                logger.error(f"Failed to download from GCS: {video_path} - {e}")
+                return None
+        else:
+            # Local mode - check if file exists
+            if os.path.exists(video_path):
+                return video_path
+            
+            # Try with data/ prefix
+            local_path = os.path.join('data', video_path)
+            if os.path.exists(local_path):
+                return local_path
+            
+            logger.error(f"Local video not found: {video_path}")
+            return None
     
     def export_sequence_metadata(
         self,
@@ -216,6 +283,7 @@ class VideoGenerator:
     def _validate_sequence(self, sequence: ChoreographySequence) -> None:
         """
         Validate the choreography sequence and log duration information.
+        Downloads GCS files if in cloud mode.
         
         Args:
             sequence: The sequence to validate
@@ -229,8 +297,13 @@ class VideoGenerator:
         total_calculated_duration = 0.0
         
         for i, move in enumerate(sequence.moves):
-            if not os.path.exists(move.video_path):
+            # Convert path to local file (download from GCS if needed)
+            local_path = self._get_local_video_path(move.video_path)
+            if not local_path or not os.path.exists(local_path):
                 raise VideoGenerationError(f"Video file not found: {move.video_path}")
+            
+            # Update move with local path
+            move.video_path = local_path
             
             if move.duration <= 0:
                 raise VideoGenerationError(f"Move {i} has invalid duration: {move.duration}")

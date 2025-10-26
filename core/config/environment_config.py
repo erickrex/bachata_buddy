@@ -135,36 +135,84 @@ class EnvironmentConfig:
                 "Please set GCP_PROJECT_ID to your Google Cloud project ID."
             )
         
-        client = secretmanager.SecretManagerServiceClient()
+        # Initialize Secret Manager client (may not be used if env vars are set)
+        client = None
+        try:
+            client = secretmanager.SecretManagerServiceClient()
+        except Exception as e:
+            logger.warning(f"Failed to initialize Secret Manager client: {e}")
         
-        # Load Elasticsearch config from secrets
-        es_host = self._get_secret(client, project_id, "elasticsearch-host")
-        es_port = int(self._get_secret(client, project_id, "elasticsearch-port"))
-        es_username = self._get_secret(client, project_id, "elasticsearch-username")
-        es_password = self._get_secret(client, project_id, "elasticsearch-password")
+        # Try environment variables first, then Secret Manager
+        es_host = os.getenv("ELASTICSEARCH_HOST")
+        es_api_key = os.getenv("ELASTICSEARCH_API_KEY")
         
-        self.elasticsearch = ElasticsearchConfig(
-            host=es_host,
-            port=es_port,
-            index_name="bachata_move_embeddings",
-            username=es_username,
-            password=es_password,
-            use_ssl=True,
-            verify_certs=True,
-            max_connections=10,
-            timeout=30,
-            retry_on_timeout=True
-        )
+        if not es_host or not es_api_key:
+            # Fallback to Secret Manager
+            if client:
+                try:
+                    es_host = es_host or self._get_secret(client, project_id, "elasticsearch-host")
+                    es_port = int(self._get_secret(client, project_id, "elasticsearch-port", default="443"))
+                    es_username = self._get_secret(client, project_id, "elasticsearch-username", default="")
+                    es_password = self._get_secret(client, project_id, "elasticsearch-password", default="")
+                except Exception as e:
+                    logger.warning(f"Failed to load from Secret Manager, using defaults: {e}")
+                    es_port = 443
+                    es_username = ""
+                    es_password = ""
+            else:
+                logger.warning("Secret Manager client not available, using defaults")
+                es_port = 443
+                es_username = ""
+                es_password = ""
+        else:
+            # Using environment variables (Elasticsearch Serverless with API key)
+            es_port = 443
+            es_username = ""
+            es_password = ""
         
-        # YOLOv8 config
-        model_name = self._get_secret(client, project_id, "yolov8-model-name", default="yolov8n-pose.pt")
+        # Use API key if available (Elasticsearch Serverless), otherwise username/password
+        if es_api_key:
+            self.elasticsearch = ElasticsearchConfig(
+                host=es_host,
+                port=es_port,
+                index_name=os.getenv("ELASTICSEARCH_INDEX", "bachata_move_embeddings"),
+                api_key=es_api_key,
+                use_ssl=True,
+                verify_certs=True,
+                max_connections=10,
+                timeout=30,
+                retry_on_timeout=True
+            )
+        else:
+            self.elasticsearch = ElasticsearchConfig(
+                host=es_host,
+                port=es_port,
+                index_name="bachata_move_embeddings",
+                username=es_username,
+                password=es_password,
+                use_ssl=True,
+                verify_certs=True,
+                max_connections=10,
+                timeout=30,
+                retry_on_timeout=True
+            )
+        
+        # YOLOv8 config - try env var first, then Secret Manager, then default
+        model_name = os.getenv("YOLOV8_MODEL")
+        if not model_name and client:
+            try:
+                model_name = self._get_secret(client, project_id, "yolov8-model-name", default="yolov8n-pose.pt")
+            except:
+                model_name = "yolov8n-pose.pt"
+        elif not model_name:
+            model_name = "yolov8n-pose.pt"
         
         self.yolov8 = YOLOv8Config(
             model_name=model_name,
-            confidence_threshold=0.3,
-            device="cpu",
-            iou_threshold=0.5,
-            max_det=10
+            confidence_threshold=float(os.getenv("YOLOV8_CONFIDENCE", "0.3")),
+            device=os.getenv("YOLOV8_DEVICE", "cpu"),
+            iou_threshold=float(os.getenv("YOLOV8_IOU_THRESHOLD", "0.5")),
+            max_det=int(os.getenv("YOLOV8_MAX_DET", "10"))
         )
     
     def _get_secret(self, client, project_id: str, secret_id: str, default: Optional[str] = None) -> str:

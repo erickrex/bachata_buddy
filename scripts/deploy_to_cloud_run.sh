@@ -28,7 +28,7 @@ fi
 # Configuration
 REGION=${REGION:-us-central1}
 SERVICE_NAME=${SERVICE_NAME:-bachata-buddy}
-MEMORY=${MEMORY:-4Gi}
+MEMORY=${MEMORY:-8Gi}
 CPU=${CPU:-4}
 TIMEOUT=${TIMEOUT:-300}
 
@@ -128,8 +128,10 @@ echo ""
 echo "🔍 View service details:"
 echo "  gcloud run services describe $SERVICE_NAME --region $REGION"
 echo ""
-echo "⚠️  Don't forget to:"
-echo "  1. Update ALLOWED_HOSTS in .env with: ${SERVICE_URL#https://}"
-echo "  2. Redeploy if you updated ALLOWED_HOSTS"
-echo "  3. Run database migrations if needed"
+echo "⚠️  IMPORTANT - Next steps:"
+echo "  1. Run database migrations:"
+echo "     ./scripts/run_cloud_migrations.sh"
+echo ""
+echo "  2. Update ALLOWED_HOSTS in .env with: ${SERVICE_URL#https://}"
+echo "     Then redeploy with: ./scripts/deploy_to_cloud_run.sh"
 echo ""

@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="user-authenticated" content="{% if user.is_authenticated %}true{% else %}false{% endif %}">
     <title>{% block title %}Bachata Choreography Generator{% endblock %}</title>
     
     <!-- Tailwind CSS -->

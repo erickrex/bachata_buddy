@@ -55,19 +55,25 @@ def describe_choreo(request):
         confirmed = request.POST.get('confirmed', 'false') == 'true'
         parameters_json = request.POST.get('parameters', None)
         
+        logger.info(f"[AI Template] User {request.user.id} submitted query: '{query[:100]}...' (confirmed={confirmed})")
+        
         if not query:
+            logger.warning(f"[AI Template] Empty query from user {request.user.id}")
             return JsonResponse({
                 'error': 'Please describe your choreography'
             }, status=400)
         
         try:
             # Initialize Gemini service
+            logger.info(f"[AI Template] Initializing Gemini service for user {request.user.id}")
             gemini_service = GeminiService()
             
             if not confirmed:
                 # Step 1: Parse query and return parameters for confirmation
+                logger.info(f"[AI Template] Parsing query for user {request.user.id}: '{query[:50]}...'")
                 try:
                     parameters = gemini_service.parse_choreography_request(query)
+                    logger.info(f"[AI Template] Successfully parsed query for user {request.user.id}: difficulty={parameters.difficulty}, style={parameters.style}")
                     
                     return JsonResponse({
                         'parameters': parameters.to_dict(),
@@ -75,16 +81,19 @@ def describe_choreo(request):
                     })
                     
                 except Exception as parse_error:
-                    logger.error(f"Failed to parse query: {parse_error}")
+                    logger.error(f"[AI Template] Failed to parse query for user {request.user.id}: {parse_error}", exc_info=True)
                     
                     # Try to get suggestions
                     try:
+                        logger.info(f"[AI Template] Generating suggestions for user {request.user.id}")
                         available_metadata = {
                             'difficulties': ['beginner', 'intermediate', 'advanced'],
                             'styles': ['romantic', 'energetic', 'sensual', 'playful']
                         }
                         suggestions = gemini_service.suggest_alternatives(query, available_metadata)
-                    except:
+                        logger.info(f"[AI Template] Generated {len(suggestions)} suggestions for user {request.user.id}")
+                    except Exception as sugg_error:
+                        logger.error(f"[AI Template] Failed to generate suggestions for user {request.user.id}: {sugg_error}")
                         suggestions = []
                     
                     return JsonResponse({
@@ -94,31 +103,45 @@ def describe_choreo(request):
             
             else:
                 # Step 2: Generate choreography with confirmed parameters
+                logger.info(f"[AI Template] User {request.user.id} confirmed parameters, starting generation")
                 if parameters_json:
                     try:
                         params_dict = json.loads(parameters_json)
                         parameters = ChoreographyParameters.from_dict(params_dict)
-                    except:
+                        logger.info(f"[AI Template] Loaded parameters from JSON for user {request.user.id}")
+                    except Exception as param_error:
+                        logger.error(f"[AI Template] Invalid parameters JSON for user {request.user.id}: {param_error}")
                         return JsonResponse({
                             'error': 'Invalid parameters'
                         }, status=400)
                 else:
                     # Re-parse if parameters not provided
+                    logger.info(f"[AI Template] Re-parsing query for user {request.user.id}")
                     parameters = gemini_service.parse_choreography_request(query)
                 
                 # Integrate with choreography generation pipeline
                 try:
+                    # CRITICAL: Clean up stuck tasks before creating new one
+                    from .utils import cleanup_stuck_tasks
+                    cleanup_count = cleanup_stuck_tasks(max_age_minutes=5)
+                    if cleanup_count > 0:
+                        logger.info(f"[AI Template] Cleaned up {cleanup_count} stuck tasks for user {request.user.id}")
+                    
                     # Create task for choreography generation
                     task_id = str(uuid.uuid4())
+                    logger.info(f"[AI Template] Creating task {task_id} for user {request.user.id}")
                     create_task(task_id, request.user.id)
                     
                     # Start background generation with AI explanations
+                    logger.info(f"[AI Template] Starting background thread for task {task_id}")
                     thread = threading.Thread(
                         target=generate_choreography_with_ai_explanations,
                         args=(task_id, request.user.id, parameters, query, gemini_service),
                         daemon=True
                     )
                     thread.start()
+                    
+                    logger.info(f"[AI Template] Task {task_id} started successfully for user {request.user.id}")
                     
                     # Return task ID for polling
                     return JsonResponse({
@@ -128,7 +151,7 @@ def describe_choreo(request):
                     })
                     
                 except Exception as gen_error:
-                    logger.error(f"Failed to start choreography generation: {gen_error}")
+                    logger.error(f"[AI Template] Failed to start choreography generation for user {request.user.id}: {gen_error}", exc_info=True)
                     return JsonResponse({
                         'error': 'Failed to start choreography generation',
                         'details': str(gen_error)
@@ -136,20 +159,21 @@ def describe_choreo(request):
         
         except ValueError as e:
             # Handle missing API key or configuration errors
-            logger.error(f"Gemini service error: {e}")
+            logger.error(f"[AI Template] Gemini service configuration error for user {request.user.id}: {e}")
             return JsonResponse({
                 'error': 'AI service is not configured. Please contact administrator.',
                 'details': str(e)
             }, status=500)
         
         except Exception as e:
-            logger.error(f"Unexpected error in describe_choreo: {e}", exc_info=True)
+            logger.error(f"[AI Template] Unexpected error for user {request.user.id}: {e}", exc_info=True)
             return JsonResponse({
                 'error': 'An unexpected error occurred. Please try again.',
                 'details': str(e)
             }, status=500)
     
     # GET request - render template
+    logger.info(f"[AI Template] Rendering describe_choreo page for user {request.user.id}")
     return render(request, 'choreography/describe_choreo.html', context)
 
 
@@ -215,28 +239,41 @@ def create_choreography(request):
     """Start choreography generation task"""
     # Check authentication for AJAX requests
     if not request.user.is_authenticated:
+        logger.warning("[Legacy Template] Unauthenticated request to create_choreography")
         return JsonResponse({
             'error': 'Please log in first',
             'message': 'Please log in first'
         }, status=401)
     
+    logger.info(f"[Legacy Template] User {request.user.id} initiated choreography generation")
+    
     try:
         form = ChoreographyGenerationForm(request.POST)
         
         if not form.is_valid():
-            logger.warning(f"Invalid form submission from user {request.user.id}: {form.errors}")
+            logger.warning(f"[Legacy Template] Invalid form submission from user {request.user.id}: {form.errors}")
             return JsonResponse({
                 'error': 'Invalid form data',
                 'errors': form.errors
             }, status=400)
         
+        # CRITICAL: Clean up stuck tasks before checking concurrency
+        from .utils import list_all_tasks, cleanup_stuck_tasks
+        from datetime import timedelta
+        
+        # Clean up tasks stuck for more than 5 minutes
+        cleanup_count = cleanup_stuck_tasks(max_age_minutes=5)
+        if cleanup_count > 0:
+            logger.info(f"[Legacy Template] Cleaned up {cleanup_count} stuck tasks for user {request.user.id}")
+        
         # Check concurrency limit (max 3 concurrent generations)
-        from .utils import list_all_tasks
         task_summary = list_all_tasks()
         active_count = task_summary['running_tasks']
         
+        logger.info(f"[Legacy Template] Current active tasks: {active_count}/3")
+        
         if active_count >= 3:
-            logger.warning(f"Concurrency limit reached: {active_count} active tasks")
+            logger.warning(f"[Legacy Template] Concurrency limit reached for user {request.user.id}: {active_count} active tasks")
             return JsonResponse({
                 'error': 'Too many concurrent generations. Please try again in a few minutes.',
                 'active_tasks': active_count,
@@ -247,6 +284,7 @@ def create_choreography(request):
         task_id = str(uuid.uuid4())
         
         # Initialize task status
+        logger.info(f"[Legacy Template] Creating task {task_id} for user {request.user.id}")
         create_task(task_id, request.user.id)
         
         # Get form data
@@ -255,29 +293,58 @@ def create_choreography(request):
         youtube_url = cleaned_data.get('youtube_url')
         difficulty = cleaned_data.get('difficulty')
         
+        logger.info(f"[Legacy Template] Task {task_id} parameters: song={song_selection}, youtube={youtube_url}, difficulty={difficulty}")
+        
         # Get auto_save preference (default True)
         auto_save = request.POST.get('auto_save', 'true').lower() in ('true', '1', 'yes', 'on')
+        logger.info(f"[Legacy Template] Task {task_id} auto_save={auto_save}")
         
         # Determine audio input
-        audio_input = youtube_url if song_selection == 'new_song' else song_selection
+        if song_selection == 'new_song':
+            audio_input = youtube_url
+            logger.info(f"[Legacy Template] Task {task_id} using YouTube URL: {youtube_url}")
+        else:
+            # Convert song filename to local path using audio storage service
+            from core.services.audio_storage_service import AudioStorageService
+            try:
+                logger.info(f"[Legacy Template] Task {task_id} loading song from storage: {song_selection}")
+                audio_storage = AudioStorageService()
+                audio_input = audio_storage.get_local_path(song_selection)
+                logger.info(f"[Legacy Template] Task {task_id} resolved audio path: {audio_input}")
+            except FileNotFoundError as e:
+                logger.error(f"[Legacy Template] Song not found for task {task_id}: {song_selection} - {e}")
+                return JsonResponse({
+                    'error': f'Song not found: {song_selection}. Please upload songs to cloud storage.',
+                    'details': str(e)
+                }, status=404)
         
-        # Start background thread with auto_save parameter
-        thread = threading.Thread(
-            target=generate_choreography_background,
-            args=(task_id, request.user.id, audio_input, difficulty, auto_save),
-            daemon=True
-        )
-        thread.start()
+        # TEMPORARY FIX: Process synchronously instead of background thread
+        # Background threads don't work reliably in Cloud Run's stateless environment
+        logger.info(f"[Legacy Template] Starting SYNCHRONOUS choreography generation for task {task_id}")
         
-        logger.info(f"Started choreography generation task {task_id} for user {request.user.id}")
+        # Process immediately (this will block the request for 30-60 seconds)
+        generate_choreography_background(task_id, request.user.id, audio_input, difficulty, auto_save)
         
-        return JsonResponse({
-            'task_id': task_id,
-            'status': 'started'
-        })
+        # Get the final task status
+        final_task = get_task(task_id)
+        
+        if final_task and final_task.get('status') == 'completed':
+            logger.info(f"[Legacy Template] Task {task_id} completed successfully")
+            return JsonResponse({
+                'task_id': task_id,
+                'status': 'completed',
+                'result': final_task.get('result')
+            })
+        else:
+            logger.error(f"[Legacy Template] Task {task_id} failed: {final_task.get('error') if final_task else 'Task not found'}")
+            return JsonResponse({
+                'task_id': task_id,
+                'status': final_task.get('status', 'failed') if final_task else 'failed',
+                'error': final_task.get('error', 'Unknown error') if final_task else 'Task not found'
+            }, status=500)
         
     except Exception as e:
-        logger.error(f"Error creating choreography task for user {request.user.id}: {e}", exc_info=True)
+        logger.error(f"[Legacy Template] Error creating choreography task for user {request.user.id}: {e}", exc_info=True)
         return JsonResponse({
             'error': 'An unexpected error occurred while starting generation',
             'details': str(e)
@@ -291,16 +358,35 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
     Supports auto-save functionality based on user preferences.
     Handles specific exceptions: YouTubeDownloadError, MusicAnalysisError, VideoGenerationError.
     """
+    logger.info(f"🎬 Background thread started for task {task_id}, user {user_id}, audio: {audio_input}")
+    
+    # Wrap everything in try-except to catch ANY error
     try:
         # Import custom exceptions
-        from core.exceptions import (
-            YouTubeDownloadError,
-            MusicAnalysisError,
-            VideoGenerationError,
-            MoveAnalysisError,
-            ResourceError,
-            ServiceUnavailableError
-        )
+        try:
+            from core.exceptions import (
+                YouTubeDownloadError,
+                MusicAnalysisError,
+                VideoGenerationError,
+                MoveAnalysisError,
+                ResourceError,
+                ServiceUnavailableError
+            )
+        except ImportError as e:
+            logger.error(f"Failed to import exceptions: {e}")
+            # Define fallback exceptions
+            class YouTubeDownloadError(Exception):
+                def __init__(self, message): self.message = message
+            class MusicAnalysisError(Exception):
+                def __init__(self, message): self.message = message
+            class VideoGenerationError(Exception):
+                def __init__(self, message): self.message = message
+            class MoveAnalysisError(Exception):
+                def __init__(self, message): self.message = message
+            class ResourceError(Exception):
+                def __init__(self, message): self.message = message
+            class ServiceUnavailableError(Exception):
+                def __init__(self, message): self.message = message
         
         # Create user-specific output directory
         user_output_dir = Path(settings.MEDIA_ROOT) / 'output' / f'user_{user_id}'
@@ -309,6 +395,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         user_temp_dir.mkdir(parents=True, exist_ok=True)
         
         # Stage 1: Downloading (10%)
+        logger.info(f"[Generation] Task {task_id} - Stage 1: Downloading audio")
         update_task(
             task_id,
             status='running',
@@ -318,6 +405,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         )
         
         # Stage 2: Analyzing (25%)
+        logger.info(f"[Generation] Task {task_id} - Stage 2: Analyzing music features")
         update_task(
             task_id,
             progress=25,
@@ -326,6 +414,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         )
         
         # Initialize pipeline with user-specific directories
+        logger.info(f"[Generation] Task {task_id} - Initializing pipeline (output: {user_output_dir})")
         config = PipelineConfig(
             output_directory=str(user_output_dir),
             temp_directory=str(user_temp_dir),
@@ -334,6 +423,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         pipeline = ChoreoGenerationPipeline(config)
         
         # Stage 3: Selecting (40%)
+        logger.info(f"[Generation] Task {task_id} - Stage 3: Selecting dance moves")
         update_task(
             task_id,
             progress=40,
@@ -342,6 +432,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         )
         
         # Stage 4: Generating (70%)
+        logger.info(f"[Generation] Task {task_id} - Stage 4: Generating choreography video")
         update_task(
             task_id,
             progress=70,
@@ -350,6 +441,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         )
         
         # Run the pipeline (async function, need to run in event loop)
+        logger.info(f"[Generation] Task {task_id} - Running pipeline with audio: {audio_input}, difficulty: {difficulty}")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -359,10 +451,12 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
                     difficulty=difficulty
                 )
             )
+            logger.info(f"[Generation] Task {task_id} - Pipeline completed: success={result.success}")
         finally:
             loop.close()
         
         # Stage 5: Finalizing (90%)
+        logger.info(f"[Generation] Task {task_id} - Stage 5: Finalizing video")
         update_task(
             task_id,
             progress=90,
@@ -372,6 +466,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
         
         # Check if generation was successful
         if result.success and result.output_path:
+            logger.info(f"[Generation] Task {task_id} - Video generated successfully: {result.output_path}")
             # Extract filename from path
             video_filename = Path(result.output_path).name
             
@@ -565,6 +660,23 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
             message='An unexpected error occurred',
             error=error_msg
         )
+    
+    except BaseException as e:
+        # Catch EVERYTHING including SystemExit, KeyboardInterrupt, etc.
+        error_msg = f"Critical error in background thread: {str(e)}"
+        logger.critical(f"Task {task_id} - CRITICAL ERROR: {error_msg}", exc_info=True)
+        try:
+            update_task(
+                task_id,
+                status='failed',
+                progress=0,
+                stage='failed',
+                message='Critical system error',
+                error=error_msg
+            )
+        except:
+            pass  # If we can't even update the task, just log it
+        raise  # Re-raise to see it in logs
 
 
 def generate_choreography_with_ai_explanations(
@@ -583,6 +695,9 @@ def generate_choreography_with_ai_explanations(
     3. Generates AI explanations for each selected move
     4. Returns results with explanations
     """
+    logger.info(f"[AI Generation] Task {task_id} - Starting AI choreography generation for user {user_id}")
+    logger.info(f"[AI Generation] Task {task_id} - Original query: '{original_query[:100]}...'")
+    
     try:
         from core.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
         
@@ -591,6 +706,8 @@ def generate_choreography_with_ai_explanations(
         user_temp_dir = Path(settings.MEDIA_ROOT) / 'temp' / f'user_{user_id}'
         user_output_dir.mkdir(parents=True, exist_ok=True)
         user_temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"[AI Generation] Task {task_id} - Created directories: output={user_output_dir}, temp={user_temp_dir}")
         
         # Stage 1: Initializing (10%)
         update_task(
@@ -605,21 +722,41 @@ def generate_choreography_with_ai_explanations(
         difficulty = parameters.difficulty or 'intermediate'
         energy_level = parameters.energy_level or 'medium'
         
-        # CRITICAL DEBUG: Log AI parameters
-        logger.info("=" * 80)
-        logger.info("AI CHOREOGRAPHY PARAMETERS:")
-        logger.info(f"  Difficulty: {difficulty}")
-        logger.info(f"  Energy level: {energy_level}")
-        logger.info(f"  Style: {parameters.style}")
-        logger.info(f"  Tempo: {parameters.tempo}")
-        logger.info(f"  Original query: {original_query}")
-        logger.info("=" * 80)
+        # Log AI parameters
+        logger.info(f"[AI Generation] Task {task_id} - Parameters: difficulty={difficulty}, energy={energy_level}, style={parameters.style}, tempo={parameters.tempo}")
         
         # Use a default song from available songs
         # TODO: Add song selection to AI template
-        audio_input = "data/songs/Aventura.mp3"  # Default song for AI template
+        from core.services.audio_storage_service import AudioStorageService
+        
+        logger.info(f"[AI Generation] Task {task_id} - Loading audio file")
+        audio_storage = AudioStorageService()
+        try:
+            # Try to get Aventura.mp3, or use first available song
+            if audio_storage.exists("Aventura.mp3"):
+                audio_input = audio_storage.get_local_path("Aventura.mp3")
+                logger.info(f"[AI Generation] Task {task_id} - Using default song: Aventura.mp3")
+            else:
+                # Use first available song
+                available_songs = audio_storage.list_songs()
+                if not available_songs:
+                    raise FileNotFoundError("No songs available in storage")
+                audio_input = audio_storage.get_local_path(available_songs[0])
+                logger.info(f"[AI Generation] Task {task_id} - Using fallback song: {available_songs[0]}")
+        except Exception as e:
+            logger.error(f"[AI Generation] Task {task_id} - Audio file not found: {e}")
+            update_task(
+                task_id,
+                status='failed',
+                progress=0,
+                stage='failed',
+                message='Audio file not found. Please upload songs to cloud storage.',
+                error=str(e)
+            )
+            return
         
         # Stage 2: Generating choreography (30%)
+        logger.info(f"[AI Generation] Task {task_id} - Stage 2: Generating choreography")
         update_task(
             task_id,
             progress=30,
@@ -772,41 +909,7 @@ def generate_choreography_with_ai_explanations(
         )
 
 
-@login_required
-def task_status(request, task_id):
-    """Get task status for polling"""
-    try:
-        # Validate task_id format
-        try:
-            uuid.UUID(task_id)
-        except ValueError:
-            logger.warning(f"Invalid task_id format: {task_id}")
-            return JsonResponse({
-                'error': 'Invalid task ID format'
-            }, status=400)
-        
-        task_data = get_task(task_id)
-        
-        if not task_data:
-            logger.debug(f"Task not found: {task_id}")
-            return JsonResponse({
-                'error': 'Task not found'
-            }, status=404)
-        
-        # Verify user owns this task
-        if task_data.get('user_id') != request.user.id:
-            logger.warning(f"Unauthorized access attempt to task {task_id} by user {request.user.id}")
-            return JsonResponse({
-                'error': 'Unauthorized'
-            }, status=403)
-        
-        return JsonResponse(task_data)
-        
-    except Exception as e:
-        logger.error(f"Error retrieving task status for {task_id}: {e}", exc_info=True)
-        return JsonResponse({
-            'error': 'An unexpected error occurred while retrieving task status'
-        }, status=500)
+# Removed duplicate task_status function - using the one below
 
 
 @login_required
@@ -1116,3 +1219,55 @@ def task_progress(request):
             }
         </script>
         """)
+
+
+
+@require_http_methods(["GET"])
+def task_status(request, task_id):
+    """
+    Get the status of a choreography generation task.
+    
+    Returns JSON with task progress, status, and results.
+    """
+    try:
+        task_data = get_task(task_id)
+        
+        if not task_data:
+            logger.warning(f"[Task Status] Task {task_id} not found")
+            return JsonResponse({
+                'error': 'Task not found',
+                'task_id': task_id
+            }, status=404)
+        
+        # Check if user owns this task (if authenticated)
+        if request.user.is_authenticated:
+            if task_data.get('user_id') != request.user.id:
+                logger.warning(f"[Task Status] Unauthorized access attempt to task {task_id} by user {request.user.id}")
+                return JsonResponse({
+                    'error': 'Unauthorized',
+                    'message': 'You do not have permission to view this task'
+                }, status=403)
+        
+        # Log status check (only log every 10th check to avoid spam)
+        import random
+        if random.random() < 0.1:  # 10% sampling
+            logger.debug(f"[Task Status] Task {task_id} status: {task_data.get('status')}, progress: {task_data.get('progress')}%")
+        
+        # Return task data
+        return JsonResponse({
+            'task_id': task_id,
+            'status': task_data.get('status', 'unknown'),
+            'progress': task_data.get('progress', 0),
+            'stage': task_data.get('stage', ''),
+            'message': task_data.get('message', ''),
+            'result': task_data.get('result'),
+            'error': task_data.get('error'),
+            'created_at': task_data.get('created_at')
+        })
+        
+    except Exception as e:
+        logger.error(f"[Task Status] Error getting task status for {task_id}: {e}", exc_info=True)
+        return JsonResponse({
+            'error': 'Internal server error',
+            'details': str(e)
+        }, status=500)

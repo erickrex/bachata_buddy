@@ -96,9 +96,9 @@ WSGI_APPLICATION = 'bachata_buddy.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Check if running on Cloud Run with Cloud SQL
-if os.environ.get('ENVIRONMENT') == 'cloud' and os.environ.get('CLOUD_SQL_CONNECTION_NAME'):
-    # Use Unix socket for Cloud SQL connection
+# Check if running on Cloud Run with Cloud SQL Unix socket
+if os.environ.get('CLOUD_SQL_CONNECTION_NAME') and os.environ.get('ENVIRONMENT') == 'cloud':
+    # Use Unix socket for Cloud SQL connection (Cloud Run)
     # Cloud Run mounts the socket at /cloudsql/<connection-name>
     DATABASES = {
         'default': {
@@ -111,7 +111,9 @@ if os.environ.get('ENVIRONMENT') == 'cloud' and os.environ.get('CLOUD_SQL_CONNEC
         }
     }
 else:
-    # Use TCP/IP for local development or external connections
+    # Use TCP/IP for local development, Compute Engine, or external connections
+    # For Compute Engine: Set DB_HOST to Cloud SQL private IP or public IP
+    # For local dev: Set DB_HOST to localhost or 127.0.0.1
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',

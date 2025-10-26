@@ -7,6 +7,7 @@ import asyncio
 import logging
 import time
 import json
+import os
 import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -635,8 +636,15 @@ class ChoreoGenerationPipeline:
         def analyze_single_move(clip) -> Optional[MoveCandidate]:
             """Analyze a single move clip with optimizations."""
             try:
-                video_path = Path(self.config.annotation_data_dir) / clip.video_path
-                if not video_path.exists():
+                # In cloud mode, don't prepend data dir - paths from Elasticsearch are already correct
+                use_gcs = os.environ.get('ENVIRONMENT') == 'cloud'
+                if use_gcs:
+                    video_path = clip.video_path  # Use path as-is from Elasticsearch
+                else:
+                    video_path = str(Path(self.config.annotation_data_dir) / clip.video_path)
+                
+                # Skip existence check in cloud mode (will be downloaded by video generator)
+                if not use_gcs and not Path(video_path).exists():
                     return None
                 
                 # Check cache first
@@ -765,8 +773,15 @@ class ChoreoGenerationPipeline:
         
         for clip in clips:
             try:
-                video_path = Path(self.config.annotation_data_dir) / clip.video_path
-                if not video_path.exists():
+                # In cloud mode, don't prepend data dir - paths from Elasticsearch are already correct
+                use_gcs = os.environ.get('ENVIRONMENT') == 'cloud'
+                if use_gcs:
+                    video_path = clip.video_path  # Use path as-is from Elasticsearch
+                else:
+                    video_path = str(Path(self.config.annotation_data_dir) / clip.video_path)
+                
+                # Skip existence check in cloud mode (will be downloaded by video generator)
+                if not use_gcs and not Path(video_path).exists():
                     continue
                 
                 # Check cache

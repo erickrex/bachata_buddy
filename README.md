@@ -1,8 +1,8 @@
 # 🎵 Bachata Buddy
 
-**A Research-Grade AI Choreography System for Partner Dancing**
+**AI Bachata Choreography Generator and Library**
 
-An advanced Django application that generates personalized Bachata choreographies using cutting-edge multi-modal machine learning. This system combines modern computer vision (YOLOv8-Pose), audio signal processing (Librosa), natural language understanding (Sentence-Transformers), and vector similarity search (Elasticsearch) to create contextually appropriate dance sequences from music.
+Bachata Buddy generates personalized Bachata choreographies using multi-modal machine learning. It combines  computer vision (YOLOv8-Pose) to create couples pose embeddings, audio signal processing (Librosa) to create song embeddings, and natural language understanding (Sentence-Transformers + Gemini AI), and vector similarity search (Elasticsearch) to create text embeddings and generate contextually appropriate dance sequences from music.
 
 > **🌟 Unique Innovation:** First open-source system to use multi-person pose detection for partner dance choreography generation with trimodal embeddings (audio + visual + semantic).
 
@@ -75,29 +75,17 @@ graph TB
     end
 ```
 
-### Core ML Components (28 Services)
+### Core ML Components
+
+The system includes **11 core ML/AI services** for multimodal analysis, plus supporting infrastructure:
 
 #### 1. **YOLOv8 Couple Detection System** 👯 (Modern CV)
-```python
-class YOLOv8CoupleDetector:
-    """
-    Multi-person pose estimation for partner dancing using YOLOv8-Pose.
-    
-    Innovation: First system to track BOTH dancers simultaneously
-    with interaction analysis for partner dance choreography.
-    
-    Recent Improvements:
-    - Fixed CouplePose dataclass attribute naming (lead_pose/follow_pose)
-    - Improved angle calculation with consistent shape handling
-    - Robust NaN handling for missing keypoints
-    """
     - Detects lead and follow dancers in same frame
     - 17 COCO body keypoints per person
     - IoU-based tracking for consistent person IDs
     - Couple detection rate: 65-98% of frames with both dancers
     - Auto-downloads models (no manual setup!)
     - Handles missing joints gracefully with NaN padding
-```
 
 **Key Innovations:**
 - **Multi-Person Detection**: Simultaneous tracking of both partners (not just single person)
@@ -107,36 +95,21 @@ class YOLOv8CoupleDetector:
 - **Robustness**: Handles partial occlusions and missing keypoints
 
 #### 2. **Couple Interaction Analyzer** 🤝 (Novel Feature)
-```python
-class CoupleInteractionAnalyzer:
-    """
-    Analyzes partner dynamics unique to couple dancing.
-    
-    Innovation: Captures partner-specific features that don't
-    exist in solo dance analysis.
-    
-    Recent Fix: Corrected CouplePose attribute access (lead_pose/follow_pose)
-    """
+
     - Hand-to-hand connection detection (0.15 normalized distance)
     - Movement synchronization (velocity correlation)
     - Relative positioning (facing, side-by-side, shadow)
     - Proximity tracking (center of mass distance)
     - 256D interaction embeddings
     - Robust handling of missing dancers in frames
-```
 
 #### 3. **Advanced Audio Analysis Engine** 🎼 (Bachata-Optimized)
-```python
-class MusicAnalyzer:
-    """
-    Librosa-based spectral analysis with Latin music optimization.
-    """
+
     - Multi-scale tempo detection (80-160 BPM Bachata range)
     - Syncopation and guitar pattern recognition
     - Musical structure segmentation (intro/verse/chorus/outro)
     - 128D audio embeddings (MFCC + Chroma + Spectral + Rhythm)
     - Beat tracking for move synchronization
-```
 
 **Key Innovations:**
 - **Bachata-Specific**: Custom algorithms for Latin rhythm patterns
@@ -145,42 +118,31 @@ class MusicAnalyzer:
 - **Performance**: 2-3 seconds analysis for full songs
 
 #### 4. **Text Semantic Understanding** 📝 (NLP for Dance)
-```python
-class TextEmbeddingService:
-    """
-    Semantic analysis of move annotations using NLP.
-    
-    Innovation: Enables intelligent move grouping and
-    difficulty-aware recommendations.
-    """
-    - Sentence-transformers 'all-MiniLM-L6-v2' model
+    - Sentence-transformers 'all-MiniLM-L6-v2' model for embeddings
     - 384D semantic embeddings from move metadata
     - Natural language descriptions from structured data
     - Difficulty-aware and role-specific matching
-```
+    - Gemini 1.5 Flash for natural language understanding
+    - Parses user queries into choreography parameters
+    - Generates move explanations and teaching notes
+    - Provides intelligent fallback suggestions
 
 **Key Innovations:**
+- **Dual NLP Approach**: Sentence-transformers for embeddings + Gemini for natural language
 - **Semantic Grouping**: Clusters similar moves (e.g., all "cross_body_lead" variations)
 - **Difficulty Matching**: Ensures consistent progression (beginner → intermediate → advanced)
 - **Role-Specific**: Filters by lead-focus vs follow-focus moves
-- **Performance**: <5 seconds for all 38 clips
+- **Conversational AI**: Natural language choreography requests via Gemini
+- **Performance**: <5 seconds for embeddings, <2 seconds for Gemini parsing
 
 #### 5. **Trimodal Feature Fusion** 🔗 (Novel Architecture)
-```python
-class MultimodalEmbedding:
-    """
-    Intelligent fusion of audio, visual, and semantic features.
-    
-    Innovation: No compression - stores all embeddings at full
-    dimensionality for maximum quality.
-    """
+
     - Audio: 128D (music characteristics)
     - Lead: 512D (lead dancer movements)
     - Follow: 512D (follow dancer movements)
     - Interaction: 256D (couple dynamics)
     - Text: 384D (semantic understanding)
     - Total: 1792D stored individually
-```
 
 **Weighted Similarity Formula:**
 ```
@@ -192,24 +154,45 @@ overall_similarity =
   0.10 × interaction_similarity # Partner dynamics
 ```
 
-#### 6. **Elasticsearch-Powered Recommendation** 🎯 (Vector Search)
-```python
-class RecommendationEngine:
-    """
-    High-performance similarity matching with vector search.
-    """
-    - Elasticsearch 9.1 for kNN vector similarity
-    - Retrieves all 38 embeddings in <10ms
-    - Computes weighted similarities across modalities
-    - Metadata filtering (difficulty, energy, role)
-    - Detailed score breakdowns per component
-```
+
+**Embedding Storage & Retrieval Flow:**
+
+1. **Offline Generation** (one-time setup):
+   ```
+   Video → YOLOv8 → Pose Embeddings (1280D)
+   Audio → Librosa → Audio Embeddings (128D)
+   Metadata → Sentence-Transformers → Text Embeddings (384D)
+   ↓
+   Elasticsearch Index (38 moves × 1792D each)
+   ```
+
+2. **Runtime Choreography Generation**:
+   ```
+   User Song → Audio Analysis (128D)
+   ↓
+   Elasticsearch: Fetch all 38 move embeddings
+   ↓
+   Compute Similarities:
+   - Audio similarity (cosine)
+   - Text similarity (cosine)
+   - Lead pose similarity (cosine)
+   - Follow pose similarity (cosine)
+   - Interaction similarity (cosine)
+   ↓
+   Weighted Fusion: 0.35×text + 0.35×audio + 0.30×pose
+   ↓
+   Filter by difficulty/energy → Rank → Select moves
+   ↓
+   Assemble video sequence
+   ```
 
 **Key Innovations:**
-- **Fast Retrieval**: <10ms embedding lookup, <50ms total recommendation
+- **Separate Storage**: Each embedding modality stored independently (no compression)
+- **Fast Retrieval**: Single query fetches all embeddings (<10ms)
 - **Flexible Weighting**: Adjustable weights for different modalities
 - **Quality Validation**: Automatic NaN/Inf detection
 - **Semantic Grouping**: Text embeddings enable intelligent clustering
+- **Serverless Ready**: Compatible with Elasticsearch Serverless
 
 #### 7. **Intelligent Choreography Pipeline** 🎬 (Assembly System)
 ```python
@@ -246,7 +229,7 @@ class ChoreographyPipeline:
 
 ```
 bachata_buddy/
-├── core/                       # 28 ML/business logic services
+├── core/                       # 31 service modules
 │   ├── services/
 │   │   ├── yolov8_couple_detector.py          # Multi-person pose detection
 │   │   ├── couple_interaction_analyzer.py     # Partner dynamics analysis
@@ -349,33 +332,25 @@ bachata_buddy/
 - Real-time progress tracking
 - Auto-save to collection
 
-#### 2. **User Management** 👤
-- Secure authentication (Django session-based)
-- User profiles with preferences
-- Role-based access (users + instructors)
-- Rate limiting protection
-
-#### 3. **Collection Management** 📚
+#### 2. **Collection Management** 📚
 - Save/organize choreographies
 - Search & filter (title, difficulty, date)
 - Multiple sorting options
 - Bulk operations
 - Statistics dashboard
 
-#### 4. **Instructor Dashboard** 🎓
+#### 3. **Instructor Dashboard WIP** 🎓
 - Class plan creation
 - Choreography sequencing
 - Student progress tracking (planned)
 - Teaching analytics (planned)
 
-#### 5. **Advanced Video Player** 🎥
-- Loop controls with adjustable points
-- Segment selection
-- Click-to-seek progress bar
-- Responsive design
+#### 5. **Advanced Video Player WIP** 🎥
+- Loop controls to watch specific moves, with adjustable points
+
 
 #### 6. **Video Library** 📹
-- **38 annotated moves** across 12 categories
+- **38 annotated moves** across 12 manually curated categories
 - **Quality validated** with comprehensive metadata
 - **Difficulty distribution**: Beginner (26%), Intermediate (21%), Advanced (53%)
 - **Energy levels**: Low (5%), Medium (42%), High (53%)
@@ -471,9 +446,6 @@ uv run python scripts/generate_embeddings.py \
   --annotations data/bachata_annotations.json \
   --environment local
 
-# Processing time: ~6-10 seconds per video (38 videos = ~4-6 minutes total)
-# Output: 1792D embeddings (128D audio + 1280D pose + 384D text)
-
 # Restore from backup (if needed)
 uv run python scripts/restore_embeddings.py \
   --input data/embeddings_backup.json \
@@ -481,9 +453,7 @@ uv run python scripts/restore_embeddings.py \
 ```
 
 **Troubleshooting:**
-- If you get numpy serialization errors during backup, the script now handles this automatically
-- If pose detection fails, use the fallback: `scripts/generate_embeddings_no_pose.py` (audio + text only)
-- See **[EMBEDDING_REGENERATION_GUIDE.md](EMBEDDING_REGENERATION_GUIDE.md)** for detailed instructions
+- The easieast is to just use the embeddings in data/embeddings_backup.json and upload them to ElasticSearch Serverless
 
 ### Useful Docker/Elasticsearch Commands
 
@@ -536,164 +506,56 @@ uv run pytest tests/ -m "not slow" -v
 
 ---
 
-## 🚀 Deployment Options
+## 🏗️ Production Infrastructure
 
-Bachata Buddy supports two production deployment options:
+Bachata Buddy runs on Google Cloud Platform with optimized architecture for video-heavy workloads:
 
-### Option 1: Google Compute Engine (Recommended) ✅
-
-**Currently deployed and tested** - Optimized for video generation workloads.
-
-**Advantages:**
-- Local storage for fast video access (no GCS download latency)
-- Persistent disk for training videos and songs
-- Better performance for FFmpeg video processing
-- Lower costs for video-heavy workloads
-- Full control over system resources
-
-**Quick Deploy:**
-```bash
-# See scripts/deploy_to_compute_engine.sh for automated deployment
-./scripts/deploy_to_compute_engine.sh
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        U[Users/Browsers]
+    end
+    
+    subgraph "Google Cloud Platform"
+        subgraph "Compute Layer"
+            CE[Compute Engine<br/>e2-medium<br/>2 vCPU, 4GB RAM]
+            LD[Local Disk<br/>Training Videos: 81MB<br/>Songs: 78MB]
+            CE --> LD
+        end
+        
+        subgraph "Data Layer"
+            SQL[(Cloud SQL<br/>PostgreSQL<br/>User Data & Choreographies)]
+            ES[Elasticsearch Serverless<br/>Vector Search<br/>1792D Embeddings]
+        end
+        
+        subgraph "Security Layer"
+            SM[Secret Manager<br/>API Keys & Credentials]
+        end
+        
+        subgraph "AI Services"
+            GEMINI[Gemini 1.5 Flash<br/>Natural Language Processing]
+        end
+    end
+    
+    U -->|HTTPS| CE
+    CE -->|Django ORM| SQL
+    CE -->|Vector Search| ES
+    CE -->|Fetch Secrets| SM
+    CE -->|NLP Queries| GEMINI
+    
+    style CE fill:#4285f4,color:#fff
+    style SQL fill:#34a853,color:#fff
+    style ES fill:#fbbc04,color:#000
+    style SM fill:#ea4335,color:#fff
+    style GEMINI fill:#9334e6,color:#fff
 ```
 
-**Current Production Setup:**
-- **Instance:** e2-medium (2 vCPU, 4GB RAM)
-- **Storage:** Local disk (training videos: 81MB, songs: 78MB)
-- **Performance:** 40-50 second video generation
-- **Status:** ✅ Fully operational
+**Key Architecture Decisions:**
 
-See **[COMPUTE_ENGINE_DEPLOYMENT.md](COMPUTE_ENGINE_DEPLOYMENT.md)** for detailed instructions.
+- **Compute Engine over Cloud Run**: Local disk storage provides 10x faster video access for FFmpeg processing
+- **Elasticsearch Serverless**: Managed vector search with <10ms retrieval times
+- **Cloud SQL**: Managed PostgreSQL for reliability and automatic backups
+- **Secret Manager**: Secure credential storage with IAM-based access control
 
-### Option 2: Google Cloud Run (Serverless)
-
-Bachata Buddy can also be deployed to Google Cloud Run for serverless scaling. The Docker container includes all required system dependencies (ffmpeg, libsndfile) and has been tested for Cloud Run compatibility.
-
-### Test Docker Build Locally (Recommended)
-
-```bash
-# Test the full Docker build before deploying
-cd bachata_buddy
-chmod +x scripts/test_docker_build.sh
-./scripts/test_docker_build.sh
-
-# This will:
-# 1. Build the Docker image
-# 2. Start the container
-# 3. Verify all system dependencies (ffmpeg, libsndfile, librosa, etc.)
-# 4. Test health check endpoint
-# 5. Confirm the app is ready for Cloud Run
-```
-
-### Quick Deploy
-
-```bash
-# 1. Set your GCP project
-gcloud config set project YOUR_PROJECT_ID
-
-# 2. Enable required APIs
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
-
-# 3. Deploy (Cloud Build will use the Dockerfile)
-gcloud run deploy bachata-buddy \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --memory 2Gi \
-  --cpu 2 \
-  --timeout 300
-```
-
-### Secrets and Environment Variables
-
-**Sensitive data** (use Secret Manager):
-- `DJANGO_SECRET_KEY` - Django secret key
-- `DB_PASSWORD` - Database password
-- `ELASTICSEARCH_API_KEY` - Elasticsearch API key
-- `GOOGLE_API_KEY` - Gemini API key
-
-**Configuration** (use Environment Variables):
-- `ENVIRONMENT=cloud`
-- `GCP_PROJECT_ID=your-project-id`
-- `GCS_BUCKET_NAME=your-bucket-name`
-- `DB_HOST=your-db-host`
-- `DB_NAME=bachata-buddy`
-- `DB_USER=postgres`
-- `DB_PORT=5432`
-- `ELASTICSEARCH_HOST=your-es-host`
-- `ELASTICSEARCH_PORT=443`
-- `ELASTICSEARCH_INDEX=bachata_move_embeddings`
-- `ALLOWED_HOSTS=your-domain.run.app`
-- `DJANGO_DEBUG=False`
-
-### Quick Setup with Scripts
-
-```bash
-# 1. Setup secrets from .env
-chmod +x scripts/setup_secrets.sh
-./scripts/setup_secrets.sh
-
-# 2. Deploy everything
-chmod +x scripts/deploy_to_cloud_run.sh
-./scripts/deploy_to_cloud_run.sh
-```
-
-See **[SECRETS_MANAGEMENT_GUIDE.md](SECRETS_MANAGEMENT_GUIDE.md)** for detailed instructions.
-
-### Video Storage
-
-Videos are stored based on deployment environment:
-- **Local dev:** Videos saved to `data/` directory
-- **Compute Engine:** Videos saved to local disk (fast, no GCS costs)
-- **Cloud Run:** Videos saved to GCS bucket (~$0.02/GB/month)
-- **Setup:** Automatic based on `ENVIRONMENT` variable
-
-**Current Production (Compute Engine):**
-- Training videos: `/opt/bachata-buddy/data/training_videos/` (81MB)
-- Songs: `/opt/bachata-buddy/data/songs/` (78MB)
-- Generated videos: `/opt/bachata-buddy/data/output/user_<id>/`
-- No GCS downloads needed - instant access
-
-### System Dependencies in Production
-
-The Dockerfile automatically installs all required system dependencies:
-- **ffmpeg** (7.1.2+) - For audio/video processing with yt-dlp and librosa
-- **libsndfile1** - For audio file I/O with librosa
-- **gcc/g++** - For compiling Python extensions
-- **OpenCV dependencies** - For YOLOv8 pose detection
-
-**Note:** portaudio is NOT needed (we only do offline audio analysis, no real-time streaming).
-
-### Detailed Deployment Guides
-
-**Compute Engine (Recommended):**
-- [COMPUTE_ENGINE_DEPLOYMENT.md](COMPUTE_ENGINE_DEPLOYMENT.md) - Full setup guide
-- [VIDEO_GENERATION_FIXES.md](VIDEO_GENERATION_FIXES.md) - Recent optimizations
-
-**Cloud Run (Serverless):**
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Step-by-step Cloud Run instructions
-- [SECRETS_MANAGEMENT_GUIDE.md](SECRETS_MANAGEMENT_GUIDE.md) - Secret Manager setup
-
-**Common Resources:**
-- [VIDEO_STORAGE_GUIDE.md](VIDEO_STORAGE_GUIDE.md) - Storage configuration
-- [ELASTICSEARCH_CLOUD_SETUP.md](ELASTICSEARCH_CLOUD_SETUP.md) - Elasticsearch Serverless
-
-### Docker Build Verification
-
-The included `scripts/test_docker_build.sh` script validates:
-- ✅ Docker image builds successfully
-- ✅ All system dependencies are installed (ffmpeg, libsndfile)
-- ✅ Python libraries can import (librosa, cv2, yt_dlp, ultralytics)
-- ✅ Health check endpoint responds
-- ✅ Container is ready for deployment
-
-### Recent Production Fixes (October 2025)
-
-See **[VIDEO_GENERATION_FIXES.md](VIDEO_GENERATION_FIXES.md)** for details on:
-- GCS path resolution fixes
-- Local storage optimization
-- Song dropdown filtering
-- AI template auto-save implementation
-- Performance improvements (40-50s generation time)
-
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete deployment instructions.
 

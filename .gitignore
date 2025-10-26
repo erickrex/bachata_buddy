@@ -5,7 +5,6 @@ data/temp
 
 
 # Generated content directories
-data/output/
 data/temp/
 data/cache/
 data/choreography_metadata/
@@ -77,8 +76,6 @@ coverage.xml
 .pytest_cache/
 
 # Media files (too large for git)
-*.mp4
-*.mp3
 *.wav
 *.avi
 *.mov

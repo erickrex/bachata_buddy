@@ -8,8 +8,8 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 
-from core.config.environment_config import ElasticsearchConfig
-from core.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import ElasticsearchConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ class TestElasticsearchService:
     
     def test_initialization_serverless(self, serverless_config, mock_es_client):
         """Test service initializes with Serverless config."""
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             
             assert service.config == serverless_config
@@ -73,7 +73,7 @@ class TestElasticsearchService:
     
     def test_index_exists(self, serverless_config, mock_es_client):
         """Test checking if index exists."""
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             
             assert service.index_exists() is True
@@ -83,7 +83,7 @@ class TestElasticsearchService:
         """Test index creation for Serverless (no shard/replica settings)."""
         mock_es_client.indices.exists.return_value = False
         
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             service.create_index()
             
@@ -97,7 +97,7 @@ class TestElasticsearchService:
     
     def test_count_documents(self, serverless_config, mock_es_client):
         """Test counting documents."""
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             count = service.count_documents()
             
@@ -142,7 +142,7 @@ class TestFieldsAPI:
             }
         }
         
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             embeddings = service.get_all_embeddings()
             
@@ -170,7 +170,7 @@ class TestFieldsAPI:
         """Test get_all_embeddings with metadata filters."""
         mock_es_client.search.return_value = {'hits': {'hits': []}}
         
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             service.get_all_embeddings(filters={'difficulty': 'beginner'})
             
@@ -218,7 +218,7 @@ class TestBulkIndexing:
             }
         ]
         
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             service.bulk_index_embeddings(embeddings)
             
@@ -252,7 +252,7 @@ class TestErrorHandling:
         mock_client = MagicMock()
         mock_client.ping.return_value = False
         
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_client):
             from elasticsearch.exceptions import ConnectionError as ESConnectionError
             
             with pytest.raises(ESConnectionError):
@@ -260,7 +260,7 @@ class TestErrorHandling:
     
     def test_empty_embeddings_list(self, serverless_config, mock_es_client):
         """Test bulk indexing with empty list."""
-        with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
             service = ElasticsearchService(serverless_config)
             
             # Should not raise, just log warning

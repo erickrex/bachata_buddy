@@ -4,6 +4,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.core.exceptions import PermissionDenied
 from django.db import models
+import json
 from .models import ClassPlan, ClassPlanSequence
 from .forms import ClassPlanForm, ClassPlanSequenceForm
 from choreography.models import SavedChoreography

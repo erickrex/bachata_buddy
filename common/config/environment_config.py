@@ -9,6 +9,9 @@ Supports two environments:
 from dataclasses import dataclass
 from typing import Optional
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

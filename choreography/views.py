@@ -13,7 +13,7 @@ import json
 
 from .forms import ChoreographyGenerationForm
 from .utils import create_task, get_task, update_task, cleanup_old_tasks, list_all_tasks, delete_task
-from core.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
+from video_processing.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def describe_choreo(request):
     - Parameter confirmation
     - AI-generated explanations
     """
-    from core.services.gemini_service import GeminiService, ChoreographyParameters
+    from ai_services.services.gemini_service import GeminiService, ChoreographyParameters
     
     context = {}
     
@@ -184,7 +184,7 @@ def api_parse_query(request):
     
     Allows real-time parameter preview before submission.
     """
-    from core.services.gemini_service import GeminiService
+    from ai_services.services.gemini_service import GeminiService
     
     try:
         # Get query from request body
@@ -299,7 +299,7 @@ def create_choreography(request):
         logger.info(f"[Legacy Template] Task {task_id} auto_save={auto_save}")
         
         # Convert song filename to local path using audio storage service
-        from core.services.audio_storage_service import AudioStorageService
+        from video_processing.services.audio_storage_service import AudioStorageService
         try:
             logger.info(f"[Legacy Template] Task {task_id} loading song from storage: {song_selection}")
             audio_storage = AudioStorageService()
@@ -358,7 +358,7 @@ def generate_choreography_background(task_id: str, user_id: int, audio_input: st
     try:
         # Import custom exceptions
         try:
-            from core.exceptions import (
+            from common.exceptions import (
                 YouTubeDownloadError,
                 MusicAnalysisError,
                 VideoGenerationError,
@@ -693,7 +693,7 @@ def generate_choreography_with_ai_explanations(
     logger.info(f"[AI Generation] Task {task_id} - Original query: '{original_query[:100]}...'")
     
     try:
-        from core.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
+        from video_processing.services.choreography_pipeline import ChoreoGenerationPipeline, PipelineConfig
         
         # Create user-specific output directory
         user_output_dir = Path(settings.MEDIA_ROOT) / 'output' / f'user_{user_id}'
@@ -721,7 +721,7 @@ def generate_choreography_with_ai_explanations(
         
         # Use a default song from available songs
         # TODO: Add song selection to AI template
-        from core.services.audio_storage_service import AudioStorageService
+        from video_processing.services.audio_storage_service import AudioStorageService
         
         logger.info(f"[AI Generation] Task {task_id} - Loading audio file")
         audio_storage = AudioStorageService()

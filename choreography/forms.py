@@ -11,7 +11,7 @@ class ChoreographyGenerationForm(forms.Form):
     @staticmethod
     def get_song_choices():
         """Dynamically load available songs from storage"""
-        from core.services.audio_storage_service import AudioStorageService
+        from video_processing.services.audio_storage_service import AudioStorageService
         
         choices = [('', 'Choose a song...')]
         

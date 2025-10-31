@@ -44,8 +44,8 @@ import time
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from google.cloud import storage
-from core.services.elasticsearch_service import ElasticsearchService
-from core.config.environment_config import EnvironmentConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import EnvironmentConfig
 
 # Configure logging
 logging.basicConfig(

@@ -8,8 +8,8 @@ from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass
 import logging
 
-from .music_analyzer import MusicFeatures
-from .move_analyzer import MoveAnalysisResult
+from video_processing.services.music_analyzer import MusicFeatures
+from ai_services.services.move_analyzer import MoveAnalysisResult
 
 logger = logging.getLogger(__name__)
 

@@ -10,35 +10,33 @@ class TestChoreographyGenerationForm:
     def test_valid_form_with_local_song(self):
         """Test form is valid with local song selection"""
         form_data = {
-            'song_selection': 'data/songs/Amor.mp3',
+            'song_selection': 'Amor.mp3',
             'difficulty': 'intermediate',
         }
         form = ChoreographyGenerationForm(data=form_data)
         assert form.is_valid()
-        assert form.cleaned_data['song_selection'] == 'data/songs/Amor.mp3'
+        assert form.cleaned_data['song_selection'] == 'Amor.mp3'
         assert form.cleaned_data['difficulty'] == 'intermediate'
     
-    def test_valid_form_with_youtube_url(self):
-        """Test form is valid with YouTube URL"""
+    def test_valid_form_with_different_song(self):
+        """Test form is valid with different song selection"""
         form_data = {
-            'song_selection': 'new_song',
-            'youtube_url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'song_selection': 'Veneno.mp3',
             'difficulty': 'beginner',
         }
         form = ChoreographyGenerationForm(data=form_data)
         assert form.is_valid()
-        assert form.cleaned_data['song_selection'] == 'new_song'
-        assert form.cleaned_data['youtube_url'] == 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+        assert form.cleaned_data['song_selection'] == 'Veneno.mp3'
     
-    def test_invalid_form_new_song_without_url(self):
-        """Test form is invalid when new_song selected without YouTube URL"""
+    def test_invalid_form_invalid_song(self):
+        """Test form is invalid with non-existent song"""
         form_data = {
-            'song_selection': 'new_song',
+            'song_selection': 'nonexistent.mp3',
             'difficulty': 'advanced',
         }
         form = ChoreographyGenerationForm(data=form_data)
         assert not form.is_valid()
-        assert 'YouTube URL is required' in str(form.errors)
+        assert 'song_selection' in form.errors
     
     def test_invalid_form_missing_song_selection(self):
         """Test form is invalid without song selection"""
@@ -63,10 +61,11 @@ class TestChoreographyGenerationForm:
         form = ChoreographyGenerationForm()
         song_choices = dict(form.fields['song_selection'].choices)
         
-        # Check some key songs are present
-        assert 'data/songs/Amor.mp3' in song_choices
-        assert 'data/songs/Veneno.mp3' in song_choices
-        assert 'new_song' in song_choices
+        # Check some key songs are present (using new format without path)
+        assert 'Amor.mp3' in song_choices
+        assert 'Veneno.mp3' in song_choices
+        # Empty choice for "Choose a song..."
+        assert '' in song_choices
     
     def test_form_difficulty_default(self):
         """Test difficulty field has correct default"""
@@ -82,12 +81,6 @@ class TestChoreographyGenerationForm:
         assert 'x-model' in song_widget_attrs
         assert song_widget_attrs['x-model'] == 'selectedSong'
         
-        # Check youtube_url has x-model and x-show
-        url_widget_attrs = form.fields['youtube_url'].widget.attrs
-        assert 'x-model' in url_widget_attrs
-        assert 'x-show' in url_widget_attrs
-        assert url_widget_attrs['x-show'] == "selectedSong === 'new_song'"
-        
         # Check difficulty has x-model
         difficulty_widget_attrs = form.fields['difficulty'].widget.attrs
         assert 'x-model' in difficulty_widget_attrs
@@ -97,7 +90,7 @@ class TestChoreographyGenerationForm:
         """Test form widgets include Tailwind CSS classes"""
         form = ChoreographyGenerationForm()
         
-        for field_name in ['song_selection', 'youtube_url', 'difficulty']:
+        for field_name in ['song_selection', 'difficulty']:
             widget_attrs = form.fields[field_name].widget.attrs
             assert 'class' in widget_attrs
             assert 'w-full' in widget_attrs['class']

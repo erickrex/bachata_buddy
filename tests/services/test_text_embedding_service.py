@@ -13,7 +13,7 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 
-from core.services.text_embedding_service import TextEmbeddingService
+from ai_services.services.text_embedding_service import TextEmbeddingService
 
 
 # ============================================================================
@@ -54,7 +54,7 @@ class TestTextEmbeddingService:
     
     def test_initialization(self):
         """Test service initialization."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             service = TextEmbeddingService()
             
             # Verify model was loaded
@@ -63,7 +63,7 @@ class TestTextEmbeddingService:
     
     def test_create_text_description_complete(self, sample_annotation):
         """Test text description generation with complete annotation."""
-        with patch('core.services.text_embedding_service.SentenceTransformer'):
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer'):
             service = TextEmbeddingService()
             
             description = service.create_text_description(sample_annotation)
@@ -78,7 +78,7 @@ class TestTextEmbeddingService:
     
     def test_create_text_description_incomplete(self, incomplete_annotation):
         """Test text description generation with incomplete annotation."""
-        with patch('core.services.text_embedding_service.SentenceTransformer'):
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer'):
             service = TextEmbeddingService()
             
             description = service.create_text_description(incomplete_annotation)
@@ -94,7 +94,7 @@ class TestTextEmbeddingService:
     
     def test_move_label_formatting(self):
         """Test move label formatting (underscores to spaces, title case)."""
-        with patch('core.services.text_embedding_service.SentenceTransformer'):
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer'):
             service = TextEmbeddingService()
             
             annotation = {
@@ -111,7 +111,7 @@ class TestTextEmbeddingService:
     
     def test_generate_text_embedding_dimensions(self, sample_annotation):
         """Test that generated embeddings have correct dimensions (384D)."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             # Mock the model to return a 384D embedding
             mock_model = MagicMock()
             mock_embedding = np.random.randn(384).astype(np.float32)
@@ -126,7 +126,7 @@ class TestTextEmbeddingService:
     
     def test_generate_text_embedding_normalization(self, sample_annotation):
         """Test that embeddings are L2 normalized."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             # Mock the model to return a normalized embedding (as the real model would)
             mock_model = MagicMock()
             # Create a normalized vector
@@ -144,7 +144,7 @@ class TestTextEmbeddingService:
     
     def test_generate_text_embedding_calls_encode(self, sample_annotation):
         """Test that generate_embedding_from_annotation calls model.encode with correct parameters."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             mock_model = MagicMock()
             mock_embedding = np.random.randn(384).astype(np.float32)
             mock_model.encode.return_value = mock_embedding
@@ -160,7 +160,7 @@ class TestTextEmbeddingService:
     
     def test_handle_missing_fields_gracefully(self):
         """Test handling of annotations with missing fields."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             mock_model = MagicMock()
             mock_embedding = np.random.randn(384).astype(np.float32)
             mock_model.encode.return_value = mock_embedding
@@ -180,7 +180,7 @@ class TestTextEmbeddingService:
     
     def test_model_caching(self):
         """Test that model is cached and reused."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             mock_model = MagicMock()
             mock_st.return_value = mock_model
             
@@ -194,7 +194,7 @@ class TestTextEmbeddingService:
     
     def test_batch_processing_efficiency(self, sample_annotation):
         """Test that service can process multiple annotations efficiently."""
-        with patch('core.services.text_embedding_service.SentenceTransformer') as mock_st:
+        with patch('ai_services.services.text_embedding_service.SentenceTransformer') as mock_st:
             mock_model = MagicMock()
             mock_embedding = np.random.randn(384).astype(np.float32)
             mock_model.encode.return_value = mock_embedding

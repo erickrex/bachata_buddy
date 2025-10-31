@@ -8,7 +8,7 @@ import pytest
 import os
 from unittest.mock import Mock, patch, MagicMock
 
-from core.services.gemini_service import (
+from ai_services.services.gemini_service import (
     GeminiService,
     ChoreographyParameters,
     RateLimiter

@@ -17,9 +17,9 @@ import logging
 import json
 from pathlib import Path
 
-from .yolov8_couple_detector import CouplePose
-from .pose_feature_extractor import TemporalPoseSequence
-from .couple_interaction_analyzer import TemporalInteractionSequence
+from video_processing.services.yolov8_couple_detector import CouplePose
+from video_processing.services.pose_feature_extractor import TemporalPoseSequence
+from video_processing.services.couple_interaction_analyzer import TemporalInteractionSequence
 
 logger = logging.getLogger(__name__)
 

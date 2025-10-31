@@ -9,12 +9,12 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch
 
-from core.services.couple_interaction_analyzer import (
+from video_processing.services.couple_interaction_analyzer import (
     CoupleInteractionAnalyzer,
     InteractionFeatures,
     TemporalInteractionSequence
 )
-from core.services.yolov8_couple_detector import CouplePose, PersonPose
+from video_processing.services.yolov8_couple_detector import CouplePose, PersonPose
 
 
 @pytest.fixture
@@ -165,7 +165,7 @@ class TestCoupleInteractionAnalyzer:
     def test_calculate_synchronization(self, analyzer):
         """Test synchronization calculation."""
         # Create mock pose features with velocities
-        from core.services.pose_feature_extractor import PoseFeatures
+        from video_processing.services.pose_feature_extractor import PoseFeatures
         
         lead_features = []
         follow_features = []

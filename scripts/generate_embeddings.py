@@ -30,14 +30,14 @@ from tqdm import tqdm
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config.environment_config import EnvironmentConfig
-from core.services.yolov8_couple_detector import YOLOv8CoupleDetector
-from core.services.pose_embedding_generator import PoseEmbeddingGenerator
-from core.services.music_analyzer import MusicAnalyzer
-from core.services.text_embedding_service import TextEmbeddingService
-from core.services.elasticsearch_service import ElasticsearchService
-from core.services.embedding_validator import EmbeddingValidator
-from core.services.quality_metrics import QualityReportGenerator, QualityMetrics
+from common.config.environment_config import EnvironmentConfig
+from video_processing.services.yolov8_couple_detector import YOLOv8CoupleDetector
+from video_processing.services.pose_embedding_generator import PoseEmbeddingGenerator
+from video_processing.services.music_analyzer import MusicAnalyzer
+from ai_services.services.text_embedding_service import TextEmbeddingService
+from ai_services.services.elasticsearch_service import ElasticsearchService
+from ai_services.services.embedding_validator import EmbeddingValidator
+from ai_services.services.quality_metrics import QualityReportGenerator, QualityMetrics
 
 
 # Configure logging

@@ -17,7 +17,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import ConnectionError, TransportError
 from elasticsearch.helpers import bulk
 
-from core.config.environment_config import ElasticsearchConfig
+from common.config.environment_config import ElasticsearchConfig
 
 
 logger = logging.getLogger(__name__)

@@ -35,8 +35,8 @@ sys.path.insert(0, str(project_root))
 from dotenv import load_dotenv
 import json
 
-from core.config.environment_config import EnvironmentConfig
-from core.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import EnvironmentConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
 
 # Configure logging
 logging.basicConfig(

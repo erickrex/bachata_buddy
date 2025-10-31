@@ -13,9 +13,9 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, MagicMock, patch
 
-from core.services.elasticsearch_service import ElasticsearchService
-from core.services.recommendation_engine import RecommendationEngine, RecommendationRequest
-from core.config.environment_config import ElasticsearchConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
+from ai_services.services.recommendation_engine import RecommendationEngine, RecommendationRequest
+from common.config.environment_config import ElasticsearchConfig
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def mock_es_client():
 @pytest.fixture
 def es_service_with_mock(mock_es_config, mock_es_client):
     """Create ElasticsearchService with mocked client."""
-    with patch('core.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
+    with patch('ai_services.services.elasticsearch_service.Elasticsearch', return_value=mock_es_client):
         service = ElasticsearchService(mock_es_config)
         service.client = mock_es_client
         return service
@@ -390,7 +390,7 @@ class TestWeightedSimilarity:
 class TestRecommendationEngineHybridSearch:
     """Test RecommendationEngine integration with hybrid search."""
     
-    @patch('core.services.recommendation_engine.ElasticsearchService')
+    @patch('ai_services.services.recommendation_engine.ElasticsearchService')
     def test_recommendation_with_hybrid_search(self, mock_es_class):
         """Test recommendations using hybrid search."""
         # Mock Elasticsearch service
@@ -441,7 +441,7 @@ class TestRecommendationEngineHybridSearch:
         assert len(results) > 0
         assert results[0].move_candidate.clip_id == 'clip_007'
     
-    @patch('core.services.recommendation_engine.ElasticsearchService')
+    @patch('ai_services.services.recommendation_engine.ElasticsearchService')
     def test_recommendation_fallback_to_get_all(self, mock_es_class):
         """Test fallback to get_all_embeddings when hybrid search fails."""
         # Mock Elasticsearch service

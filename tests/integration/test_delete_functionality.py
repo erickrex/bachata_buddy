@@ -22,10 +22,10 @@ User = get_user_model()
 class TestDeleteChoreography:
     """Test individual choreography deletion"""
     
-    def test_delete_choreography_success(self, django_client, test_user, tmp_path):
+    def test_delete_choreography_success(self, client, test_user, tmp_path):
         """Test successful deletion of choreography with video file"""
         # Login
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Create video file
         video_dir = tmp_path / 'output' / f'user_{test_user.id}'
@@ -46,7 +46,7 @@ class TestDeleteChoreography:
         assert video_file.exists()
         
         # Delete choreography
-        response = django_client.post(
+        response = client.post(
             reverse('collections:delete', kwargs={'pk': choreography.pk})
         )
         
@@ -65,9 +65,9 @@ class TestDeleteChoreography:
         assert len(messages) > 0
         assert 'Successfully deleted' in str(messages[0])
     
-    def test_delete_choreography_without_video_file(self, django_client, test_user):
+    def test_delete_choreography_without_video_file(self, client, test_user):
         """Test deletion when video file doesn't exist"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Create choreography without actual video file
         choreography = SavedChoreography.objects.create(
@@ -79,7 +79,7 @@ class TestDeleteChoreography:
         )
         
         # Delete choreography
-        response = django_client.post(
+        response = client.post(
             reverse('collections:delete', kwargs={'pk': choreography.pk})
         )
         
@@ -87,7 +87,7 @@ class TestDeleteChoreography:
         assert response.status_code == 302
         assert not SavedChoreography.objects.filter(pk=choreography.pk).exists()
     
-    def test_delete_choreography_unauthorized(self, django_client, test_user):
+    def test_delete_choreography_unauthorized(self, client, test_user):
         """Test that users cannot delete other users' choreographies"""
         # Create another user
         other_user = User.objects.create_user(
@@ -106,10 +106,10 @@ class TestDeleteChoreography:
         )
         
         # Login as test_user
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Try to delete other user's choreography
-        response = django_client.post(
+        response = client.post(
             reverse('collections:delete', kwargs={'pk': choreography.pk})
         )
         
@@ -119,7 +119,7 @@ class TestDeleteChoreography:
         # Choreography should still exist
         assert SavedChoreography.objects.filter(pk=choreography.pk).exists()
     
-    def test_delete_choreography_requires_login(self, django_client, test_user):
+    def test_delete_choreography_requires_login(self, client, test_user):
         """Test that deletion requires authentication"""
         # Create choreography
         choreography = SavedChoreography.objects.create(
@@ -131,7 +131,7 @@ class TestDeleteChoreography:
         )
         
         # Try to delete without login
-        response = django_client.post(
+        response = client.post(
             reverse('collections:delete', kwargs={'pk': choreography.pk})
         )
         
@@ -142,9 +142,9 @@ class TestDeleteChoreography:
         # Choreography should still exist
         assert SavedChoreography.objects.filter(pk=choreography.pk).exists()
     
-    def test_delete_choreography_requires_post(self, django_client, test_user):
+    def test_delete_choreography_requires_post(self, client, test_user):
         """Test that deletion requires POST method"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         choreography = SavedChoreography.objects.create(
             user=test_user,
@@ -155,7 +155,7 @@ class TestDeleteChoreography:
         )
         
         # Try GET request
-        response = django_client.get(
+        response = client.get(
             reverse('collections:delete', kwargs={'pk': choreography.pk})
         )
         
@@ -170,9 +170,9 @@ class TestDeleteChoreography:
 class TestDeleteAllChoreographies:
     """Test bulk deletion of all choreographies"""
     
-    def test_delete_all_choreographies_success(self, django_client, test_user, tmp_path):
+    def test_delete_all_choreographies_success(self, client, test_user, tmp_path):
         """Test successful deletion of all choreographies"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Create video directory
         video_dir = tmp_path / 'output' / f'user_{test_user.id}'
@@ -197,7 +197,7 @@ class TestDeleteAllChoreographies:
         assert len(list(video_dir.glob('*.mp4'))) == 3
         
         # Delete all
-        response = django_client.post(reverse('collections:delete_all'))
+        response = client.post(reverse('collections:delete_all'))
         
         # Check redirect
         assert response.status_code == 302
@@ -214,7 +214,7 @@ class TestDeleteAllChoreographies:
         assert len(messages) > 0
         assert 'Successfully deleted all 3 choreographies' in str(messages[0])
     
-    def test_delete_all_only_deletes_own_choreographies(self, django_client, test_user):
+    def test_delete_all_only_deletes_own_choreographies(self, client, test_user):
         """Test that bulk delete only affects current user's choreographies"""
         # Create another user
         other_user = User.objects.create_user(
@@ -241,10 +241,10 @@ class TestDeleteAllChoreographies:
         )
         
         # Login as test_user
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Delete all
-        response = django_client.post(reverse('collections:delete_all'))
+        response = client.post(reverse('collections:delete_all'))
         
         # Check test_user's choreographies deleted
         assert SavedChoreography.objects.filter(user=test_user).count() == 0
@@ -253,15 +253,15 @@ class TestDeleteAllChoreographies:
         assert SavedChoreography.objects.filter(user=other_user).count() == 1
         assert SavedChoreography.objects.filter(pk=other_choreo.pk).exists()
     
-    def test_delete_all_with_no_choreographies(self, django_client, test_user):
+    def test_delete_all_with_no_choreographies(self, client, test_user):
         """Test bulk delete when user has no choreographies"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Verify no choreographies
         assert SavedChoreography.objects.filter(user=test_user).count() == 0
         
         # Try to delete all
-        response = django_client.post(reverse('collections:delete_all'))
+        response = client.post(reverse('collections:delete_all'))
         
         # Should still succeed with info message
         assert response.status_code == 302
@@ -270,7 +270,7 @@ class TestDeleteAllChoreographies:
         assert len(messages) > 0
         assert 'No choreographies to delete' in str(messages[0])
     
-    def test_delete_all_requires_login(self, django_client, test_user):
+    def test_delete_all_requires_login(self, client, test_user):
         """Test that bulk delete requires authentication"""
         # Create choreography
         SavedChoreography.objects.create(
@@ -282,7 +282,7 @@ class TestDeleteAllChoreographies:
         )
         
         # Try to delete without login
-        response = django_client.post(reverse('collections:delete_all'))
+        response = client.post(reverse('collections:delete_all'))
         
         # Should redirect to login
         assert response.status_code == 302
@@ -291,9 +291,9 @@ class TestDeleteAllChoreographies:
         # Choreography should still exist
         assert SavedChoreography.objects.filter(user=test_user).count() == 1
     
-    def test_delete_all_requires_post(self, django_client, test_user):
+    def test_delete_all_requires_post(self, client, test_user):
         """Test that bulk delete requires POST method"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         SavedChoreography.objects.create(
             user=test_user,
@@ -304,7 +304,7 @@ class TestDeleteAllChoreographies:
         )
         
         # Try GET request
-        response = django_client.get(reverse('collections:delete_all'))
+        response = client.get(reverse('collections:delete_all'))
         
         # Should return 405 Method Not Allowed
         assert response.status_code == 405
@@ -312,12 +312,12 @@ class TestDeleteAllChoreographies:
         # Choreography should still exist
         assert SavedChoreography.objects.filter(user=test_user).count() == 1
     
-    def test_delete_all_cleans_up_empty_directory(self, django_client, test_user, tmp_path, settings):
+    def test_delete_all_cleans_up_empty_directory(self, client, test_user, tmp_path, settings):
         """Test that empty output directory is removed after bulk delete"""
         # Set MEDIA_ROOT to tmp_path
         settings.MEDIA_ROOT = tmp_path
         
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Create video directory
         video_dir = tmp_path / 'output' / f'user_{test_user.id}'
@@ -339,7 +339,7 @@ class TestDeleteAllChoreographies:
         assert video_dir.exists()
         
         # Delete all
-        django_client.post(reverse('collections:delete_all'))
+        client.post(reverse('collections:delete_all'))
         
         # Directory should be removed (if empty)
         # Note: This might not always work depending on implementation
@@ -351,9 +351,9 @@ class TestDeleteAllChoreographies:
 class TestDeleteFunctionalityIntegration:
     """Integration tests for delete functionality"""
     
-    def test_delete_from_collection_list_page(self, django_client, test_user):
+    def test_delete_from_collection_list_page(self, client, test_user):
         """Test that delete buttons appear on collection list page"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Create choreography
         SavedChoreography.objects.create(
@@ -365,7 +365,7 @@ class TestDeleteFunctionalityIntegration:
         )
         
         # Get collection list page
-        response = django_client.get(reverse('collections:list'))
+        response = client.get(reverse('collections:list'))
         
         assert response.status_code == 200
         
@@ -376,12 +376,12 @@ class TestDeleteFunctionalityIntegration:
         assert 'confirmDelete' in response.content.decode()
         assert 'confirmDeleteAll' in response.content.decode()
     
-    def test_delete_all_button_only_shows_with_choreographies(self, django_client, test_user):
+    def test_delete_all_button_only_shows_with_choreographies(self, client, test_user):
         """Test that 'Delete All' button only appears when user has choreographies"""
-        django_client.force_login(test_user)
+        client.force_login(test_user)
         
         # Get page with no choreographies
-        response = django_client.get(reverse('collections:list'))
+        response = client.get(reverse('collections:list'))
         assert response.status_code == 200
         
         # Should not show delete all button
@@ -398,7 +398,7 @@ class TestDeleteFunctionalityIntegration:
         )
         
         # Get page with choreographies
-        response = django_client.get(reverse('collections:list'))
+        response = client.get(reverse('collections:list'))
         assert response.status_code == 200
         
         # Should show delete all button

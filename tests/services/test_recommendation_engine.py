@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 
-from core.services.recommendation_engine import (
+from ai_services.services.recommendation_engine import (
     RecommendationEngine,
     MoveCandidate,
     RecommendationScore,
@@ -88,8 +88,8 @@ class TestRecommendationEngine:
     
     def test_initialization_without_es_service(self):
         """Test engine creates ES service if not provided."""
-        with patch('core.services.recommendation_engine.EnvironmentConfig'):
-            with patch('core.services.recommendation_engine.ElasticsearchService'):
+        with patch('ai_services.services.recommendation_engine.EnvironmentConfig'):
+            with patch('ai_services.services.recommendation_engine.ElasticsearchService'):
                 engine = RecommendationEngine()
                 assert engine.es_service is not None
     

@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from choreography.models import SavedChoreography
 from instructors.models import ClassPlan
-from core.exceptions import (
+from common.exceptions import (
     YouTubeDownloadError,
     MusicAnalysisError,
     VideoGenerationError

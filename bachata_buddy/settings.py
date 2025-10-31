@@ -50,12 +50,16 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Third-party apps
     'django_htmx',
-    # Local apps
-    'core',  # Shared services and utilities
+    # Local apps - shared utilities
+    'common',
+    # Local apps - existing
     'users',
     'choreography',
     'user_collections',
     'instructors',
+    # Local apps - new architecture
+    'ai_services',
+    'video_processing',
 ]
 
 MIDDLEWARE = [

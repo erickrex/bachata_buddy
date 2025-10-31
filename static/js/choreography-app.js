@@ -293,20 +293,60 @@ function choreographyApp() {
         handleSaveResponse(event) {
             this.isSaving = false;
             if (event.detail.xhr.status === 200) {
-                if (this.$root?.showNotification) {
-                    this.$root.showNotification('💾 Choreography saved to your collection!', 'success');
-                }
+                // Show success notification
+                this.showNotification('💾 Choreography saved to your collection!', 'success');
             } else {
                 try {
                     const errorData = JSON.parse(event.detail.xhr.responseText || event.detail.xhr.response);
-                    if (this.$root?.showNotification) {
-                        this.$root.showNotification(errorData.message || 'Failed to save choreography', 'error');
-                    }
+                    this.showNotification(errorData.message || 'Failed to save choreography', 'error');
                 } catch (e) {
-                    if (this.$root?.showNotification) {
-                        this.$root.showNotification('Failed to save choreography', 'error');
-                    }
+                    this.showNotification('Failed to save choreography', 'error');
                 }
+            }
+        },
+        
+        // Simple notification system
+        showNotification(message, type = 'info') {
+            // Try to use $root notification if available
+            if (this.$root?.showNotification) {
+                this.$root.showNotification(message, type);
+                return;
+            }
+            
+            // Fallback: Create a simple toast notification
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-semibold transition-all transform translate-x-0 ${
+                type === 'success' ? 'bg-green-500' :
+                type === 'error' ? 'bg-red-500' :
+                type === 'warning' ? 'bg-yellow-500' :
+                'bg-blue-500'
+            }`;
+            toast.textContent = message;
+            toast.style.animation = 'slideIn 0.3s ease-out';
+            
+            document.body.appendChild(toast);
+            
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-in';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+            
+            // Add CSS animations if not already present
+            if (!document.getElementById('toast-animations')) {
+                const style = document.createElement('style');
+                style.id = 'toast-animations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { transform: translateX(400px); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOut {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(400px); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
             }
         },
         

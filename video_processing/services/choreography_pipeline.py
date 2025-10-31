@@ -21,13 +21,13 @@ import pickle
 from .music_analyzer import MusicAnalyzer, MusicFeatures
 from .yolov8_couple_detector import YOLOv8CoupleDetector
 from .pose_embedding_generator import PoseEmbeddingGenerator
-from .recommendation_engine import (
+from ai_services.services.recommendation_engine import (
     RecommendationEngine, RecommendationRequest, MoveCandidate, RecommendationScore
 )
 from .video_generator import VideoGenerator, VideoGenerationConfig
-from .annotation_interface import AnnotationInterface
+from choreography.services.annotation_interface import AnnotationInterface
 from .youtube_service import YouTubeService
-from core.models.video_models import ChoreographySequence
+from video_processing.models.video_models import ChoreographySequence
 
 logger = logging.getLogger(__name__)
 
@@ -951,7 +951,8 @@ class ChoreoGenerationPipeline:
             )
             
             # FALLBACK STRATEGY: If too few recommendations, relax filters progressively
-            if len(recommendations) < 10:
+            # Threshold lowered to 5 to preserve difficulty filtering with limited datasets
+            if len(recommendations) < 5:
                 logger.warning(f"Only {len(recommendations)} recommendations found with difficulty={difficulty}, energy_level={energy_level}")
                 logger.warning("Applying fallback strategy: removing energy_level filter...")
                 
@@ -969,7 +970,7 @@ class ChoreoGenerationPipeline:
                 )
                 logger.info(f"After removing energy filter: {len(recommendations)} recommendations")
             
-            if len(recommendations) < 10:
+            if len(recommendations) < 5:
                 logger.warning(f"Still only {len(recommendations)} recommendations with difficulty={difficulty}")
                 logger.warning("Applying fallback strategy: removing difficulty filter...")
                 
@@ -1136,7 +1137,7 @@ class ChoreoGenerationPipeline:
     
     def _create_full_song_sequence(self, video_paths: List[str], target_duration: float) -> ChoreographySequence:
         """Create a sequence that fills the entire song duration by repeating moves as needed."""
-        from core.models.video_models import ChoreographySequence, SelectedMove, TransitionType
+        from video_processing.models import ChoreographySequence, SelectedMove, TransitionType
         import subprocess
         import json
         

@@ -16,7 +16,9 @@ try:
 except ImportError:
     PANDAS_AVAILABLE = False
 
-from core.models.annotation_schema import (
+# Note: annotation_schema contains Pydantic models, not Django models
+# Moved from core/models to video_processing/models for proper organization
+from video_processing.models.annotation_schema import (
     AnnotationCollection, 
     MoveAnnotation, 
     DifficultyLevel,

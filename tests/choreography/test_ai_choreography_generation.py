@@ -18,7 +18,7 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
-from core.services.gemini_service import ChoreographyParameters
+from ai_services.services.gemini_service import ChoreographyParameters
 
 
 User = get_user_model()
@@ -37,7 +37,7 @@ class TestAIExplanationGeneration(TestCase):
         self.client = Client()
         self.client.login(username='testuser', password='testpass123')
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_explanation_generation_for_moves(self, mock_gemini_class):
         """Test that explanations are generated for each move."""
         # Mock Gemini service
@@ -83,7 +83,7 @@ class TestAIExplanationGeneration(TestCase):
         assert 'romantic' in explanation.lower()
         assert 'intermediate' in explanation.lower()
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_explanation_quality_checks(self, mock_gemini_class):
         """Test that generated explanations meet quality standards."""
         mock_gemini = MagicMock()
@@ -108,7 +108,7 @@ class TestAIExplanationGeneration(TestCase):
         assert len(explanation.split()) > 10  # Multiple words
         assert any(word in explanation.lower() for word in ['match', 'chosen', 'selected', 'perfect'])
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_fallback_to_template_messages(self, mock_gemini_class):
         """Test fallback to template messages when AI fails."""
         mock_gemini = MagicMock()
@@ -135,7 +135,7 @@ class TestAIExplanationGeneration(TestCase):
         assert 'beginner' in explanation
         assert 'low' in explanation
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_batch_explanation_generation(self, mock_gemini_class):
         """Test generating explanations for multiple moves."""
         mock_gemini = MagicMock()
@@ -205,15 +205,15 @@ class TestLegacyTemplateIsolation(TestCase):
         assert b'describe your choreography' not in response.content.lower()
         assert b'natural language' not in response.content.lower()
     
-    @patch('core.services.elasticsearch_service.Elasticsearch')
+    @patch('ai_services.services.elasticsearch_service.Elasticsearch')
     def test_both_templates_use_same_elasticsearch(self, mock_es_client):
         """Test that both templates use the same Elasticsearch connection."""
         # Mock Elasticsearch client
         mock_es_client.return_value.ping.return_value = True
         
         # This is verified by checking that both use the same service
-        from core.services.elasticsearch_service import ElasticsearchService
-        from core.config.environment_config import EnvironmentConfig
+        from ai_services.services.elasticsearch_service import ElasticsearchService
+        from common.config.environment_config import EnvironmentConfig
         
         config = EnvironmentConfig()
         es_service = ElasticsearchService(config.elasticsearch)
@@ -236,7 +236,7 @@ class TestEndToEndAITemplate(TestCase):
         self.client = Client()
         self.client.login(username='testuser', password='testpass123')
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_complete_ai_flow_with_explanations(self, mock_gemini_class):
         """Test complete flow from query to explanations."""
         mock_gemini = MagicMock()
@@ -268,7 +268,7 @@ class TestEndToEndAITemplate(TestCase):
         assert data['parameters']['style'] == 'romantic'
     
     @patch('threading.Thread')
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_ai_generation_starts_background_task(self, mock_gemini_class, mock_thread):
         """Test that AI generation starts a background task."""
         mock_gemini = MagicMock()
@@ -298,7 +298,7 @@ class TestEndToEndAITemplate(TestCase):
         assert 'task_id' in data
         assert data['status'] == 'started'
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_error_handling_with_suggestions(self, mock_gemini_class):
         """Test error handling with AI suggestions."""
         mock_gemini = MagicMock()
@@ -334,7 +334,7 @@ class TestEndToEndAITemplate(TestCase):
 class TestExplanationCaching(TestCase):
     """Test explanation caching and performance."""
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_explanation_caching_reduces_api_calls(self, mock_gemini_class):
         """Test that explanations are cached to reduce API calls."""
         mock_gemini = MagicMock()
@@ -355,7 +355,7 @@ class TestExplanationCaching(TestCase):
         # Verify explanations match
         assert explanation1 == explanation2
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_explanation_generation_timeout(self, mock_gemini_class):
         """Test that explanation generation has timeout protection."""
         mock_gemini = MagicMock()
@@ -385,7 +385,7 @@ class TestExplanationCaching(TestCase):
 class TestAITemplateAccessControl(TestCase):
     """Test access control for AI template."""
     
-    @patch('core.services.gemini_service.GeminiService')
+    @patch('ai_services.services.gemini_service.GeminiService')
     def test_ai_template_requires_authentication(self, mock_gemini_class):
         """Test that AI template requires user authentication."""
         # Mock Gemini service

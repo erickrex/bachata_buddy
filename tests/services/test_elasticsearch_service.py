@@ -19,8 +19,8 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 from elasticsearch.exceptions import ConnectionError, TransportError
 
-from core.config.environment_config import ElasticsearchConfig
-from core.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import ElasticsearchConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
 
 
 # ============================================================================
@@ -285,7 +285,7 @@ class TestElasticsearchServiceUnit:
     
     def test_to_list_with_numpy_array(self, es_config):
         """Test _to_list with numpy array."""
-        with patch('core.services.elasticsearch_service.Elasticsearch'):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch'):
             es_service = ElasticsearchService(es_config)
             
             arr = np.array([1.0, 2.0, 3.0])
@@ -296,7 +296,7 @@ class TestElasticsearchServiceUnit:
     
     def test_to_list_with_none(self, es_config):
         """Test _to_list with None."""
-        with patch('core.services.elasticsearch_service.Elasticsearch'):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch'):
             es_service = ElasticsearchService(es_config)
             
             result = es_service._to_list(None)
@@ -305,7 +305,7 @@ class TestElasticsearchServiceUnit:
     
     def test_to_list_with_list(self, es_config):
         """Test _to_list with list."""
-        with patch('core.services.elasticsearch_service.Elasticsearch'):
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch'):
             es_service = ElasticsearchService(es_config)
             
             lst = [1.0, 2.0, 3.0]
@@ -322,7 +322,7 @@ class TestElasticsearchServiceUnit:
             use_ssl=False
         )
         
-        with patch('core.services.elasticsearch_service.Elasticsearch') as mock_es:
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch') as mock_es:
             ElasticsearchService(config)
             
             # Verify URL was constructed correctly
@@ -338,7 +338,7 @@ class TestElasticsearchServiceUnit:
             use_ssl=True
         )
         
-        with patch('core.services.elasticsearch_service.Elasticsearch') as mock_es:
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch') as mock_es:
             ElasticsearchService(config)
             
             # Verify URL was constructed correctly
@@ -355,7 +355,7 @@ class TestElasticsearchServiceUnit:
             password="secret123"
         )
         
-        with patch('core.services.elasticsearch_service.Elasticsearch') as mock_es:
+        with patch('ai_services.services.elasticsearch_service.Elasticsearch') as mock_es:
             ElasticsearchService(config)
             
             # Verify authentication was included

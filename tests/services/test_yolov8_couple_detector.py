@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import sys
 
-from core.services.yolov8_couple_detector import (
+from video_processing.services.yolov8_couple_detector import (
     PersonPose,
     CouplePose,
     PersonTracker,

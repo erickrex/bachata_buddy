@@ -123,7 +123,7 @@ class TestAutoSave:
             # Submit generation with auto_save=true
             url = reverse('choreography:create')
             response = django_client.post(url, {
-                'song_selection': 'data/songs/Amor.mp3',
+                'song_selection': 'Amor.mp3',
                 'difficulty': 'intermediate',
                 'auto_save': 'true'
             })
@@ -194,9 +194,8 @@ class TestConcurrencyLimiting:
         django_client.force_login(test_user)
         
         # Clean up any existing tasks first
-        from choreography.utils import _active_tasks, _task_lock
-        with _task_lock:
-            _active_tasks.clear()
+        from choreography.models import ChoreographyTask
+        ChoreographyTask.objects.filter(user=test_user).delete()
         
         # Create 3 completed tasks
         for i in range(3):
@@ -224,9 +223,8 @@ class TestTaskManagement:
         django_client.force_login(test_user)
         
         # Clean up any existing tasks first
-        from choreography.utils import _active_tasks, _task_lock
-        with _task_lock:
-            _active_tasks.clear()
+        from choreography.models import ChoreographyTask
+        ChoreographyTask.objects.filter(user=test_user).delete()
         
         # Create some tasks
         task1 = str(uuid.uuid4())
@@ -273,29 +271,46 @@ class TestTaskManagement:
     
     def test_cancel_task_unauthorized(self, django_client, test_user):
         """Test that users cannot cancel other users' tasks."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Create another user
+        other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@example.com',
+            password='testpass123'
+        )
+        
         django_client.force_login(test_user)
         
-        # Create a task for another user
+        # Create a task for the other user
         task_id = str(uuid.uuid4())
-        create_task(task_id, test_user.id + 999)
+        create_task(task_id, other_user.id)
         
         url = reverse('choreography:cancel_task', kwargs={'task_id': task_id})
         response = django_client.post(url)
         
         assert response.status_code == 403
     
-    def test_task_cleanup(self):
+    def test_task_cleanup(self, test_user):
         """Test automatic task cleanup."""
-        import time
+        from django.utils import timezone
+        from datetime import timedelta
+        from choreography.models import ChoreographyTask
         
         # Create old completed task
         task_id = str(uuid.uuid4())
-        create_task(task_id, 1)
-        update_task(task_id, status='completed', created_at=time.time() - 7200)  # 2 hours old
+        create_task(task_id, test_user.id)
+        update_task(task_id, status='completed')
+        
+        # Manually set created_at to 2 hours ago
+        task = ChoreographyTask.objects.get(task_id=task_id)
+        task.created_at = timezone.now() - timedelta(hours=2)
+        task.save()
         
         # Create recent task
         task_id2 = str(uuid.uuid4())
-        create_task(task_id2, 1)
+        create_task(task_id2, test_user.id)
         
         # Run cleanup
         removed = cleanup_old_tasks(max_age_hours=1)
@@ -308,71 +323,7 @@ class TestTaskManagement:
         assert get_task(task_id2) is not None
 
 
-@pytest.mark.django_db
-class TestYouTubeValidation:
-    """Test YouTube URL validation endpoint."""
-    
-    def test_validate_youtube_url_valid(self, django_client, test_user):
-        """Test validating a valid YouTube URL."""
-        django_client.force_login(test_user)
-        
-        url = reverse('choreography:validate_youtube')
-        
-        with patch('yt_dlp.YoutubeDL') as mock_ydl:
-            # Mock yt-dlp response
-            mock_ydl.return_value.__enter__.return_value.extract_info.return_value = {
-                'title': 'Test Video',
-                'duration': 180,
-                'uploader': 'Test Channel',
-                'view_count': 1000
-            }
-            
-            response = django_client.post(
-                url,
-                data=json.dumps({'url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'}),
-                content_type='application/json'
-            )
-            
-            assert response.status_code == 200
-            data = json.loads(response.content)
-            
-            assert data['valid'] is True
-            assert 'details' in data
-            assert data['details']['title'] == 'Test Video'
-    
-    def test_validate_youtube_url_invalid_format(self, django_client, test_user):
-        """Test validating an invalid URL format."""
-        django_client.force_login(test_user)
-        
-        url = reverse('choreography:validate_youtube')
-        response = django_client.post(
-            url,
-            data=json.dumps({'url': 'https://not-youtube.com/video'}),
-            content_type='application/json'
-        )
-        
-        assert response.status_code == 200
-        data = json.loads(response.content)
-        
-        assert data['valid'] is False
-        assert 'Invalid YouTube URL format' in data['message']
-    
-    def test_validate_youtube_url_missing(self, django_client, test_user):
-        """Test validation with missing URL."""
-        django_client.force_login(test_user)
-        
-        url = reverse('choreography:validate_youtube')
-        response = django_client.post(
-            url,
-            data=json.dumps({'url': ''}),
-            content_type='application/json'
-        )
-        
-        assert response.status_code == 400
-        data = json.loads(response.content)
-        
-        assert data['valid'] is False
-        assert 'URL is required' in data['message']
+# YouTube validation feature was removed - tests deleted
 
 
 @pytest.mark.django_db

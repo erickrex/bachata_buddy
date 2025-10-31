@@ -3,8 +3,8 @@ Fix video paths in Elasticsearch from Bachata_steps/ to training_videos/
 """
 
 import logging
-from core.config.environment_config import EnvironmentConfig
-from core.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import EnvironmentConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

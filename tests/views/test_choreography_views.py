@@ -42,17 +42,22 @@ class TestChoreographyIndexView:
     """Test the choreography index view."""
     
     def test_index_page_loads_successfully(self, client):
-        """Test index page loads without authentication."""
+        """Test index page redirects to select-song."""
         url = reverse('choreography:index')
         response = client.get(url)
         
+        # Index now redirects to select-song
+        assert response.status_code == 302
+        assert response.url == reverse('choreography:select-song')
+        
+        # Follow redirect and check it loads
+        response = client.get(url, follow=True)
         assert response.status_code == 200
         assert 'form' in response.context
-        assert b'choreography' in response.content.lower() or b'generate' in response.content.lower()
     
     def test_index_page_contains_form(self, client):
-        """Test index page contains ChoreographyGenerationForm."""
-        url = reverse('choreography:index')
+        """Test select-song page contains ChoreographyGenerationForm."""
+        url = reverse('choreography:select-song')
         response = client.get(url)
         
         assert response.status_code == 200
@@ -61,8 +66,8 @@ class TestChoreographyIndexView:
         assert b'difficulty' in response.content
     
     def test_index_page_uses_correct_template(self, client):
-        """Test index page uses choreography/index.html template."""
-        url = reverse('choreography:index')
+        """Test select-song page uses choreography/index.html template."""
+        url = reverse('choreography:select-song')
         response = client.get(url)
         
         assert response.status_code == 200

@@ -8,7 +8,7 @@ as well as validation of configuration parameters.
 import pytest
 import os
 from unittest.mock import patch, MagicMock
-from core.config.environment_config import EnvironmentConfig, ElasticsearchConfig, MMPoseConfig
+from common.config.environment_config import EnvironmentConfig, ElasticsearchConfig, YOLOv8Config
 
 
 class TestEnvironmentConfigLocal:
@@ -21,8 +21,8 @@ class TestEnvironmentConfigLocal:
         monkeypatch.setenv("ELASTICSEARCH_HOST", "localhost")
         monkeypatch.setenv("ELASTICSEARCH_PORT", "9200")
         monkeypatch.setenv("ELASTICSEARCH_INDEX", "test_index")
-        monkeypatch.setenv("MMPOSE_CHECKPOINT_PATH", "./test_checkpoints")
-        monkeypatch.setenv("MMPOSE_CONFIDENCE", "0.3")
+        monkeypatch.setenv("YOLOV8_MODEL", "yolov8n-pose.pt")
+        monkeypatch.setenv("YOLOV8_CONFIDENCE", "0.3")
     
     def test_load_local_config(self):
         """Test loading local configuration from .env."""
@@ -32,9 +32,9 @@ class TestEnvironmentConfigLocal:
         assert config.elasticsearch.host == "localhost"
         assert config.elasticsearch.port == 9200
         assert config.elasticsearch.index_name == "test_index"
-        assert config.mmpose.model_checkpoint_path == "./test_checkpoints"
-        assert config.mmpose.confidence_threshold == 0.3
-        assert config.mmpose.device == "cpu"
+        assert config.yolov8.model_name == "yolov8n-pose.pt"
+        assert config.yolov8.confidence_threshold == 0.3
+        assert config.yolov8.device == "cpu"
     
     def test_elasticsearch_defaults(self, monkeypatch):
         """Test Elasticsearch default values."""
@@ -48,16 +48,16 @@ class TestEnvironmentConfigLocal:
         assert config.elasticsearch.max_connections == 10
         assert config.elasticsearch.timeout == 30
     
-    def test_mmpose_defaults(self, monkeypatch):
-        """Test MMPose default values."""
-        monkeypatch.delenv("MMPOSE_CONFIDENCE", raising=False)
-        monkeypatch.delenv("MMPOSE_HAND_DETECTION", raising=False)
+    def test_yolov8_defaults(self, monkeypatch):
+        """Test YOLOv8 default values."""
+        monkeypatch.delenv("YOLOV8_CONFIDENCE", raising=False)
+        monkeypatch.delenv("YOLOV8_MODEL", raising=False)
         
         config = EnvironmentConfig()
         
-        assert config.mmpose.confidence_threshold == 0.3
-        assert config.mmpose.enable_hand_detection is True
-        assert config.mmpose.device == "cpu"
+        assert config.yolov8.confidence_threshold == 0.3
+        assert config.yolov8.model_name == "yolov8n-pose.pt"
+        assert config.yolov8.device == "cpu"
     
     def test_ssl_configuration(self, monkeypatch):
         """Test SSL configuration."""
@@ -85,9 +85,9 @@ class TestEnvironmentConfigValidation:
         monkeypatch.setenv("ENVIRONMENT", "local")
         monkeypatch.setenv("ELASTICSEARCH_HOST", "")
         monkeypatch.setenv("ELASTICSEARCH_PORT", "9200")
-        monkeypatch.setenv("MMPOSE_CHECKPOINT_PATH", "./checkpoints")
+        monkeypatch.setenv("YOLOV8_MODEL", "yolov8n-pose.pt")
         
-        with pytest.raises(ValueError, match="Elasticsearch host is required"):
+        with pytest.raises(ValueError, match="Elasticsearch connection is required"):
             EnvironmentConfig()
     
     def test_invalid_elasticsearch_port(self, monkeypatch):
@@ -95,7 +95,7 @@ class TestEnvironmentConfigValidation:
         monkeypatch.setenv("ENVIRONMENT", "local")
         monkeypatch.setenv("ELASTICSEARCH_HOST", "localhost")
         monkeypatch.setenv("ELASTICSEARCH_PORT", "-1")
-        monkeypatch.setenv("MMPOSE_CHECKPOINT_PATH", "./checkpoints")
+        monkeypatch.setenv("YOLOV8_MODEL", "yolov8n-pose.pt")
         
         with pytest.raises(ValueError, match="port must be a positive integer"):
             EnvironmentConfig()
@@ -105,8 +105,8 @@ class TestEnvironmentConfigValidation:
         monkeypatch.setenv("ENVIRONMENT", "local")
         monkeypatch.setenv("ELASTICSEARCH_HOST", "localhost")
         monkeypatch.setenv("ELASTICSEARCH_PORT", "9200")
-        monkeypatch.setenv("MMPOSE_CHECKPOINT_PATH", "./checkpoints")
-        monkeypatch.setenv("MMPOSE_CONFIDENCE", "1.5")
+        monkeypatch.setenv("YOLOV8_MODEL", "yolov8n-pose.pt")
+        monkeypatch.setenv("YOLOV8_CONFIDENCE", "1.5")
         
         with pytest.raises(ValueError, match="confidence threshold must be between 0.0 and 1.0"):
             EnvironmentConfig()
@@ -116,27 +116,27 @@ class TestEnvironmentConfigValidation:
         monkeypatch.setenv("ENVIRONMENT", "local")
         monkeypatch.setenv("ELASTICSEARCH_HOST", "localhost")
         monkeypatch.setenv("ELASTICSEARCH_PORT", "9200")
-        monkeypatch.setenv("MMPOSE_CHECKPOINT_PATH", "./checkpoints")
-        monkeypatch.setenv("MMPOSE_CONFIDENCE", "-0.1")
+        monkeypatch.setenv("YOLOV8_MODEL", "yolov8n-pose.pt")
+        monkeypatch.setenv("YOLOV8_CONFIDENCE", "-0.1")
         
         with pytest.raises(ValueError, match="confidence threshold must be between 0.0 and 1.0"):
             EnvironmentConfig()
     
-    def test_missing_mmpose_checkpoint_path(self, monkeypatch):
-        """Test that missing MMPose checkpoint path raises ValueError."""
+    def test_missing_yolov8_model(self, monkeypatch):
+        """Test that missing YOLOv8 model uses default."""
         monkeypatch.setenv("ENVIRONMENT", "local")
         monkeypatch.setenv("ELASTICSEARCH_HOST", "localhost")
         monkeypatch.setenv("ELASTICSEARCH_PORT", "9200")
-        monkeypatch.setenv("MMPOSE_CHECKPOINT_PATH", "")
+        monkeypatch.delenv("YOLOV8_MODEL", raising=False)
         
-        with pytest.raises(ValueError, match="MMPose checkpoint path is required"):
-            EnvironmentConfig()
+        config = EnvironmentConfig()
+        assert config.yolov8.model_name == "yolov8n-pose.pt"
 
 
 class TestEnvironmentConfigCloud:
     """Tests for cloud environment configuration."""
     
-    @patch('core.config.environment_config.secretmanager.SecretManagerServiceClient')
+    @patch('common.config.environment_config.secretmanager.SecretManagerServiceClient')
     def test_load_cloud_config(self, mock_secret_client, monkeypatch):
         """Test loading cloud configuration from Secret Manager."""
         monkeypatch.setenv("ENVIRONMENT", "cloud")
@@ -155,7 +155,7 @@ class TestEnvironmentConfigCloud:
                 "elasticsearch-port": "9243",
                 "elasticsearch-username": "elastic",
                 "elasticsearch-password": "secret123",
-                "mmpose-checkpoint-path": "gs://bucket/checkpoints"
+                "yolov8-model-name": "yolov8n-pose.pt"
             }
             
             mock_response.payload.data.decode.return_value = secrets.get(secret_id, "")
@@ -171,7 +171,7 @@ class TestEnvironmentConfigCloud:
         assert config.elasticsearch.username == "elastic"
         assert config.elasticsearch.password == "secret123"
         assert config.elasticsearch.use_ssl is True
-        assert config.mmpose.model_checkpoint_path == "gs://bucket/checkpoints"
+        assert config.yolov8.model_name == "yolov8n-pose.pt"
     
     def test_missing_gcp_project_id(self, monkeypatch):
         """Test that missing GCP_PROJECT_ID raises ValueError."""
@@ -205,15 +205,14 @@ class TestDataClasses:
         assert config.verify_certs is True  # default
         assert config.max_connections == 10  # default
     
-    def test_mmpose_config_creation(self):
-        """Test MMPoseConfig creation."""
-        config = MMPoseConfig(
-            model_checkpoint_path="./checkpoints",
+    def test_yolov8_config_creation(self):
+        """Test YOLOv8Config creation."""
+        config = YOLOv8Config(
+            model_name="yolov8n-pose.pt",
             confidence_threshold=0.5,
-            enable_hand_detection=False
+            device="cpu"
         )
         
-        assert config.model_checkpoint_path == "./checkpoints"
+        assert config.model_name == "yolov8n-pose.pt"
         assert config.confidence_threshold == 0.5
-        assert config.enable_hand_detection is False
-        assert config.device == "cpu"  # always CPU
+        assert config.device == "cpu"

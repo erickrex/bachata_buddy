@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import json
 
-from core.models.video_models import (
+from video_processing.models.video_models import (
     ChoreographySequence, 
     SelectedMove, 
     VideoGenerationConfig, 

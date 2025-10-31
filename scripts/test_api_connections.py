@@ -26,7 +26,7 @@ print()
 print("1. Testing Gemini API...")
 print("-" * 70)
 try:
-    from core.services.gemini_service import GeminiService, ChoreographyParameters
+    from ai_services.services.gemini_service import GeminiService, ChoreographyParameters
     
     service = GeminiService()
     print("✅ Gemini service initialized")
@@ -83,8 +83,8 @@ print()
 print("2. Testing Elasticsearch...")
 print("-" * 70)
 try:
-    from core.config.environment_config import EnvironmentConfig
-    from core.services.elasticsearch_service import ElasticsearchService
+    from common.config.environment_config import EnvironmentConfig
+    from ai_services.services.elasticsearch_service import ElasticsearchService
     
     config = EnvironmentConfig()
     print(f"   Host: {config.elasticsearch.host}")

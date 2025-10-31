@@ -11,7 +11,7 @@ from django.test import Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
-from core.services.gemini_service import ChoreographyParameters
+from ai_services.services.gemini_service import ChoreographyParameters
 
 User = get_user_model()
 
@@ -35,7 +35,7 @@ def user(db):
 @pytest.fixture
 def mock_gemini_service():
     """Mock GeminiService for testing."""
-    with patch('core.services.gemini_service.GeminiService') as mock_service:
+    with patch('ai_services.services.gemini_service.GeminiService') as mock_service:
         mock_instance = MagicMock()
         mock_service.return_value = mock_instance
         yield mock_instance
@@ -170,7 +170,7 @@ class TestAITemplateFlow:
     
     def test_gemini_service_not_configured(self, client):
         """Test error handling when Gemini service is not configured."""
-        with patch('core.services.gemini_service.GeminiService') as mock_service:
+        with patch('ai_services.services.gemini_service.GeminiService') as mock_service:
             mock_service.side_effect = ValueError("Google API key is required")
             
             response = client.post(
@@ -193,7 +193,7 @@ class TestAPIParseQuery:
     
     def test_api_parse_query_success(self, client, mock_gemini_service):
         """Test successful query parsing via API."""
-        with patch('core.services.gemini_service.GeminiService') as mock_service:
+        with patch('ai_services.services.gemini_service.GeminiService') as mock_service:
             mock_instance = MagicMock()
             mock_service.return_value = mock_instance
             
@@ -233,7 +233,7 @@ class TestAPIParseQuery:
     
     def test_api_parse_query_error_with_suggestions(self, client):
         """Test API error handling with suggestions."""
-        with patch('core.services.gemini_service.GeminiService') as mock_service:
+        with patch('ai_services.services.gemini_service.GeminiService') as mock_service:
             mock_instance = MagicMock()
             mock_service.return_value = mock_instance
             
@@ -328,7 +328,7 @@ class TestErrorHandling:
     
     def test_unexpected_error(self, client):
         """Test handling of unexpected errors."""
-        with patch('core.services.gemini_service.GeminiService') as mock_service:
+        with patch('ai_services.services.gemini_service.GeminiService') as mock_service:
             mock_service.side_effect = RuntimeError("Unexpected error")
             
             response = client.post(

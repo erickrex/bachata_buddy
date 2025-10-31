@@ -13,9 +13,9 @@ import os
 import sys
 from unittest.mock import Mock, patch, MagicMock
 
-from core.config.environment_config import (
+from common.config.environment_config import (
     ElasticsearchConfig,
-    MMPoseConfig,
+    YOLOv8Config,
     EnvironmentConfig
 )
 
@@ -78,43 +78,42 @@ class TestElasticsearchConfig:
 
 
 # ============================================================================
-# Unit Tests for MMPoseConfig
+# Unit Tests for YOLOv8Config
 # ============================================================================
 
-class TestMMPoseConfig:
-    """Unit tests for MMPoseConfig dataclass."""
+class TestYOLOv8Config:
+    """Unit tests for YOLOv8Config dataclass."""
     
-    def test_mmpose_config_defaults(self):
-        """Test MMPoseConfig with default values."""
-        config = MMPoseConfig(
-            model_checkpoint_path="./checkpoints"
-        )
+    def test_yolov8_config_defaults(self):
+        """Test YOLOv8Config with default values."""
+        config = YOLOv8Config()
         
-        assert config.model_checkpoint_path == "./checkpoints"
+        assert config.model_name == "yolov8n-pose.pt"
         assert config.confidence_threshold == 0.3
-        assert config.enable_hand_detection is True
         assert config.device == "cpu"
+        assert config.iou_threshold == 0.5
+        assert config.max_det == 10
     
-    def test_mmpose_config_custom_values(self):
-        """Test MMPoseConfig with custom values."""
-        config = MMPoseConfig(
-            model_checkpoint_path="/custom/path",
+    def test_yolov8_config_custom_values(self):
+        """Test YOLOv8Config with custom values."""
+        config = YOLOv8Config(
+            model_name="yolov8m-pose.pt",
             confidence_threshold=0.5,
-            enable_hand_detection=False
+            device="cuda",
+            iou_threshold=0.7,
+            max_det=20
         )
         
-        assert config.model_checkpoint_path == "/custom/path"
+        assert config.model_name == "yolov8m-pose.pt"
         assert config.confidence_threshold == 0.5
-        assert config.enable_hand_detection is False
-        assert config.device == "cpu"  # Always CPU
+        assert config.device == "cuda"
+        assert config.iou_threshold == 0.7
+        assert config.max_det == 20
     
-    def test_mmpose_config_always_cpu(self):
-        """Test that MMPoseConfig always uses CPU device."""
-        config = MMPoseConfig(
-            model_checkpoint_path="./checkpoints"
-        )
+    def test_yolov8_config_cpu_device(self):
+        """Test that YOLOv8Config can use CPU device."""
+        config = YOLOv8Config(device="cpu")
         
-        # Device should always be CPU
         assert config.device == "cpu"
 
 
@@ -133,9 +132,9 @@ class TestEnvironmentConfigLocal:
         "ELASTICSEARCH_USERNAME": "test_user",
         "ELASTICSEARCH_PASSWORD": "test_pass",
         "ELASTICSEARCH_USE_SSL": "false",
-        "MMPOSE_CHECKPOINT_PATH": "./test_checkpoints",
-        "MMPOSE_CONFIDENCE": "0.5",
-        "MMPOSE_HAND_DETECTION": "true"
+        "YOLOV8_MODEL": "yolov8n-pose.pt",
+        "YOLOV8_CONFIDENCE": "0.5",
+        "YOLOV8_DEVICE": "cpu"
     })
     @patch('dotenv.load_dotenv')
     def test_load_local_config(self, mock_load_dotenv):
@@ -156,10 +155,10 @@ class TestEnvironmentConfigLocal:
         assert config.elasticsearch.password == "test_pass"
         assert config.elasticsearch.use_ssl is False
         
-        # Verify MMPose config
-        assert config.mmpose.model_checkpoint_path == "./test_checkpoints"
-        assert config.mmpose.confidence_threshold == 0.5
-        assert config.mmpose.enable_hand_detection is True
+        # Verify YOLOv8 config
+        assert config.yolov8.model_name == "yolov8n-pose.pt"
+        assert config.yolov8.confidence_threshold == 0.5
+        assert config.yolov8.device == "cpu"
     
     @patch.dict(os.environ, {
         "ENVIRONMENT": "local",
@@ -180,8 +179,8 @@ class TestEnvironmentConfigLocal:
         assert config.elasticsearch.index_name == "bachata_move_embeddings"
         assert config.elasticsearch.username is None
         assert config.elasticsearch.password is None
-        assert config.mmpose.model_checkpoint_path == "./checkpoints"
-        assert config.mmpose.confidence_threshold == 0.3
+        assert config.yolov8.model_name == "yolov8n-pose.pt"
+        assert config.yolov8.confidence_threshold == 0.3
     
     @patch.dict(os.environ, {
         "ENVIRONMENT": "local",
@@ -200,14 +199,14 @@ class TestEnvironmentConfigLocal:
         "ENVIRONMENT": "local",
         "ELASTICSEARCH_HOST": "localhost",
         "ELASTICSEARCH_PORT": "9200",
-        "MMPOSE_HAND_DETECTION": "false"
+        "YOLOV8_DEVICE": "cuda"
     })
     @patch('dotenv.load_dotenv')
-    def test_load_local_config_hand_detection_parsing(self, mock_load_dotenv):
-        """Test parsing of boolean hand detection flag."""
+    def test_load_local_config_device_parsing(self, mock_load_dotenv):
+        """Test parsing of device configuration."""
         config = EnvironmentConfig()
         
-        assert config.mmpose.enable_hand_detection is False
+        assert config.yolov8.device == "cuda"
 
 
 # ============================================================================

@@ -15,10 +15,10 @@ import pytest
 import numpy as np
 from pathlib import Path
 
-from core.config.environment_config import EnvironmentConfig, ElasticsearchConfig
-from core.services.elasticsearch_service import ElasticsearchService
-from core.services.text_embedding_service import TextEmbeddingService
-from core.services.recommendation_engine import RecommendationEngine
+from common.config.environment_config import EnvironmentConfig, ElasticsearchConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
+from ai_services.services.text_embedding_service import TextEmbeddingService
+from ai_services.services.recommendation_engine import RecommendationEngine
 
 
 # ============================================================================

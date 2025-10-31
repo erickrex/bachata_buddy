@@ -21,8 +21,8 @@ import numpy as np
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config.environment_config import EnvironmentConfig
-from core.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import EnvironmentConfig
+from ai_services.services.elasticsearch_service import ElasticsearchService
 
 
 # Configure logging

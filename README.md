@@ -47,39 +47,67 @@ graph TB
         M[Move Annotations] --> D[Text Embedder]
     end
     
-    subgraph "Feature Extraction"
+    subgraph "video_processing App"
         B --> E[Audio Features<br/>128D]
         C --> F[Lead Pose<br/>512D]
         C --> G[Follow Pose<br/>512D]
         C --> H[Interaction<br/>256D]
-        D --> I[Text Semantic<br/>384D]
     end
     
-    subgraph "Storage & Retrieval"
+    subgraph "ai_services App"
+        D --> I[Text Semantic<br/>384D]
         E --> J[Elasticsearch<br/>Vector DB]
         F --> J
         G --> J
         H --> J
         I --> J
-    end
-    
-    subgraph "Recommendation"
         J --> K[Weighted Similarity<br/>35% Text + 35% Audio + 30% Pose]
         K --> L[Top-K Moves]
     end
     
-    subgraph "Generation"
+    subgraph "video_processing App"
         L --> N[Choreography Pipeline]
         N --> O[Video Assembly]
         O --> P[Final Choreography]
     end
+    
+    style E fill:#4285f4,color:#fff
+    style F fill:#4285f4,color:#fff
+    style G fill:#4285f4,color:#fff
+    style H fill:#4285f4,color:#fff
+    style I fill:#34a853,color:#fff
+    style J fill:#34a853,color:#fff
+    style K fill:#34a853,color:#fff
+    style L fill:#34a853,color:#fff
+    style N fill:#4285f4,color:#fff
+    style O fill:#4285f4,color:#fff
+    style P fill:#4285f4,color:#fff
 ```
+
+**Legend:**
+- 🔵 Blue: `video_processing` app (media processing)
+- 🟢 Green: `ai_services` app (ML/AI services)
 
 ### Core ML Components
 
-The system includes **11 core ML/AI services** for multimodal analysis, plus supporting infrastructure:
+The system includes **11 core ML/AI services** organized across two specialized apps:
 
-#### 1. **YOLOv8 Couple Detection System** 👯 (Modern CV)
+**`video_processing` App** (Media Processing)
+- YOLOv8 couple detection
+- Pose feature extraction & embeddings
+- Couple interaction analysis
+- Audio analysis (Librosa)
+- Video generation (FFmpeg)
+- Choreography pipeline
+
+**`ai_services` App** (ML/AI Services)
+- Gemini AI integration
+- Elasticsearch vector search
+- Text embeddings (Sentence-Transformers)
+- Recommendation engine
+- Feature fusion & quality metrics
+
+#### 1. **YOLOv8 Couple Detection System** 👯 (Modern CV) - `video_processing`
     - Detects lead and follow dancers in same frame
     - 17 COCO body keypoints per person
     - IoU-based tracking for consistent person IDs
@@ -94,7 +122,7 @@ The system includes **11 core ML/AI services** for multimodal analysis, plus sup
 - **Performance**: 70-75% mAP accuracy with 5x faster setup than MMPose
 - **Robustness**: Handles partial occlusions and missing keypoints
 
-#### 2. **Couple Interaction Analyzer** 🤝 (Novel Feature)
+#### 2. **Couple Interaction Analyzer** 🤝 (Novel Feature) - `video_processing`
 
     - Hand-to-hand connection detection (0.15 normalized distance)
     - Movement synchronization (velocity correlation)
@@ -103,7 +131,7 @@ The system includes **11 core ML/AI services** for multimodal analysis, plus sup
     - 256D interaction embeddings
     - Robust handling of missing dancers in frames
 
-#### 3. **Advanced Audio Analysis Engine** 🎼 (Bachata-Optimized)
+#### 3. **Advanced Audio Analysis Engine** 🎼 (Bachata-Optimized) - `video_processing`
 
     - Multi-scale tempo detection (80-160 BPM Bachata range)
     - Syncopation and guitar pattern recognition
@@ -117,7 +145,7 @@ The system includes **11 core ML/AI services** for multimodal analysis, plus sup
 - **Temporal Segmentation**: Maps musical sections to choreography structure
 - **Performance**: 2-3 seconds analysis for full songs
 
-#### 4. **Text Semantic Understanding** 📝 (NLP for Dance)
+#### 4. **Text Semantic Understanding** 📝 (NLP for Dance) - `ai_services`
     - Sentence-transformers 'all-MiniLM-L6-v2' model for embeddings
     - 384D semantic embeddings from move metadata
     - Natural language descriptions from structured data
@@ -135,7 +163,7 @@ The system includes **11 core ML/AI services** for multimodal analysis, plus sup
 - **Conversational AI**: Natural language choreography requests via Gemini
 - **Performance**: <5 seconds for embeddings, <2 seconds for Gemini parsing
 
-#### 5. **Trimodal Feature Fusion** 🔗 (Novel Architecture)
+#### 5. **Trimodal Feature Fusion** 🔗 (Novel Architecture) - `ai_services`
 
     - Audio: 128D (music characteristics)
     - Lead: 512D (lead dancer movements)
@@ -194,11 +222,12 @@ overall_similarity =
 - **Semantic Grouping**: Text embeddings enable intelligent clustering
 - **Serverless Ready**: Compatible with Elasticsearch Serverless
 
-#### 7. **Intelligent Choreography Pipeline** 🎬 (Assembly System)
+#### 6. **Intelligent Choreography Pipeline** 🎬 (Assembly System) - `video_processing`
 ```python
 class ChoreographyPipeline:
     """
     Temporal choreography assembly with smooth transitions.
+    Located in: video_processing.services.choreography_pipeline
     """
     - Musical structure mapping to move categories
     - Transition optimization for movement flow
@@ -227,66 +256,332 @@ class ChoreographyPipeline:
 
 ## 🏗️ Project Structure
 
+### Application Architecture
+
+The project follows a **layered architecture** with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Domain Apps                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ choreography │  │    users     │  │ instructors  │  │
+│  │              │  │              │  │              │  │
+│  │ user_        │  │              │  │              │  │
+│  │ collections  │  │              │  │              │  │
+│  └──────┬───────┘  └──────────────┘  └──────────────┘  │
+│         │                                                │
+└─────────┼────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Service Apps                          │
+│  ┌──────────────────┐         ┌──────────────────┐      │
+│  │ video_processing │────────▶│   ai_services    │      │
+│  │                  │         │                  │      │
+│  │ • Video gen      │         │ • Gemini AI      │      │
+│  │ • Pose detection │         │ • Elasticsearch  │      │
+│  │ • Audio analysis │         │ • Embeddings     │      │
+│  └────────┬─────────┘         └────────┬─────────┘      │
+│           │                            │                 │
+└───────────┼────────────────────────────┼─────────────────┘
+            │                            │
+            ▼                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                      Base Layer                          │
+│                   ┌──────────────┐                       │
+│                   │    common    │                       │
+│                   │              │                       │
+│                   │ • Config     │                       │
+│                   │ • Exceptions │                       │
+│                   │ • Utilities  │                       │
+│                   └──────────────┘                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Dependency Rules:**
+- `common` depends on nothing (base layer)
+- `ai_services` depends only on `common`
+- `video_processing` depends on `common` and `ai_services`
+- Domain apps depend on service apps and `common`
+- **No circular dependencies**
+
+### Directory Structure
+
 ```
 bachata_buddy/
-├── core/                       # 31 service modules
+├── common/                     # Shared utilities (base layer)
 │   ├── services/
-│   │   ├── yolov8_couple_detector.py          # Multi-person pose detection
-│   │   ├── couple_interaction_analyzer.py     # Partner dynamics analysis
-│   │   ├── pose_embedding_generator.py        # 1280D pose embeddings
-│   │   ├── pose_feature_extractor.py          # Keypoint feature extraction
-│   │   ├── text_embedding_service.py          # 384D semantic embeddings
-│   │   ├── music_analyzer.py                  # 128D audio embeddings
-│   │   ├── elasticsearch_service.py           # Vector similarity search
-│   │   ├── recommendation_engine.py           # Trimodal recommendations
-│   │   ├── choreography_pipeline.py           # Sequence generation
-│   │   ├── quality_metrics.py                 # Quality scoring
-│   │   ├── embedding_validator.py             # Validation & verification
-│   │   ├── feature_fusion.py                  # Multi-modal fusion
-│   │   ├── video_generator.py                 # FFmpeg video assembly
-│   │   ├── youtube_service.py                 # Music download
-│   │   ├── move_analyzer.py                   # Move analysis
-│   │   ├── annotation_validator.py            # Data validation
-│   │   ├── performance_monitor.py             # Performance tracking
-│   │   ├── resource_manager.py                # Resource management
-│   │   ├── temp_file_manager.py               # Cleanup utilities
-│   │   ├── model_validation.py                # ML model validation
-│   │   ├── training_dataset_builder.py        # Dataset construction
-│   │   ├── training_data_validator.py         # Data quality checks
-│   │   ├── hyperparameter_optimizer.py        # Hyperparameter tuning
-│   │   ├── directory_organizer.py             # File organization
-│   │   ├── annotation_interface.py            # Annotation tools
-│   │   ├── collection_service.py              # Collection management
-│   │   ├── instructor_dashboard_service.py    # Instructor features
-│   │   └── authentication_service.py          # Auth utilities
+│   │   ├── resource_manager.py            # Memory/CPU monitoring
+│   │   ├── temp_file_manager.py           # Temporary file cleanup
+│   │   ├── performance_monitor.py         # Performance tracking
+│   │   └── directory_organizer.py         # File system utilities
 │   ├── config/
-│   │   └── environment_config.py              # Local/Cloud config
-│   └── models/                                # Pydantic data models
-├── choreography/               # Choreography generation app
-├── users/                      # User management
-├── user_collections/           # Collection management
-├── instructors/                # Instructor dashboard
+│   │   └── environment_config.py          # Environment configuration
+│   ├── exceptions.py                      # Custom exceptions
+│   └── README.md
+│
+├── ai_services/                # AI/ML services
+│   ├── services/
+│   │   ├── gemini_service.py              # Google Gemini API
+│   │   ├── elasticsearch_service.py       # Vector similarity search
+│   │   ├── text_embedding_service.py      # 384D semantic embeddings
+│   │   ├── recommendation_engine.py       # Trimodal recommendations
+│   │   ├── move_analyzer.py               # Move analysis
+│   │   ├── feature_fusion.py              # Multi-modal fusion
+│   │   ├── quality_metrics.py             # Quality scoring
+│   │   ├── embedding_validator.py         # Validation & verification
+│   │   ├── hyperparameter_optimizer.py    # Hyperparameter tuning
+│   │   └── model_validation.py            # ML model validation
+│   ├── README.md
+│   └── README_ELASTICSEARCH.md
+│
+├── video_processing/           # Video/audio processing
+│   ├── services/
+│   │   ├── video_generator.py             # FFmpeg video assembly
+│   │   ├── video_storage_service.py       # GCS video storage
+│   │   ├── audio_storage_service.py       # GCS audio storage
+│   │   ├── yolov8_couple_detector.py      # Multi-person pose detection
+│   │   ├── pose_feature_extractor.py      # Keypoint feature extraction
+│   │   ├── pose_embedding_generator.py    # 1280D pose embeddings
+│   │   ├── couple_interaction_analyzer.py # Partner dynamics analysis
+│   │   ├── music_analyzer.py              # 128D audio embeddings
+│   │   ├── youtube_service.py             # Music download
+│   │   └── choreography_pipeline.py       # Sequence generation
+│   ├── models/
+│   │   └── video_models.py                # Video metadata models
+│   └── README.md
+│
+├── choreography/               # Choreography generation (domain)
+│   ├── services/
+│   │   ├── annotation_interface.py        # Annotation tools
+│   │   └── annotation_validator.py        # Data validation
+│   ├── views.py
+│   ├── models.py
+│   └── urls.py
+│
+├── users/                      # User management (domain)
+│   ├── services/
+│   │   └── authentication_service.py      # Auth utilities
+│   ├── views.py
+│   ├── models.py
+│   └── urls.py
+│
+├── user_collections/           # Collection management (domain)
+│   ├── services/
+│   │   └── collection_service.py          # Collection operations
+│   ├── views.py
+│   ├── models.py
+│   └── urls.py
+│
+├── instructors/                # Instructor dashboard (domain)
+│   ├── services/
+│   │   └── instructor_dashboard_service.py # Instructor features
+│   ├── views.py
+│   ├── models.py
+│   └── urls.py
+│
 ├── data/
 │   ├── Bachata_steps/          # 38 annotated video clips
 │   ├── bachata_annotations.json # Move metadata
 │   ├── songs/                  # Audio files
 │   └── output/                 # Generated choreographies
+│
 ├── scripts/
 │   ├── generate_embeddings.py  # Offline embedding generation
-│   └── generate_embeddings_no_pose.py # Audio+text only (fallback)
+│   └── backup_embeddings.py    # Embedding backup/restore
+│
 ├── tests/                      # 67%+ test coverage
-│   ├── unit/                   # 23 unit tests passing
+│   ├── unit/                   # Unit tests
 │   ├── services/               # Service layer tests
 │   ├── integration/            # End-to-end tests
 │   ├── models/                 # Django model tests
 │   ├── views/                  # Django view tests
 │   └── forms/                  # Django form tests
+│
 └── templates/                  # Django templates
 ```
 
 ---
 
+## 📚 Developer Migration Guide
+
+### Core App Refactoring (October 2025)
+
+The monolithic `core` app has been refactored into three focused apps for better maintainability and clearer separation of concerns.
+
+#### What Changed
+
+**Before:**
+```python
+# Old import paths (DEPRECATED)
+from core.services.video_generator import VideoGenerator
+from core.services.gemini_service import GeminiService
+from core.services.elasticsearch_service import ElasticsearchService
+from core.config.environment_config import EnvironmentConfig
+from core.exceptions import VideoGenerationError
+```
+
+**After:**
+```python
+# New import paths (CURRENT)
+from video_processing.services.video_generator import VideoGenerator
+from ai_services.services.gemini_service import GeminiService
+from ai_services.services.elasticsearch_service import ElasticsearchService
+from common.config.environment_config import EnvironmentConfig
+from common.exceptions import VideoGenerationError
+```
+
+#### Import Path Reference
+
+| Old Path | New Path | App |
+|----------|----------|-----|
+| `core.services.video_generator` | `video_processing.services.video_generator` | Video Processing |
+| `core.services.video_storage_service` | `video_processing.services.video_storage_service` | Video Processing |
+| `core.services.audio_storage_service` | `video_processing.services.audio_storage_service` | Video Processing |
+| `core.services.yolov8_couple_detector` | `video_processing.services.yolov8_couple_detector` | Video Processing |
+| `core.services.pose_feature_extractor` | `video_processing.services.pose_feature_extractor` | Video Processing |
+| `core.services.pose_embedding_generator` | `video_processing.services.pose_embedding_generator` | Video Processing |
+| `core.services.couple_interaction_analyzer` | `video_processing.services.couple_interaction_analyzer` | Video Processing |
+| `core.services.music_analyzer` | `video_processing.services.music_analyzer` | Video Processing |
+| `core.services.youtube_service` | `video_processing.services.youtube_service` | Video Processing |
+| `core.services.choreography_pipeline` | `video_processing.services.choreography_pipeline` | Video Processing |
+| `core.services.gemini_service` | `ai_services.services.gemini_service` | AI Services |
+| `core.services.elasticsearch_service` | `ai_services.services.elasticsearch_service` | AI Services |
+| `core.services.text_embedding_service` | `ai_services.services.text_embedding_service` | AI Services |
+| `core.services.recommendation_engine` | `ai_services.services.recommendation_engine` | AI Services |
+| `core.services.move_analyzer` | `ai_services.services.move_analyzer` | AI Services |
+| `core.services.feature_fusion` | `ai_services.services.feature_fusion` | AI Services |
+| `core.services.quality_metrics` | `ai_services.services.quality_metrics` | AI Services |
+| `core.services.embedding_validator` | `ai_services.services.embedding_validator` | AI Services |
+| `core.services.hyperparameter_optimizer` | `ai_services.services.hyperparameter_optimizer` | AI Services |
+| `core.services.model_validation` | `ai_services.services.model_validation` | AI Services |
+| `core.services.resource_manager` | `common.services.resource_manager` | Common |
+| `core.services.temp_file_manager` | `common.services.temp_file_manager` | Common |
+| `core.services.performance_monitor` | `common.services.performance_monitor` | Common |
+| `core.services.directory_organizer` | `common.services.directory_organizer` | Common |
+| `core.config.environment_config` | `common.config.environment_config` | Common |
+| `core.exceptions` | `common.exceptions` | Common |
+| `core.models.video_models` | `video_processing.models.video_models` | Video Processing |
+
+#### Quick Migration Steps
+
+1. **Find all old imports in your code:**
+   ```bash
+   # Search for old import patterns
+   grep -r "from core.services" .
+   grep -r "from core.config" .
+   grep -r "from core.exceptions" .
+   grep -r "from core.models" .
+   ```
+
+2. **Replace with new imports:**
+   ```bash
+   # Example: Update video_generator imports
+   find . -type f -name "*.py" -exec sed -i '' \
+     's/from core\.services\.video_generator/from video_processing.services.video_generator/g' {} +
+   
+   # Example: Update gemini_service imports
+   find . -type f -name "*.py" -exec sed -i '' \
+     's/from core\.services\.gemini_service/from ai_services.services.gemini_service/g' {} +
+   
+   # Example: Update config imports
+   find . -type f -name "*.py" -exec sed -i '' \
+     's/from core\.config\.environment_config/from common.config.environment_config/g' {} +
+   ```
+
+3. **Verify no old imports remain:**
+   ```bash
+   # Should return no results
+   grep -r "from core.services" . --include="*.py"
+   grep -r "from core.config" . --include="*.py"
+   ```
+
+4. **Run tests to verify:**
+   ```bash
+   uv run pytest tests/
+   ```
+
+#### App Responsibilities
+
+**`common` - Shared Utilities**
+- Environment configuration
+- Custom exceptions
+- Resource management (memory, CPU)
+- Temporary file cleanup
+- Performance monitoring
+- File system utilities
+- **No domain logic**
+- **No dependencies on other apps**
+
+**`ai_services` - AI/ML Services**
+- Google Gemini API integration
+- Elasticsearch vector search
+- Text embeddings (Sentence-Transformers)
+- Move recommendations
+- Feature fusion (trimodal)
+- Quality metrics
+- Embedding validation
+- **Depends on:** `common`
+
+**`video_processing` - Video/Audio Processing**
+- Video generation (FFmpeg)
+- Video/audio storage (GCS)
+- Pose detection (YOLOv8)
+- Pose embeddings
+- Couple interaction analysis
+- Music analysis (Librosa)
+- Choreography pipeline
+- **Depends on:** `common`, `ai_services`
+
+**Domain Apps** (`choreography`, `users`, `instructors`, `user_collections`)
+- Business logic
+- Views and templates
+- Models and migrations
+- **Depends on:** `common`, `ai_services`, `video_processing`
+
+#### Benefits of New Structure
+
+✅ **Clear Separation of Concerns** - Each app has a single, well-defined purpose
+
+✅ **No Circular Dependencies** - Layered architecture prevents import cycles
+
+✅ **Easier Testing** - Services can be tested in isolation
+
+✅ **Better Discoverability** - Easy to find functionality by app name
+
+✅ **Microservices Ready** - Clean boundaries for future service extraction
+
+✅ **Improved Maintainability** - Smaller, focused codebases per app
+
+#### Troubleshooting
+
+**Import Error: `ModuleNotFoundError: No module named 'core.services'`**
+- You're using old import paths. Update to new paths (see table above).
+
+**Import Error: `cannot import name 'X' from 'common.services'`**
+- Check if the service moved to `ai_services` or `video_processing`.
+- Refer to the import path reference table.
+
+**Circular Import Error**
+- Ensure you're following the dependency rules (see architecture diagram).
+- `common` should never import from `ai_services` or `video_processing`.
+- Use dependency injection if needed.
+
+**Tests Failing After Migration**
+- Update test imports to use new paths.
+- Check `tests/services/` for examples of updated imports.
+
+---
+
 ## 🆕 Recent Major Enhancements
+
+### Core App Refactoring (October 2025) ✅
+- **Modular Architecture**: Split monolithic `core` app into 3 focused apps
+- **Clear Boundaries**: `common` (utilities), `ai_services` (ML), `video_processing` (media)
+- **No Circular Dependencies**: Layered architecture with explicit dependency rules
+- **Better Maintainability**: Smaller, focused codebases (10-15 services per app)
+- **Microservices Ready**: Clean boundaries for future service extraction
+- **Comprehensive Documentation**: Migration guide with import path reference
 
 ### YOLOv8-Pose Integration (October 2025) ✅
 - **Modern Detection**: 70-75% mAP with simple setup (replaced MMPose)

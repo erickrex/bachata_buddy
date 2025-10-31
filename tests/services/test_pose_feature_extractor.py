@@ -9,12 +9,12 @@ import pytest
 import numpy as np
 from unittest.mock import Mock
 
-from core.services.pose_feature_extractor import (
+from video_processing.services.pose_feature_extractor import (
     PoseFeatureExtractor,
     PoseFeatures,
     TemporalPoseSequence
 )
-from core.services.yolov8_couple_detector import PersonPose
+from video_processing.services.yolov8_couple_detector import PersonPose
 
 
 @pytest.fixture
@@ -204,11 +204,26 @@ class TestPoseFeatureExtractor:
             )
             poses.append(pose)
         
-        sequence = extractor.extract_temporal_sequence(poses)
+        # Note: extract_temporal_sequence expects CouplePose objects, not PersonPose
+        # Convert PersonPose to CouplePose for testing
+        from video_processing.services.yolov8_couple_detector import CouplePose
+        couple_poses = [
+            CouplePose(
+                lead_pose=pose,
+                follow_pose=pose,  # Use same pose for both for testing
+                frame_idx=pose.frame_idx,
+                timestamp=pose.frame_idx / 30.0,
+                has_both_dancers=True
+            )
+            for pose in poses
+        ]
+        
+        sequence = extractor.extract_temporal_sequence(couple_poses, person_id=1)
         
         assert isinstance(sequence, TemporalPoseSequence)
         assert len(sequence.features) == 10
         assert sequence.frame_count == 10
+        assert sequence.person_id == 1
         # All but first should have velocity
         assert sum(1 for f in sequence.features if f.velocity is not None) == 9
 
@@ -249,10 +264,11 @@ class TestTemporalPoseSequence:
             for _ in range(10)
         ]
         
-        sequence = TemporalPoseSequence(features=features, frame_count=10)
+        sequence = TemporalPoseSequence(features=features, person_id=0, frame_count=10)
         
         assert len(sequence.features) == 10
         assert sequence.frame_count == 10
+        assert sequence.person_id == 0
     
     def test_get_feature_vector_consistent_angles(self):
         """Test feature vector with all angles present."""
@@ -274,7 +290,7 @@ class TestTemporalPoseSequence:
             )
             features.append(feat)
         
-        sequence = TemporalPoseSequence(features=features, frame_count=20)
+        sequence = TemporalPoseSequence(features=features, person_id=0, frame_count=20)
         vector = sequence.get_feature_vector()
         
         assert isinstance(vector, np.ndarray)
@@ -304,7 +320,7 @@ class TestTemporalPoseSequence:
             )
             features.append(feat)
         
-        sequence = TemporalPoseSequence(features=features, frame_count=20)
+        sequence = TemporalPoseSequence(features=features, person_id=0, frame_count=20)
         vector = sequence.get_feature_vector()
         
         # Should handle missing angles with NaN padding and nanmean/nanstd
@@ -327,7 +343,7 @@ class TestTemporalPoseSequence:
             )
             features.append(feat)
         
-        sequence = TemporalPoseSequence(features=features, frame_count=10)
+        sequence = TemporalPoseSequence(features=features, person_id=0, frame_count=10)
         vector = sequence.get_feature_vector()
         
         # Should add zeros for velocity stats
@@ -336,7 +352,7 @@ class TestTemporalPoseSequence:
     
     def test_get_feature_vector_empty_sequence(self):
         """Test feature vector with empty sequence."""
-        sequence = TemporalPoseSequence(features=[], frame_count=0)
+        sequence = TemporalPoseSequence(features=[], person_id=0, frame_count=0)
         vector = sequence.get_feature_vector()
         
         assert isinstance(vector, np.ndarray)

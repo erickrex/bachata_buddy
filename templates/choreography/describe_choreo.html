@@ -4,6 +4,7 @@
 {% block title %}AI Choreography Creator - Bachata Buddy{% endblock %}
 
 {% block extra_head %}
+<script src="{% static 'js/choreography-shared.js' %}?v=20251031"></script>
 <style>
 [x-cloak] { display: none !important; }
 </style>
@@ -184,13 +185,8 @@
         </div>
 
         <!-- Video Player (only show if video exists) -->
-        <div x-show="result && result.video_filename && result.video_filename !== 'placeholder.mp4'" class="mb-6">
-            <video 
-                x-ref="videoPlayer"
-                :src="result ? `/video/${result.video_filename}/` : ''"
-                controls
-                class="w-full rounded-xl shadow-lg">
-            </video>
+        <div x-show="result && result.video_filename && result.video_filename !== 'placeholder.mp4'">
+            {% include 'choreography/_video_player.html' %}
         </div>
         
         <!-- Placeholder message when video not yet generated -->
@@ -220,6 +216,11 @@
             </div>
         </div>
 
+        <!-- Save to Collection Form -->
+        <div x-show="result && result.video_filename && result.video_filename !== 'placeholder.mp4'">
+            {% include 'choreography/_save_form.html' %}
+        </div>
+
         <!-- Generate Another Button -->
         <div class="text-center">
             <button @click="resetForm()"
@@ -244,6 +245,10 @@ function aiChoreographyApp() {
         suggestions: [],
         result: null,
         taskId: null,
+        
+        // Merge in shared mixins
+        ...ChoreographyShared.videoPlayerMixin(),
+        ...ChoreographyShared.saveMixin(),
 
         init() {
             console.log('AI Choreography App initialized');
@@ -354,6 +359,10 @@ function aiChoreographyApp() {
                     this.result = data.result;
                     this.isGenerating = false;
                     this.progress = 100;
+                    
+                    // Pre-fill save form with parameters
+                    this.saveDifficulty = this.parameters.difficulty || 'intermediate';
+                    this.saveTitle = `AI Choreography: ${this.query.substring(0, 50)}`;
                 } else if (data.status === 'failed') {
                     // Generation failed
                     this.error = true;
@@ -376,6 +385,32 @@ function aiChoreographyApp() {
             this.parameters = {};
         },
 
+        // Notification wrapper (uses shared function)
+        showNotification(message, type = 'info') {
+            ChoreographyShared.showNotification(message, type);
+        },
+        
+        // Override saveToCollection to include AI-specific data
+        async saveToCollection(videoData, csrfToken, saveUrl) {
+            // Enhance video data with AI-specific information
+            const enhancedData = {
+                ...videoData,
+                music_info: {
+                    query: this.query,
+                    parameters: this.parameters,
+                    difficulty: this.saveDifficulty
+                },
+                generation_parameters: {
+                    query: this.query,
+                    parameters: this.parameters,
+                    task_id: this.taskId
+                }
+            };
+            
+            // Call the shared save function with enhanced data
+            return ChoreographyShared.saveMixin().saveToCollection.call(this, enhancedData, csrfToken, saveUrl);
+        },
+
         resetForm() {
             this.query = '';
             this.showParameters = false;
@@ -387,6 +422,19 @@ function aiChoreographyApp() {
             this.suggestions = [];
             this.result = null;
             this.taskId = null;
+            // Reset save state
+            this.saveTitle = '';
+            this.saveDifficulty = 'intermediate';
+            this.isSaving = false;
+            this.saveSuccess = false;
+            // Reset video player state
+            this.videoDuration = 0;
+            this.currentTime = 0;
+            this.progressPercentage = 0;
+            this.isPlaying = false;
+            this.isLooping = false;
+            this.loopStart = -1;
+            this.loopEnd = -1;
         }
     };
 }

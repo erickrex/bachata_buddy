@@ -17,35 +17,14 @@ function choreographyApp() {
         currentStage: 'initializing',
         isCheckingProgress: false,
         
-        // Save state
-        isSaving: false,
-        
         // Results
         result: null,
         error: false,
         errorMessage: '',
-         
-        // Video player state
-        videoDuration: 0,
-        currentTime: 0,
-        progressPercentage: 0,
-        isPlaying: false,
         
-        // Loop functionality
-        isLooping: false,
-        loopStart: -1,
-        loopEnd: -1,
-        
-        // Computed properties for loop indicators
-        get loopStartPercentage() {
-            return this.videoDuration > 0 && this.loopStart >= 0 
-                ? (this.loopStart / this.videoDuration) * 100 : 0;
-        },
-        
-        get loopSegmentWidth() {
-            return this.videoDuration > 0 && this.loopStart >= 0 && this.loopEnd > this.loopStart 
-                ? ((this.loopEnd - this.loopStart) / this.videoDuration) * 100 : 0;
-        },
+        // Merge in shared mixins
+        ...ChoreographyShared.videoPlayerMixin(),
+        ...ChoreographyShared.saveMixin(),
         
         // Initialize component
         init() {
@@ -285,69 +264,9 @@ function choreographyApp() {
             }
         },
         
-        // Save functionality
-        startSaving() {
-            this.isSaving = true;
-        },
-        
-        handleSaveResponse(event) {
-            this.isSaving = false;
-            if (event.detail.xhr.status === 200) {
-                // Show success notification
-                this.showNotification('💾 Choreography saved to your collection!', 'success');
-            } else {
-                try {
-                    const errorData = JSON.parse(event.detail.xhr.responseText || event.detail.xhr.response);
-                    this.showNotification(errorData.message || 'Failed to save choreography', 'error');
-                } catch (e) {
-                    this.showNotification('Failed to save choreography', 'error');
-                }
-            }
-        },
-        
-        // Simple notification system
+        // Notification wrapper (uses shared function)
         showNotification(message, type = 'info') {
-            // Try to use $root notification if available
-            if (this.$root?.showNotification) {
-                this.$root.showNotification(message, type);
-                return;
-            }
-            
-            // Fallback: Create a simple toast notification
-            const toast = document.createElement('div');
-            toast.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-semibold transition-all transform translate-x-0 ${
-                type === 'success' ? 'bg-green-500' :
-                type === 'error' ? 'bg-red-500' :
-                type === 'warning' ? 'bg-yellow-500' :
-                'bg-blue-500'
-            }`;
-            toast.textContent = message;
-            toast.style.animation = 'slideIn 0.3s ease-out';
-            
-            document.body.appendChild(toast);
-            
-            // Auto-remove after 3 seconds
-            setTimeout(() => {
-                toast.style.animation = 'slideOut 0.3s ease-in';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-            
-            // Add CSS animations if not already present
-            if (!document.getElementById('toast-animations')) {
-                const style = document.createElement('style');
-                style.id = 'toast-animations';
-                style.textContent = `
-                    @keyframes slideIn {
-                        from { transform: translateX(400px); opacity: 0; }
-                        to { transform: translateX(0); opacity: 1; }
-                    }
-                    @keyframes slideOut {
-                        from { transform: translateX(0); opacity: 1; }
-                        to { transform: translateX(400px); opacity: 0; }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
+            ChoreographyShared.showNotification(message, type);
         },
         
         showResult(resultData) {
@@ -356,122 +275,7 @@ function choreographyApp() {
             this.error = false;
             this.progress = 100;
             this.currentStage = 'completed';
-            if (this.$root?.showNotification) {
-                this.$root.showNotification('🎉 Choreography generated successfully!', 'success');
-            }
-        },
-        
-        // VIDEO PLAYER FUNCTIONS
-        togglePlayPause() {
-            const video = this.$refs.videoPlayer;
-            if (!video) return;
-            
-            if (video.paused) {
-                if (this.isLooping && this.loopStart >= 0) {
-                    video.currentTime = this.loopStart;
-                }
-                video.play();
-                this.isPlaying = true;
-            } else {
-                video.pause();
-                this.isPlaying = false;
-            }
-        },
-
-        seekTo(time) {
-            const video = this.$refs.videoPlayer;
-            if (video) video.currentTime = time;
-        },
-
-        initVideoPlayer() {
-            const video = this.$refs.videoPlayer;
-            if (video) {
-                this.videoDuration = video.duration;
-                this.currentTime = video.currentTime;
-                this.isPlaying = !video.paused;
-                this.updateVideoProgress();
-            }
-        },
-
-        updateVideoProgress() {
-            const video = this.$refs.videoPlayer;
-            if (!video) return;
-            
-            this.currentTime = video.currentTime;
-            this.progressPercentage = (video.currentTime / video.duration) * 100;
-            this.isPlaying = !video.paused;
-            
-            // Loop check
-            if (this.isLooping && this.loopEnd > 0 && video.currentTime >= this.loopEnd) {
-                video.currentTime = this.loopStart;
-            }
-        },
-
-        handleVideoEnd() {
-            this.isPlaying = false;
-            if (this.isLooping && this.loopStart >= 0) {
-                const video = this.$refs.videoPlayer;
-                if (video) {
-                    video.currentTime = this.loopStart;
-                    video.play();
-                }
-            }
-        },
-
-        seekToPosition(event) {
-            const video = this.$refs.videoPlayer;
-            if (!video || this.videoDuration <= 0) return;
-            
-            const rect = event.currentTarget.getBoundingClientRect();
-            const percentage = (event.clientX - rect.left) / rect.width;
-            const newTime = percentage * this.videoDuration;
-            video.currentTime = newTime;
-            
-            // Auto-create 10-second segment if looping but no segment exists
-            if (this.isLooping && (this.loopStart < 0 || this.loopEnd <= this.loopStart)) {
-                this.loopStart = Math.max(0, newTime - 5);
-                this.loopEnd = Math.min(this.videoDuration, newTime + 5);
-            }
-        },
-
-        // LOOP FUNCTIONALITY
-        toggleLoop() {
-            this.isLooping = !this.isLooping;
-            
-            if (this.isLooping) {
-                this.selectCurrent10Seconds();
-                if (this.loopStart >= 0) {
-                    const video = this.$refs.videoPlayer;
-                    if (video) video.currentTime = this.loopStart;
-                }
-            } else {
-                this.loopStart = -1;
-                this.loopEnd = -1;
-            }
-        },
-
-        selectCurrent10Seconds() {
-            const video = this.$refs.videoPlayer;
-            if (video && this.videoDuration > 0) {
-                this.loopStart = Math.max(0, this.currentTime - 5);
-                this.loopEnd = Math.min(this.videoDuration, this.currentTime + 5);
-            }
-        },
-
-        adjustLoopStart(seconds) {
-            if (this.loopStart >= 0) {
-                this.loopStart = Math.max(0, Math.min(this.loopStart + seconds, this.loopEnd - 1));
-            }
-        },
-
-        adjustLoopEnd(seconds) {
-            if (this.loopEnd > 0) {
-                this.loopEnd = Math.min(this.videoDuration, Math.max(this.loopEnd + seconds, this.loopStart + 1));
-            }
-        },
-
-        formatTime(seconds) {
-            return window.HelperUtils?.formatTime(seconds) || '0:00';
+            this.showNotification('🎉 Choreography generated successfully!', 'success');
         },
         
         resetForm() {
@@ -479,10 +283,12 @@ function choreographyApp() {
                 selectedSong: '', difficulty: 'intermediate',
                 isGenerating: false, result: null, error: false, progress: 0,
                 progressMessage: 'Starting...', currentStage: 'initializing',
-                currentTaskId: null, isSaving: false, isCheckingProgress: false,
+                currentTaskId: null, isCheckingProgress: false,
                 // Reset video state
                 videoDuration: 0, currentTime: 0, progressPercentage: 0,
-                isPlaying: false, isLooping: false, loopStart: -1, loopEnd: -1
+                isPlaying: false, isLooping: false, loopStart: -1, loopEnd: -1,
+                // Reset save state
+                saveTitle: '', saveDifficulty: 'intermediate', isSaving: false, saveSuccess: false
             });
         }
     }

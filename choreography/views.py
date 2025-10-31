@@ -802,6 +802,7 @@ def generate_choreography_with_ai_explanations(
         # Load metadata to get move information
         metadata_path = result.metadata_path
         explanations = []
+        quota_exceeded = False
         
         if metadata_path and Path(metadata_path).exists():
             try:
@@ -812,6 +813,14 @@ def generate_choreography_with_ai_explanations(
                 
                 # Generate explanations for each move (limit to first 10 for performance)
                 for i, move in enumerate(moves_used[:10]):
+                    # Skip if quota already exceeded
+                    if quota_exceeded:
+                        explanations.append(
+                            f"This move was selected to match your {difficulty} difficulty "
+                            f"and {energy_level} energy preferences."
+                        )
+                        continue
+                    
                     try:
                         # Create context for explanation
                         context = {
@@ -837,12 +846,23 @@ def generate_choreography_with_ai_explanations(
                         )
                         
                     except Exception as e:
-                        logger.warning(f"Failed to generate explanation for move {i}: {e}")
-                        # Use fallback explanation
-                        explanations.append(
-                            f"This move was selected to match your {difficulty} difficulty "
-                            f"and {energy_level} energy preferences."
-                        )
+                        error_str = str(e)
+                        # Check if it's a quota error
+                        if '429' in error_str or 'quota' in error_str.lower() or 'RATE_LIMIT_EXCEEDED' in error_str:
+                            logger.warning(f"Gemini API quota exceeded. Skipping remaining explanations.")
+                            quota_exceeded = True
+                            # Use fallback for this and remaining moves
+                            explanations.append(
+                                f"This move was selected to match your {difficulty} difficulty "
+                                f"and {energy_level} energy preferences."
+                            )
+                        else:
+                            logger.warning(f"Failed to generate explanation for move {i}: {e}")
+                            # Use fallback explanation
+                            explanations.append(
+                                f"This move was selected to match your {difficulty} difficulty "
+                                f"and {energy_level} energy preferences."
+                            )
                 
             except Exception as e:
                 logger.error(f"Failed to load metadata for explanations: {e}")

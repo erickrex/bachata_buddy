@@ -249,24 +249,188 @@
     {% csrf_token %}
 </form>
 
+<!-- Custom Confirmation Modal -->
+<div id="confirmModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <!-- Background overlay -->
+    <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" onclick="closeModal()"></div>
+    
+    <!-- Modal content -->
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full transform transition-all">
+            <!-- Modal header -->
+            <div class="px-6 pt-6 pb-4">
+                <div class="flex items-center">
+                    <div id="modalIcon" class="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 text-red-600 text-2xl">
+                        ⚠️
+                    </div>
+                    <h3 id="modalTitle" class="ml-4 text-lg font-bold text-gray-900">
+                        Confirm Deletion
+                    </h3>
+                </div>
+            </div>
+            
+            <!-- Modal body -->
+            <div class="px-6 pb-4">
+                <p id="modalMessage" class="text-sm text-gray-600">
+                    Are you sure you want to proceed?
+                </p>
+                <div id="modalDetails" class="mt-3 text-sm text-gray-500 space-y-1">
+                    <!-- Additional details will be inserted here -->
+                </div>
+            </div>
+            
+            <!-- Modal footer -->
+            <div class="px-6 pb-6 flex space-x-3">
+                <button onclick="closeModal()" 
+                        class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
+                    Cancel
+                </button>
+                <button id="confirmButton" 
+                        onclick="executeDelete()" 
+                        class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-function confirmDelete(choreographyId, title) {
-    if (confirm(`Are you sure you want to delete "${title}"?\n\nThis will permanently delete the video file and database entry.`)) {
-        const form = document.getElementById('deleteForm');
-        form.action = `/collections/${choreographyId}/delete/`;
-        form.submit();
+let deleteAction = null;
+let deleteAllCount = 0;
+let isDeleteAll = false;
+
+function showModal(title, message, details, action, isDeleteAllAction = false) {
+    deleteAction = action;
+    isDeleteAll = isDeleteAllAction;
+    
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMessage').textContent = message;
+    
+    const detailsContainer = document.getElementById('modalDetails');
+    if (details && details.length > 0) {
+        detailsContainer.innerHTML = details.map(detail => 
+            `<div class="flex items-start">
+                <span class="mr-2">•</span>
+                <span>${detail}</span>
+            </div>`
+        ).join('');
+        detailsContainer.classList.remove('hidden');
+    } else {
+        detailsContainer.innerHTML = '';
+        detailsContainer.classList.add('hidden');
+    }
+    
+    document.getElementById('confirmModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    document.getElementById('confirmModal').classList.add('hidden');
+    document.body.style.overflow = '';
+    deleteAction = null;
+    isDeleteAll = false;
+}
+
+function executeDelete() {
+    if (isDeleteAll && deleteAllCount > 0) {
+        // Show final confirmation for delete all
+        showFinalDeleteAllConfirmation();
+    } else if (deleteAction) {
+        deleteAction();
+        closeModal();
     }
 }
 
+function showFinalDeleteAllConfirmation() {
+    document.getElementById('modalTitle').textContent = 'Final Confirmation';
+    document.getElementById('modalMessage').textContent = `Type the number ${deleteAllCount} to confirm deletion of all choreographies:`;
+    
+    const detailsContainer = document.getElementById('modalDetails');
+    detailsContainer.innerHTML = `
+        <input type="number" 
+               id="finalConfirmInput" 
+               placeholder="Enter ${deleteAllCount}"
+               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent mt-2"
+               onkeypress="if(event.key === 'Enter') executeFinalDelete()">
+    `;
+    detailsContainer.classList.remove('hidden');
+    
+    document.getElementById('confirmButton').onclick = executeFinalDelete;
+    document.getElementById('confirmButton').textContent = 'Confirm Delete';
+    
+    setTimeout(() => document.getElementById('finalConfirmInput').focus(), 100);
+}
+
+function executeFinalDelete() {
+    const input = document.getElementById('finalConfirmInput');
+    if (input && parseInt(input.value) === deleteAllCount) {
+        if (deleteAction) {
+            deleteAction();
+        }
+        closeModal();
+    } else {
+        input.classList.add('border-red-500', 'shake');
+        setTimeout(() => input.classList.remove('shake'), 500);
+    }
+}
+
+function confirmDelete(choreographyId, title) {
+    showModal(
+        'Delete Choreography',
+        `Are you sure you want to delete "${title}"?`,
+        [
+            'This will permanently delete the video file',
+            'This will delete the database entry',
+            'This action cannot be undone'
+        ],
+        () => {
+            const form = document.getElementById('deleteForm');
+            form.action = `/collections/${choreographyId}/delete/`;
+            form.submit();
+        }
+    );
+}
+
 function confirmDeleteAll() {
-    const count = {{ page_obj.paginator.count|default:0 }};
-    if (confirm(`⚠️ WARNING: This will permanently delete ALL ${count} choreographies!\n\nThis includes:\n- All video files\n- All database entries\n- This action CANNOT be undone\n\nAre you absolutely sure?`)) {
-        if (confirm(`Final confirmation: Delete all ${count} choreographies?`)) {
+    deleteAllCount = {{ page_obj.paginator.count|default:0 }};
+    showModal(
+        '⚠️ Delete All Choreographies',
+        `This will permanently delete ALL ${deleteAllCount} choreographies!`,
+        [
+            'All video files will be deleted',
+            'All database entries will be removed',
+            'This action CANNOT be undone',
+            'You will need to confirm again on the next screen'
+        ],
+        () => {
             const form = document.getElementById('deleteForm');
             form.action = '{% url "collections:delete_all" %}';
             form.submit();
-        }
-    }
+        },
+        true
+    );
 }
+
+// Add shake animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+    .shake {
+        animation: shake 0.3s ease-in-out;
+    }
+`;
+document.head.appendChild(style);
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('confirmModal').classList.contains('hidden')) {
+        closeModal();
+    }
+});
 </script>
 {% endblock %}

@@ -198,6 +198,11 @@
             </p>
         </div>
 
+        <!-- Save to Collection Form -->
+        <div x-show="result && result.video_filename && result.video_filename !== 'placeholder.mp4'">
+            {% include 'choreography/_save_form.html' %}
+        </div>
+
         <!-- AI Explanations Section -->
         <div x-show="result && result.explanations && result.explanations.length > 0" class="mb-6">
             <h3 class="text-xl font-bold text-gray-800 mb-4">🤖 AI Explanations</h3>
@@ -214,11 +219,6 @@
                     </div>
                 </template>
             </div>
-        </div>
-
-        <!-- Save to Collection Form -->
-        <div x-show="result && result.video_filename && result.video_filename !== 'placeholder.mp4'">
-            {% include 'choreography/_save_form.html' %}
         </div>
 
         <!-- Generate Another Button -->

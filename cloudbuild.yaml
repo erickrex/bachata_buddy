@@ -1,5 +1,16 @@
 # Cloud Build configuration for Bachata Buddy
 # This file automates the build and deployment process to Cloud Run
+#
+# Service Account Requirements:
+#   Before running this build, ensure service accounts are configured:
+#   1. Run: scripts/setup_service_account_permissions.sh <project-id>
+#   2. Verify: scripts/test_service_account_permissions.sh <project-id>
+#   3. See: backend/SERVICE_ACCOUNT_SETUP.md for details
+#
+# Required Service Accounts:
+#   - bachata-api-sa: Used by Cloud Run service (has roles/run.developer)
+#   - bachata-job-sa: Used by Cloud Run Jobs (for video processing)
+#   - Cloud Build SA: Automatically configured with roles/run.admin
 
 steps:
   # Step 1: Build the Docker image
@@ -79,10 +90,12 @@ steps:
       - '10'
       - '--add-cloudsql-instances'
       - '$PROJECT_ID:us-central1:bachata-db'
+      - '--service-account'
+      - 'bachata-api-sa@$PROJECT_ID.iam.gserviceaccount.com'
       - '--set-env-vars'
-      - 'ENVIRONMENT=cloud,DJANGO_DEBUG=False,DB_HOST=/cloudsql/$PROJECT_ID:us-central1:bachata-db,DB_NAME=bachata-buddy,DB_USER=postgres,DB_PORT=5432'
+      - 'ENVIRONMENT=cloud,DJANGO_DEBUG=False,DB_HOST=/cloudsql/$PROJECT_ID:us-central1:bachata-db,DB_NAME=bachata-buddy,DB_USER=postgres,DB_PORT=5432,GCP_PROJECT_ID=$PROJECT_ID,GCP_REGION=us-central1'
       - '--set-secrets'
-      - 'DJANGO_SECRET_KEY=django-secret-key:latest,GOOGLE_API_KEY=google-api-key:latest,ELASTICSEARCH_API_KEY=elasticsearch-api-key:latest,DB_PASSWORD=db-password:latest'
+      - 'DJANGO_SECRET_KEY=django-secret-key:latest,GOOGLE_API_KEY=google-api-key:latest,DB_PASSWORD=db-password:latest'
     id: 'deploy-cloud-run'
     waitFor: ['run-migrations']
 

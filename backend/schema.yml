@@ -1,0 +1,2146 @@
+openapi: 3.0.3
+info:
+  title: Bachata Buddy API
+  version: 1.0.0
+  description: REST API for Bachata Buddy choreography generation platform
+paths:
+  /api/auth/login:
+    post:
+      operationId: auth_login_create
+      description: Authenticate with username and password. Returns user data and
+        JWT tokens (access + refresh).
+      summary: Login user
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                SuccessResponse:
+                  value:
+                    user:
+                      id: 1
+                      username: dancer123
+                      email: dancer@example.com
+                      display_name: Dancer
+                      is_instructor: false
+                      preferences: {}
+                    access: eyJ0eXAiOiJKV1QiLCJhbGc...
+                    refresh: eyJ0eXAiOiJKV1QiLCJhbGc...
+                  summary: Success Response
+          description: Login successful
+        '401':
+          description: Invalid credentials or account disabled
+  /api/auth/me:
+    get:
+      operationId: auth_me_retrieve
+      description: Retrieve the authenticated user's profile information.
+      summary: Get user profile
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                ProfileResponse:
+                  value:
+                    id: 1
+                    username: dancer123
+                    email: dancer@example.com
+                    display_name: Dancer
+                    is_instructor: false
+                    preferences:
+                      theme: dark
+                      notifications: true
+                  summary: Profile Response
+          description: User profile data
+        '401':
+          description: Authentication required
+    put:
+      operationId: auth_me_update
+      description: Update the authenticated user's profile information. Username cannot
+        be changed.
+      summary: Update user profile
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                UpdatedProfile:
+                  value:
+                    id: 1
+                    username: dancer123
+                    email: newemail@example.com
+                    display_name: Pro Dancer
+                    is_instructor: false
+                    preferences:
+                      theme: light
+                      notifications: false
+                  summary: Updated Profile
+          description: Profile updated successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Authentication required
+  /api/auth/preferences:
+    get:
+      operationId: auth_preferences_retrieve
+      description: "\n    Retrieve the authenticated user's preferences.\n    \n    Returns
+        user preferences stored in the User.preferences JSONField.\n    If preferences
+        haven't been set, returns default values:\n    - auto_save_choreographies:
+        true\n    - default_difficulty: intermediate\n    - email_notifications: false\n
+        \   "
+      summary: Get user preferences
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: User preferences
+        '401':
+          description: Authentication required
+    put:
+      operationId: auth_preferences_update
+      description: "\n    Update the authenticated user's preferences.\n    \n    Supports
+        partial updates - only include fields you want to change.\n    Preferences
+        are stored in the User.preferences JSONField and merged\n    with existing
+        preferences.\n    \n    **Available Preferences:**\n    - auto_save_choreographies
+        (boolean): Auto-save generated choreographies\n    - default_difficulty (string):
+        Default difficulty (beginner/intermediate/advanced)\n    - email_notifications
+        (boolean): Enable email notifications\n    "
+      summary: Update user preferences
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferencesRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserPreferencesRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserPreferencesRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Preferences updated successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Authentication required
+  /api/auth/refresh:
+    post:
+      operationId: auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/auth/register:
+    post:
+      operationId: auth_register_create
+      description: Create a new user account with username, email, and password. Returns
+        user data and JWT tokens.
+      summary: Register new user
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                SuccessResponse:
+                  value:
+                    user:
+                      id: 1
+                      username: dancer123
+                      email: dancer@example.com
+                      display_name: Dancer
+                      is_instructor: false
+                      preferences: {}
+                    access: eyJ0eXAiOiJKV1QiLCJhbGc...
+                    refresh: eyJ0eXAiOiJKV1QiLCJhbGc...
+                  summary: Success Response
+          description: User successfully registered
+        '400':
+          description: Validation error (passwords don't match, username taken, etc.)
+  /api/choreography/generate:
+    post:
+      operationId: choreography_generate_create
+      description: "\n    Start a new choreography generation task.\n    \n    This
+        endpoint creates a Cloud Run Job execution that processes the audio input,\n
+        \   analyzes music features, queries the move database, and generates a choreography
+        video.\n    \n    The task is processed asynchronously. Use the returned task_id
+        to poll for status updates\n    via the GET /api/choreography/tasks/{task_id}
+        endpoint.\n    \n    **Processing Steps:**\n    1. Audio download and analysis
+        (tempo, energy, structure)\n    2. Move selection from Elasticsearch database\n
+        \   3. Choreography sequence generation\n    4. Video processing and compilation\n
+        \   5. Upload to Cloud Storage\n    \n    **Audio Input Formats:**\n    -
+        YouTube URL: https://www.youtube.com/watch?v=... or https://youtu.be/...\n
+        \   - Google Cloud Storage: gs://bucket-name/path/to/audio.mp3\n    "
+      summary: Generate choreography
+      tags:
+      - Choreography
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChoreographyGenerationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChoreographyGenerationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChoreographyGenerationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: Task created successfully
+        '400':
+          description: Invalid input parameters
+        '401':
+          description: Authentication required
+        '500':
+          description: Failed to create job execution
+  /api/choreography/generate-with-ai:
+    post:
+      operationId: choreography_generate_with_ai_create
+      description: "\n    Generate a choreography using natural language description
+        with AI-enhanced explanations.\n    \n    This endpoint combines AI query
+        parsing with choreography generation, allowing users\n    to describe what
+        they want in natural language instead of specifying technical parameters.\n
+        \   \n    **Workflow:**\n    1. Parse natural language query using Gemini
+        AI (if parameters not provided)\n    2. Create choreography generation task\n
+        \   3. Trigger Cloud Run Job with AI mode enabled\n    4. Job generates choreography
+        with AI explanations for each move\n    5. Return task ID for status polling\n
+        \   \n    **Examples:**\n    - \"Create a romantic beginner choreography for
+        a slow song\"\n    - \"I want an energetic intermediate routine for a party\"\n
+        \   - \"Make me a sensual advanced bachata\"\n    \n    **AI Enhancements:**\n
+        \   - Natural language understanding\n    - AI-generated explanations for
+        move selections\n    - Context-aware choreography generation\n    \n    **Response:**\n
+        \   - Returns immediately with task_id (202 Accepted)\n    - Poll /api/choreography/tasks/{task_id}
+        for status\n    - When complete, result includes AI explanations\n    \n    **Performance:**\n
+        \   - Query parsing: 1-3 seconds\n    - Total generation: 2-5 minutes (depending
+        on audio length)\n    "
+      summary: Generate choreography with AI
+      tags:
+      - Choreography
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIGenerationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIGenerationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIGenerationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: AI generation task created successfully
+        '400':
+          description: Invalid query or parameters
+        '500':
+          description: Failed to create job execution
+        '401':
+          description: Authentication required
+  /api/choreography/mock/complete/{task_id}:
+    post:
+      operationId: choreography_mock_complete_create
+      description: |-
+        Manually complete a mock job execution
+
+        POST /api/choreography/mock/complete/{task_id}
+
+        Body:
+        {
+            "success": true,  // Whether job succeeded
+            "result": {       // Optional: result data for successful jobs
+                "video_url": "gs://bucket/video.mp4",
+                "thumbnail_url": "gs://bucket/thumb.jpg",
+                "duration": 180.5,
+                "moves_count": 12
+            },
+            "error": "Error message"  // Optional: error for failed jobs
+        }
+
+        Returns:
+            200 OK with updated task status
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/choreography/mock/jobs:
+    get:
+      operationId: choreography_mock_jobs_retrieve
+      description: |-
+        List all active mock jobs
+
+        GET /api/choreography/mock/jobs
+
+        Returns:
+            List of active mock jobs with their status
+      tags:
+      - choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/choreography/mock/progress/{task_id}:
+    post:
+      operationId: choreography_mock_progress_create
+      description: |-
+        Manually update mock job progress
+
+        POST /api/choreography/mock/progress/{task_id}
+
+        Body:
+        {
+            "progress": 50,
+            "stage": "processing",
+            "message": "Processing video..."
+        }
+
+        Returns:
+            200 OK with updated task status
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/choreography/mock/simulate/{task_id}:
+    post:
+      operationId: choreography_mock_simulate_create
+      description: |-
+        Simulate job progress automatically over time
+
+        POST /api/choreography/mock/simulate/{task_id}
+
+        Body:
+        {
+            "duration_seconds": 10  // Optional: how long simulation should take (default: 10)
+        }
+
+        Returns:
+            202 Accepted - simulation started in background
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/choreography/parse-query:
+    post:
+      operationId: choreography_parse_query_create
+      description: "\n    Parse a natural language description into structured choreography
+        parameters using AI.\n    \n    This endpoint uses Google's Gemini AI to understand
+        user intent and extract\n    choreography parameters from natural language
+        descriptions.\n    \n    **Examples:**\n    - \"Create a romantic beginner
+        choreography with slow tempo\"\n    - \"I want an energetic intermediate routine
+        for a party\"\n    - \"Make me a sensual advanced bachata with body rolls\"\n
+        \   \n    **Extracted Parameters:**\n    - difficulty: beginner, intermediate,
+        or advanced\n    - style: romantic, energetic, sensual, or playful\n    -
+        energy_level: low, medium, or high\n    - tempo: slow, medium, or fast\n    \n
+        \   **Confidence Score:**\n    - 0.9: High confidence (AI parsing successful)\n
+        \   - 0.6: Medium confidence (fallback keyword matching)\n    \n    **Performance:**\n
+        \   - Typical response time: 1-3 seconds\n    - Rate limited to 60 requests/minute\n
+        \   \n    **Fallback Behavior:**\n    - If AI service unavailable, uses keyword
+        matching\n    - Always returns valid parameters (never fails)\n    "
+      summary: Parse natural language query
+      tags:
+      - Choreography
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryParseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QueryParseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QueryParseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Query parsed successfully
+        '400':
+          description: Invalid query
+        '503':
+          description: AI service temporarily unavailable
+        '401':
+          description: Authentication required
+  /api/choreography/tasks:
+    get:
+      operationId: choreography_tasks_retrieve
+      description: "\n    Retrieve a paginated list of the authenticated user's choreography
+        generation tasks.\n    \n    Tasks are ordered by creation date (most recent
+        first). Use query parameters to filter\n    by status and control pagination.\n
+        \   \n    **Status Values:**\n    - `pending`: Task queued, waiting to start\n
+        \   - `started`: Job execution created\n    - `running`: Processing in progress\n
+        \   - `completed`: Video generation finished\n    - `failed`: Error occurred
+        or cancelled by user\n    "
+      summary: List user tasks
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of items per page (max: 100)'
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - completed
+          - failed
+          - pending
+          - running
+          - started
+        description: Filter by task status
+      tags:
+      - Choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChoreographyTaskList'
+              examples:
+                TaskList:
+                  value:
+                    count: 25
+                    next: http://localhost:8000/api/choreography/tasks?page=2
+                    previous: null
+                    results:
+                    - task_id: 550e8400-e29b-41d4-a716-446655440000
+                      status: completed
+                      progress: 100
+                      stage: completed
+                      message: Choreography generated successfully
+                      created_at: '2025-11-02T10:30:00Z'
+                      updated_at: '2025-11-02T10:35:00Z'
+                    - task_id: 660e8400-e29b-41d4-a716-446655440001
+                      status: running
+                      progress: 60
+                      stage: video_processing
+                      message: Processing video frames
+                      created_at: '2025-11-02T09:15:00Z'
+                      updated_at: '2025-11-02T09:20:00Z'
+                  summary: Task List
+          description: Paginated list of tasks
+        '400':
+          description: Invalid query parameters
+        '401':
+          description: Authentication required
+  /api/choreography/tasks/{task_id}:
+    get:
+      operationId: choreography_tasks_retrieve_2
+      description: "\n    Retrieve the current status and progress of a choreography
+        generation task.\n    \n    Use this endpoint to poll for task updates. The
+        task progresses through several stages:\n    - **pending**: Task queued, waiting
+        to start\n    - **started**: Job execution created\n    - **running**: Processing
+        in progress (check progress field for percentage)\n    - **completed**: Video
+        generation finished (result contains video URL)\n    - **failed**: Error occurred
+        (error field contains details)\n    \n    Poll this endpoint every 2-5 seconds
+        while status is 'pending', 'started', or 'running'.\n    "
+      summary: Get task status
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChoreographyTask'
+              examples:
+                TaskRunning:
+                  value:
+                    task_id: 550e8400-e29b-41d4-a716-446655440000
+                    status: running
+                    progress: 45
+                    stage: video_processing
+                    message: Processing video frames
+                    result: null
+                    error: null
+                    created_at: '2025-11-02T10:30:00Z'
+                    updated_at: '2025-11-02T10:32:15Z'
+                  summary: Task Running
+                TaskCompleted:
+                  value:
+                    task_id: 550e8400-e29b-41d4-a716-446655440000
+                    status: completed
+                    progress: 100
+                    stage: completed
+                    message: Choreography generated successfully
+                    result:
+                      video_url: https://storage.googleapis.com/bucket/video.mp4
+                      duration: 180
+                      move_count: 12
+                    error: null
+                    created_at: '2025-11-02T10:30:00Z'
+                    updated_at: '2025-11-02T10:35:00Z'
+                  summary: Task Completed
+          description: Task status retrieved
+        '401':
+          description: Authentication required
+        '404':
+          description: Task not found or does not belong to user
+    delete:
+      operationId: choreography_tasks_destroy
+      description: "\n    Cancel a pending or running choreography generation task.\n
+        \   \n    This endpoint attempts to cancel the Cloud Run Job execution and
+        marks the task as failed.\n    Only tasks with status 'started' or 'running'
+        can be cancelled.\n    \n    **Note:** If the job has already completed processing,
+        cancellation may not be possible.\n    "
+      summary: Cancel task
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Choreography
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task cancelled successfully
+        '400':
+          description: Task cannot be cancelled
+        '401':
+          description: Authentication required
+        '404':
+          description: Task not found or does not belong to user
+  /api/collections/:
+    get:
+      operationId: collections_retrieve
+      description: "\n    Retrieve a paginated list of the authenticated user's saved
+        choreographies.\n    \n    Supports filtering by difficulty level and searching
+        by title. Results are paginated\n    with customizable page size.\n    "
+      summary: List saved choreographies
+      parameters:
+      - in: query
+        name: difficulty
+        schema:
+          type: string
+          enum:
+          - advanced
+          - beginner
+          - intermediate
+        description: Filter by difficulty level
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Number of items per page
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by title (case-insensitive partial match)
+      tags:
+      - Collections
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedChoreography'
+              examples:
+                CollectionList:
+                  value:
+                    count: 15
+                    next: http://localhost:8000/api/collections?page=2
+                    previous: null
+                    results:
+                    - id: 1
+                      title: Romantic Bachata
+                      video_path: https://storage.googleapis.com/bucket/video1.mp4
+                      difficulty: intermediate
+                      duration: 180
+                      music_info:
+                        song: Obsesión
+                        artist: Aventura
+                      generation_parameters:
+                        energy_level: medium
+                        style: romantic
+                      created_at: '2025-11-02T10:35:00Z'
+                  summary: Collection List
+          description: Paginated list of saved choreographies
+        '401':
+          description: Authentication required
+    post:
+      operationId: collections_create
+      description: "\n    Save a generated choreography to the user's collection.\n
+        \   \n    After a choreography generation task completes, use this endpoint
+        to save it\n    to your collection with metadata like title, difficulty, and
+        music information.\n    "
+      summary: Save choreography
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedChoreographyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SavedChoreographyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SavedChoreographyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedChoreography'
+              examples:
+                SavedChoreography:
+                  value:
+                    id: 1
+                    title: Romantic Bachata
+                    video_path: https://storage.googleapis.com/bucket/video1.mp4
+                    difficulty: intermediate
+                    duration: 180
+                    music_info:
+                      song: Obsesión
+                      artist: Aventura
+                    generation_parameters:
+                      energy_level: medium
+                      style: romantic
+                    created_at: '2025-11-02T10:35:00Z'
+                  summary: Saved Choreography
+          description: Choreography saved successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Authentication required
+  /api/collections/{id}:
+    get:
+      operationId: collections_retrieve_2
+      description: Retrieve detailed information about a specific saved choreography.
+      summary: Get choreography details
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Collections
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedChoreography'
+              examples:
+                ChoreographyDetail:
+                  value:
+                    id: 1
+                    title: Romantic Bachata
+                    video_path: https://storage.googleapis.com/bucket/video1.mp4
+                    difficulty: intermediate
+                    duration: 180
+                    music_info:
+                      song: Obsesión
+                      artist: Aventura
+                      tempo: 120
+                    generation_parameters:
+                      energy_level: medium
+                      style: romantic
+                    created_at: '2025-11-02T10:35:00Z'
+                  summary: Choreography Detail
+          description: Choreography details
+        '401':
+          description: Authentication required
+        '404':
+          description: Choreography not found or does not belong to user
+    put:
+      operationId: collections_update
+      description: "\n    Update metadata for a saved choreography.\n    \n    Supports
+        partial updates - only include fields you want to change.\n    Common use
+        cases: updating title, changing difficulty rating, or adding notes.\n    "
+      summary: Update choreography
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedChoreographyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SavedChoreographyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SavedChoreographyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedChoreography'
+              examples:
+                UpdatedChoreography:
+                  value:
+                    id: 1
+                    title: Updated Title
+                    video_path: https://storage.googleapis.com/bucket/video1.mp4
+                    difficulty: advanced
+                    duration: 180
+                    music_info:
+                      song: Obsesión
+                      artist: Aventura
+                    generation_parameters:
+                      energy_level: medium
+                      style: romantic
+                    created_at: '2025-11-02T10:35:00Z'
+                  summary: Updated Choreography
+          description: Choreography updated successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Authentication required
+        '404':
+          description: Choreography not found or does not belong to user
+    delete:
+      operationId: collections_destroy
+      description: "\n    Permanently delete a saved choreography from the collection.\n
+        \   \n    **Warning:** This action cannot be undone. The video file will remain
+        in storage\n    but will no longer be accessible through the API.\n    "
+      summary: Delete choreography
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Collections
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: Choreography deleted successfully
+        '401':
+          description: Authentication required
+        '404':
+          description: Choreography not found or does not belong to user
+  /api/collections/cleanup:
+    post:
+      operationId: collections_cleanup_create
+      description: "\n    Clean up choreography records that reference non-existent
+        video files in GCS.\n    \n    This endpoint identifies and removes \"orphaned\"
+        choreography records where\n    the associated video file no longer exists
+        in Google Cloud Storage.\n    \n    **Use Cases:**\n    - Free up database
+        space by removing invalid records\n    - Clean up after manual GCS file deletions\n
+        \   - Maintain data integrity between database and storage\n    \n    **Process:**\n
+        \   1. Iterates through user's choreographies\n    2. Checks if each video
+        file exists in GCS\n    3. Collects IDs of choreographies with missing files\n
+        \   4. Deletes orphaned records in a transaction\n    5. Returns count of
+        cleaned records\n    \n    **Performance:**\n    - Completes in <30 seconds
+        for typical collections\n    - Uses batch operations for efficiency\n    -
+        Transaction-safe (all or nothing)\n    \n    **Note:** This only removes database
+        records. It does not delete\n    any files from GCS.\n    "
+      summary: Clean up orphaned choreographies
+      tags:
+      - Collections
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Cleanup completed successfully
+        '401':
+          description: Authentication required
+  /api/collections/delete-all:
+    post:
+      operationId: collections_delete_all_create
+      description: "\n    Bulk delete all choreographies in the user's collection.\n
+        \   \n    **⚠️ WARNING:** This action is irreversible and will permanently
+        delete\n    all saved choreographies for the authenticated user.\n    \n    **Safety
+        Mechanism:**\n    - Requires explicit confirmation parameter set to `true`\n
+        \   - Uses database transaction for atomicity\n    - Logs deletion for audit
+        trail\n    \n    **Use Cases:**\n    - User wants to clear their entire collection\n
+        \   - User wants to start fresh\n    - Testing/development cleanup\n    \n
+        \   **Note:** This only deletes the database records. Video files in GCS\n
+        \   are not automatically deleted and may need separate cleanup.\n    "
+      summary: Delete all choreographies
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: All choreographies deleted successfully
+        '400':
+          description: Confirmation not provided
+        '401':
+          description: Authentication required
+  /api/collections/save:
+    post:
+      operationId: collections_save_create
+      description: "\n    Save a completed choreography generation task to the user's
+        collection.\n    \n    After a choreography generation task completes successfully,
+        use this endpoint\n    to save it to your collection with optional custom
+        title and difficulty.\n    \n    **Workflow:**\n    1. Generate choreography
+        via POST /api/choreography/generate\n    2. Poll task status via GET /api/choreography/tasks/{task_id}\n
+        \   3. When status is 'completed', save via POST /api/collections/save\n    \n
+        \   **Title Generation:**\n    - If no title provided, generates: \"Choreography
+        YYYY-MM-DD HH:MM\"\n    \n    **Difficulty:**\n    - If not provided, uses
+        difficulty from task generation parameters\n    - If task has no difficulty,
+        defaults to 'intermediate'\n    "
+      summary: Save choreography from task
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveChoreographyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SaveChoreographyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SaveChoreographyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedChoreography'
+              examples:
+                SavedChoreography:
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    title: My Romantic Bachata
+                    video_path: choreographies/2025/11/video.mp4
+                    difficulty: intermediate
+                    duration: 180.5
+                    music_info:
+                      song: Obsesión
+                      artist: Aventura
+                    generation_parameters:
+                      task_id: '...'
+                      energy_level: medium
+                    created_at: '2025-11-03T10:30:00Z'
+                  summary: Saved Choreography
+          description: Choreography saved successfully
+        '400':
+          description: Task not completed or validation error
+        '404':
+          description: Task not found or does not belong to user
+        '409':
+          description: Choreography already saved
+        '401':
+          description: Authentication required
+  /api/collections/stats:
+    get:
+      operationId: collections_stats_retrieve
+      description: "\n    Retrieve statistics about the user's choreography collection.\n
+        \   \n    Returns:\n    - Total number of saved choreographies\n    - Count
+        by difficulty level (beginner, intermediate, advanced)\n    - Total duration
+        of all choreographies in seconds\n    \n    Useful for dashboard displays
+        and collection overview.\n    "
+      summary: Get collection statistics
+      tags:
+      - Collections
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionStats'
+              examples:
+                Stats:
+                  value:
+                    total_count: 25
+                    by_difficulty:
+                      beginner: 8
+                      intermediate: 12
+                      advanced: 5
+                    total_duration: 4500
+          description: Collection statistics
+        '401':
+          description: Authentication required
+  /api/health:
+    get:
+      operationId: health_retrieve
+      description: Health check endpoint for Cloud Run
+      tags:
+      - health
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/instructors/class-plans/:
+    get:
+      operationId: instructors_class_plans_list
+      description: ViewSet for class plan CRUD operations
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassPlanList'
+          description: ''
+    post:
+      operationId: instructors_class_plans_create
+      description: ViewSet for class plan CRUD operations
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+  /api/instructors/class-plans/{id}/:
+    get:
+      operationId: instructors_class_plans_retrieve
+      description: ViewSet for class plan CRUD operations
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlanDetail'
+          description: ''
+    put:
+      operationId: instructors_class_plans_update
+      description: ViewSet for class plan CRUD operations
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+    patch:
+      operationId: instructors_class_plans_partial_update
+      description: ViewSet for class plan CRUD operations
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClassPlanRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+    delete:
+      operationId: instructors_class_plans_destroy
+      description: ViewSet for class plan CRUD operations
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/instructors/class-plans/{id}/duplicate/:
+    post:
+      operationId: instructors_class_plans_duplicate_create
+      description: Duplicate class plan with all sequences
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+  /api/instructors/class-plans/{id}/export/:
+    get:
+      operationId: instructors_class_plans_export_retrieve
+      description: Export class plan as formatted HTML
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+  /api/instructors/class-plans/{id}/reorder-sequences/:
+    post:
+      operationId: instructors_class_plans_reorder_sequences_create
+      description: Reorder sequences in class plan
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+  /api/instructors/class-plans/{id}/sequences/:
+    post:
+      operationId: instructors_class_plans_sequences_create
+      description: Add choreography to class plan
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+  /api/instructors/class-plans/{id}/sequences/{sequence_id}/:
+    put:
+      operationId: instructors_class_plans_sequences_update
+      description: Update sequence notes and estimated_time
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: sequence_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassPlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+    delete:
+      operationId: instructors_class_plans_sequences_destroy
+      description: Delete sequence and reorder remaining
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: sequence_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/instructors/class-plans/{id}/summary/:
+    get:
+      operationId: instructors_class_plans_summary_retrieve
+      description: Generate class plan summary
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassPlan'
+          description: ''
+  /api/instructors/stats/:
+    get:
+      operationId: instructors_stats_retrieve
+      description: Get instructor dashboard statistics
+      tags:
+      - instructors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    AIGenerationRequest:
+      type: object
+      description: |-
+        Serializer for AI-enhanced choreography generation.
+
+        Accepts natural language query and optional pre-parsed parameters.
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Natural language description of desired choreography
+          maxLength: 1000
+        parameters:
+          description: Optional pre-parsed parameters (if not provided, will parse
+            from query)
+      required:
+      - query
+    BulkDeleteRequest:
+      type: object
+      description: |-
+        Serializer for bulk delete confirmation.
+
+        Requires explicit confirmation to prevent accidental deletion of all choreographies.
+      properties:
+        confirmation:
+          type: boolean
+          description: Must be true to confirm deletion of all choreographies
+      required:
+      - confirmation
+    ChoreographyGenerationRequest:
+      type: object
+      description: |-
+        Serializer for choreography generation request.
+
+        Validates input parameters for creating a new choreography generation task.
+      properties:
+        audio_input:
+          type: string
+          minLength: 1
+          description: YouTube URL or GCS path to audio file
+          maxLength: 500
+        difficulty:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          x-spec-enum-id: e85f22278e8e9019
+          default: intermediate
+          description: |-
+            Difficulty level of the choreography
+
+            * `beginner` - beginner
+            * `intermediate` - intermediate
+            * `advanced` - advanced
+        energy_level:
+          enum:
+          - low
+          - medium
+          - high
+          - ''
+          type: string
+          x-spec-enum-id: afed52fc21ec10d3
+          description: |-
+            Energy level of the choreography (optional)
+
+            * `low` - low
+            * `medium` - medium
+            * `high` - high
+        style:
+          enum:
+          - traditional
+          - modern
+          - romantic
+          - sensual
+          - ''
+          type: string
+          x-spec-enum-id: aa3d3eaba2ae1b8e
+          description: |-
+            Style of the choreography (optional)
+
+            * `traditional` - traditional
+            * `modern` - modern
+            * `romantic` - romantic
+            * `sensual` - sensual
+      required:
+      - audio_input
+    ChoreographyTask:
+      type: object
+      description: |-
+        Serializer for choreography task status.
+
+        Returns the current status and progress of a choreography generation task.
+        All fields are read-only as tasks are updated by the background job.
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        progress:
+          type: integer
+          maximum: 100
+          minimum: 0
+          readOnly: true
+        stage:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        result:
+          readOnly: true
+          nullable: true
+        error:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - error
+      - message
+      - progress
+      - result
+      - stage
+      - status
+      - task_id
+      - updated_at
+    ChoreographyTaskList:
+      type: object
+      description: |-
+        Simplified serializer for listing choreography tasks.
+
+        Used for paginated list views where full details are not needed.
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        progress:
+          type: integer
+          readOnly: true
+        stage:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - message
+      - progress
+      - stage
+      - status
+      - task_id
+      - updated_at
+    ClassPlan:
+      type: object
+      description: Basic serializer for class plans (list view)
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        difficulty_level:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          description: |-
+            * `beginner` - Beginner
+            * `intermediate` - Intermediate
+            * `advanced` - Advanced
+          x-spec-enum-id: dbc16ec84b425e58
+        estimated_duration:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Estimated duration in minutes
+        instructor_notes:
+          type: string
+        sequence_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - difficulty_level
+      - id
+      - sequence_count
+      - title
+      - updated_at
+    ClassPlanDetail:
+      type: object
+      description: Detailed serializer for class plans with nested sequences
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        difficulty_level:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          description: |-
+            * `beginner` - Beginner
+            * `intermediate` - Intermediate
+            * `advanced` - Advanced
+          x-spec-enum-id: dbc16ec84b425e58
+        estimated_duration:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Estimated duration in minutes
+        instructor_notes:
+          type: string
+        sequence_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        sequences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassPlanSequence'
+          readOnly: true
+      required:
+      - created_at
+      - difficulty_level
+      - id
+      - sequence_count
+      - sequences
+      - title
+      - updated_at
+    ClassPlanRequest:
+      type: object
+      description: Basic serializer for class plans (list view)
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        difficulty_level:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          description: |-
+            * `beginner` - Beginner
+            * `intermediate` - Intermediate
+            * `advanced` - Advanced
+          x-spec-enum-id: dbc16ec84b425e58
+        estimated_duration:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Estimated duration in minutes
+        instructor_notes:
+          type: string
+      required:
+      - difficulty_level
+      - title
+    ClassPlanSequence:
+      type: object
+      description: Serializer for class plan sequences with nested choreography
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        sequence_order:
+          type: integer
+          readOnly: true
+        choreography:
+          allOf:
+          - $ref: '#/components/schemas/SavedChoreography'
+          readOnly: true
+        notes:
+          type: string
+        estimated_time:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Estimated time for this sequence in minutes
+      required:
+      - choreography
+      - id
+      - sequence_order
+    CollectionStats:
+      type: object
+      description: |-
+        Collection statistics serializer.
+
+        Provides aggregate statistics about a user's choreography collection.
+      properties:
+        total_count:
+          type: integer
+          description: Total number of saved choreographies
+        by_difficulty:
+          type: object
+          additionalProperties: {}
+          description: Count of choreographies by difficulty level
+        total_duration:
+          type: number
+          format: double
+          description: Total duration of all choreographies in seconds
+      required:
+      - by_difficulty
+      - total_count
+      - total_duration
+    LoginRequest:
+      type: object
+      description: |-
+        Login credentials serializer.
+
+        Validates username and password for authentication.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Username
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Password
+      required:
+      - password
+      - username
+    PaginatedClassPlanList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassPlan'
+    PatchedClassPlanRequest:
+      type: object
+      description: Basic serializer for class plans (list view)
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        difficulty_level:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          description: |-
+            * `beginner` - Beginner
+            * `intermediate` - Intermediate
+            * `advanced` - Advanced
+          x-spec-enum-id: dbc16ec84b425e58
+        estimated_duration:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Estimated duration in minutes
+        instructor_notes:
+          type: string
+    QueryParseRequest:
+      type: object
+      description: |-
+        Serializer for natural language query parsing.
+
+        Validates user's natural language input for AI parsing.
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Natural language description of desired choreography
+          maxLength: 1000
+      required:
+      - query
+    RegisterRequest:
+      type: object
+      description: |-
+        User registration serializer.
+
+        Validates registration data and creates new user accounts.
+        Password must meet Django's validation requirements.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Unique username (letters, numbers, @/./+/-/_ only)
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          description: Email address
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Password (min 8 characters, not too common, not entirely numeric)
+        password2:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Password confirmation (must match password)
+        display_name:
+          type: string
+          description: Display name (optional)
+          maxLength: 200
+      required:
+      - password
+      - password2
+      - username
+    SaveChoreographyRequest:
+      type: object
+      description: |-
+        Serializer for saving a completed choreography task to collection.
+
+        Used to convert a ChoreographyTask result into a SavedChoreography record.
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: UUID of the completed choreography task
+        title:
+          type: string
+          description: Optional title for the choreography (auto-generated if not
+            provided)
+          maxLength: 200
+        difficulty:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          x-spec-enum-id: e85f22278e8e9019
+          description: |-
+            Optional difficulty level (uses task difficulty if not provided)
+
+            * `beginner` - beginner
+            * `intermediate` - intermediate
+            * `advanced` - advanced
+      required:
+      - task_id
+    SavedChoreography:
+      type: object
+      description: |-
+        Saved choreography serializer.
+
+        Represents a choreography saved to the user's collection with metadata.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          description: Choreography title
+          maxLength: 200
+        video_path:
+          type: string
+          format: uri
+          description: URL or path to the video file
+        difficulty:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          x-spec-enum-id: dbc16ec84b425e58
+          description: |-
+            Difficulty level (beginner, intermediate, advanced)
+
+            * `beginner` - Beginner
+            * `intermediate` - Intermediate
+            * `advanced` - Advanced
+        duration:
+          type: number
+          format: double
+          description: Duration in seconds
+        music_info:
+          nullable: true
+          description: Music metadata as JSON (song, artist, tempo, etc.)
+        generation_parameters:
+          nullable: true
+          description: Parameters used for generation as JSON
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - difficulty
+      - duration
+      - id
+      - title
+      - video_path
+    SavedChoreographyRequest:
+      type: object
+      description: |-
+        Saved choreography serializer.
+
+        Represents a choreography saved to the user's collection with metadata.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: Choreography title
+          maxLength: 200
+        video_path:
+          type: string
+          format: binary
+          description: URL or path to the video file
+        difficulty:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          x-spec-enum-id: dbc16ec84b425e58
+          description: |-
+            Difficulty level (beginner, intermediate, advanced)
+
+            * `beginner` - Beginner
+            * `intermediate` - Intermediate
+            * `advanced` - Advanced
+        duration:
+          type: number
+          format: double
+          description: Duration in seconds
+        music_info:
+          nullable: true
+          description: Music metadata as JSON (song, artist, tempo, etc.)
+        generation_parameters:
+          nullable: true
+          description: Parameters used for generation as JSON
+      required:
+      - difficulty
+      - duration
+      - title
+      - video_path
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    User:
+      type: object
+      description: |-
+        User profile serializer.
+
+        Represents user account information. Username is read-only after creation.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        email:
+          type: string
+          format: email
+          title: Email address
+          description: User email address
+          maxLength: 254
+        display_name:
+          type: string
+          description: Display name shown in the app
+          maxLength: 200
+        is_instructor:
+          type: boolean
+          description: Whether user has instructor privileges
+        preferences:
+          description: User preferences as JSON object
+      required:
+      - id
+      - username
+    UserPreferencesRequest:
+      type: object
+      description: |-
+        User preferences serializer.
+
+        Manages user preferences stored in the User.preferences JSONField.
+        All fields are optional to support partial updates.
+      properties:
+        auto_save_choreographies:
+          type: boolean
+          description: Automatically save generated choreographies to collection
+        default_difficulty:
+          enum:
+          - beginner
+          - intermediate
+          - advanced
+          type: string
+          x-spec-enum-id: e85f22278e8e9019
+          description: |-
+            Default difficulty level for choreography generation
+
+            * `beginner` - beginner
+            * `intermediate` - intermediate
+            * `advanced` - advanced
+        email_notifications:
+          type: boolean
+          description: Enable email notifications for task completion
+    UserRequest:
+      type: object
+      description: |-
+        User profile serializer.
+
+        Represents user account information. Username is read-only after creation.
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email address
+          description: User email address
+          maxLength: 254
+        display_name:
+          type: string
+          description: Display name shown in the app
+          maxLength: 200
+        is_instructor:
+          type: boolean
+          description: Whether user has instructor privileges
+        preferences:
+          description: User preferences as JSON object
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+servers:
+- url: http://localhost:8000
+  description: Local Development

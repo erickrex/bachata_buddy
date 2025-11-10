@@ -1,0 +1,101 @@
+# Example GitHub Actions Workflow for API Testing
+# Save this as .github/workflows/api-tests.yml in your repository
+
+name: API Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: bachata_buddy_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: false
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cluster/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 9200:9200
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install UV
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        uv sync
+    
+    - name: Set up environment variables
+      working-directory: ./backend
+      run: |
+        cp .env.example .env.local
+        echo "DB_HOST=localhost" >> .env.local
+        echo "DB_PORT=5432" >> .env.local
+        echo "DB_NAME=bachata_buddy_test" >> .env.local
+        echo "DB_USER=postgres" >> .env.local
+        echo "DB_PASSWORD=postgres" >> .env.local
+        echo "ELASTICSEARCH_URL=http://localhost:9200" >> .env.local
+    
+    - name: Run migrations
+      working-directory: ./backend
+      run: |
+        uv run python manage.py migrate
+    
+    - name: Run unit tests
+      working-directory: ./backend
+      run: |
+        uv run pytest --verbose --cov=apps --cov-report=term-missing
+    
+    - name: Start backend server
+      working-directory: ./backend
+      run: |
+        uv run python manage.py runserver &
+        sleep 5
+    
+    - name: Run comprehensive API tests
+      working-directory: ./backend
+      run: |
+        python test_api_comprehensive.py --base-url http://localhost:8000
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: |
+          backend/test_results.txt
+          backend/htmlcov/

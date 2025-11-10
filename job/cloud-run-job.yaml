@@ -1,0 +1,125 @@
+# Cloud Run Job Configuration for Video Processing
+# This file defines the Cloud Run Job configuration for the blueprint-based video processor
+#
+# Deploy with:
+#   gcloud run jobs replace cloud-run-job.yaml --region us-central1
+#
+# Or use the deployment script:
+#   ./scripts/deploy_job_to_cloud_run.sh
+
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: video-processor
+  labels:
+    app: bachata-buddy
+    component: video-processor
+    architecture: blueprint-based
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        # Resource limits optimized for blueprint-based architecture
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      # Service account with minimal permissions
+      serviceAccountName: bachata-job-sa@PROJECT_ID.iam.gserviceaccount.com
+      
+      # Task configuration
+      taskCount: 1
+      parallelism: 1
+      
+      # Timeout and retry configuration
+      timeoutSeconds: 300  # 5 minutes (reduced from 10 minutes)
+      maxRetries: 3
+      
+      # Container configuration
+      containers:
+      - name: video-processor
+        image: gcr.io/PROJECT_ID/video-processor:latest
+        
+        # Resource limits (reduced for blueprint-based architecture)
+        resources:
+          limits:
+            memory: 512Mi  # Reduced from 2Gi
+            cpu: "1"       # Reduced from 2
+        
+        # Environment variables (static configuration)
+        env:
+        - name: ENVIRONMENT
+          value: "cloud"
+        - name: GCP_PROJECT_ID
+          value: "PROJECT_ID"
+        - name: GCP_REGION
+          value: "us-central1"
+        - name: DB_HOST
+          value: "/cloudsql/PROJECT_ID:us-central1:bachata-db"
+        - name: DB_NAME
+          value: "bachata_buddy"
+        - name: DB_USER
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        
+        # Dynamic environment variables (passed by API at execution time):
+        # - TASK_ID: UUID of the choreography task
+        # - USER_ID: ID of the user
+        # - BLUEPRINT_JSON: Complete blueprint with all video assembly instructions
+        
+        # Secrets (sensitive configuration)
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-password
+              key: latest
+        
+        # Cloud SQL connection
+        volumeMounts:
+        - name: cloudsql
+          mountPath: /cloudsql
+      
+      volumes:
+      - name: cloudsql
+        cloudSqlInstance:
+          instances:
+          - PROJECT_ID:us-central1:bachata-db
+
+---
+# Notes on Blueprint-Based Architecture:
+#
+# 1. Removed Dependencies:
+#    - Elasticsearch (moved to API/backend)
+#    - Django/DRF (not needed in job)
+#    - Librosa (audio analysis in API)
+#    - NumPy/SciPy (vector search in API)
+#    - FAISS (similarity search in API)
+#    - ML libraries (all intelligence in API)
+#
+# 2. Remaining Dependencies:
+#    - FFmpeg (video assembly)
+#    - psycopg2-binary (database updates)
+#    - google-cloud-storage (file I/O)
+#    - python-dotenv (config)
+#
+# 3. Resource Optimization:
+#    - Memory: 512Mi (down from 2Gi)
+#    - CPU: 1 (down from 2)
+#    - Timeout: 300s (down from 600s)
+#    - Build time: <2 minutes (down from 5+ minutes)
+#
+# 4. Environment Variables:
+#    - Static vars defined in this file
+#    - Dynamic vars (TASK_ID, USER_ID, BLUEPRINT_JSON) passed at execution time
+#    - Secrets loaded from Secret Manager
+#
+# 5. Execution Flow:
+#    API → Generate Blueprint → Submit Job with BLUEPRINT_JSON → Job Assembles Video
+#
+# 6. Service Account Permissions:
+#    - roles/cloudsql.client (database access)
+#    - roles/storage.objectViewer (read videos/audio)
+#    - roles/storage.objectCreator (write output videos)
+#    - roles/secretmanager.secretAccessor (read DB password)

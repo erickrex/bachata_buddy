@@ -2,13 +2,13 @@
 data/output
 data/user_collections
 data/temp
-
+.kiro/
 
 # Generated content directories
 data/temp/
 data/cache/
 data/choreography_metadata/
-
+docs/
 # Python
 __pycache__/
 *.__pycache__

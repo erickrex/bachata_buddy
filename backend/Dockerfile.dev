@@ -1,0 +1,40 @@
+# Development Dockerfile for Django REST API
+# Optimized for local development with hot-reload
+
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV for fast dependency management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files
+COPY pyproject.toml ./
+COPY README.md* ./
+
+# Install Python dependencies (including dev dependencies for testing)
+RUN uv pip install --system --no-cache ".[dev]"
+
+# Copy application code (will be overridden by volume mount in docker-compose)
+COPY . .
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV UV_SYSTEM_PYTHON=1
+
+# Expose port
+EXPOSE 8000
+
+# Default command (can be overridden in docker-compose.yml)
+# Use uv run to ensure proper environment
+CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]

@@ -1,0 +1,114 @@
+[
+  {
+    "model": "choreography.song",
+    "pk": 1,
+    "fields": {
+      "title": "Eso_es_amor",
+      "artist": "Jiory",
+      "duration": 232.0,
+      "bpm": 132,
+      "genre": "Modern Bachata",
+      "audio_path": "songs/Eso_es_amor.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 2,
+    "fields": {
+      "title": "Besito_a_besito",
+      "artist": "Luis Miguel del Amargue",
+      "duration": 212.0,
+      "bpm": 133,
+      "genre": "Traditional Bachata",
+      "audio_path": "songs/Besito_a_besito.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 3,
+    "fields": {
+      "title": "Babalu",
+      "artist": "J-Style & DJ Tronky",
+      "duration": 265.0,
+      "bpm": 132,
+      "genre": "Modern Bachata",
+      "audio_path": "songs/Babalu.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 4,
+    "fields": {
+      "title": "Del_mar",
+      "artist": "Ozuna, DJ Dimensions, DJ Alejandro",
+      "duration": 250.0,
+      "bpm": 115,
+      "genre": "Sensual Bachata",
+      "audio_path": "songs/Del_mar.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 5,
+    "fields": {
+      "title": "Me_emborrachare",
+      "artist": "Grupo Extra",
+      "duration": 239.0,
+      "bpm": 124,
+      "genre": "Modern Bachata",
+      "audio_path": "songs/Me_emborrachare.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 6,
+    "fields": {
+      "title": "Old_town_road",
+      "artist": "Lil Nas X, DJ Dimensions, DJ Tiguere",
+      "duration": 204.0,
+      "bpm": 132,
+      "genre": "Urban Bachata",
+      "audio_path": "songs/Old_town_road.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 7,
+    "fields": {
+      "title": "Este_secreto",
+      "artist": "Melvin War",
+      "duration": 263.0,
+      "bpm": 134,
+      "genre": "Modern Bachata",
+      "audio_path": "songs/Este_secreto.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  },
+  {
+    "model": "choreography.song",
+    "pk": 8,
+    "fields": {
+      "title": "Suegra",
+      "artist": "Romeo Santos",
+      "duration": 224.0,
+      "bpm": 123,
+      "genre": "Modern Bachata",
+      "audio_path": "songs/Suegra.mp3",
+      "created_at": "2025-11-08T10:00:00Z",
+      "updated_at": "2025-11-08T10:00:00Z"
+    }
+  }
+]

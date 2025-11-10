@@ -1,0 +1,72 @@
+{
+  "baseline_memory_mb": 21.796875,
+  "peak_memory_mb": 28.859375,
+  "memory_limit_mb": 512,
+  "passed": true,
+  "utilization_percent": 5.6365966796875,
+  "measurements": [
+    {
+      "stage": "import_start",
+      "description": "Importing services",
+      "memory_mb": 21.796875,
+      "delta_from_baseline_mb": 0.0,
+      "timestamp": 1762703326.7277892
+    },
+    {
+      "stage": "import_complete",
+      "description": "Services imported",
+      "memory_mb": 28.734375,
+      "delta_from_baseline_mb": 6.9375,
+      "timestamp": 1762703326.798635
+    },
+    {
+      "stage": "storage_init",
+      "description": "Storage service initialized",
+      "memory_mb": 28.734375,
+      "delta_from_baseline_mb": 6.9375,
+      "timestamp": 1762703326.7988858
+    },
+    {
+      "stage": "assembler_init",
+      "description": "Video assembler initialized",
+      "memory_mb": 28.765625,
+      "delta_from_baseline_mb": 6.96875,
+      "timestamp": 1762703326.800125
+    },
+    {
+      "stage": "blueprint_created",
+      "description": "Test blueprint created",
+      "memory_mb": 28.765625,
+      "delta_from_baseline_mb": 6.96875,
+      "timestamp": 1762703326.8001778
+    },
+    {
+      "stage": "temp_dir_created",
+      "description": "Temporary directory created",
+      "memory_mb": 28.765625,
+      "delta_from_baseline_mb": 6.96875,
+      "timestamp": 1762703326.8005178
+    },
+    {
+      "stage": "files_written",
+      "description": "Test files written",
+      "memory_mb": 28.765625,
+      "delta_from_baseline_mb": 6.96875,
+      "timestamp": 1762703326.802934
+    },
+    {
+      "stage": "files_read",
+      "description": "Test files read",
+      "memory_mb": 28.765625,
+      "delta_from_baseline_mb": 6.96875,
+      "timestamp": 1762703326.8376498
+    },
+    {
+      "stage": "cleanup_complete",
+      "description": "Temporary files cleaned up",
+      "memory_mb": 28.859375,
+      "delta_from_baseline_mb": 7.0625,
+      "timestamp": 1762703326.8538802
+    }
+  ]
+}

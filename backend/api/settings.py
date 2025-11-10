@@ -157,23 +157,8 @@ else:
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-        'OPTIONS': {
-            'min_length': 8,
-        }
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+# Disabled: Allow any password for easier user registration
+AUTH_PASSWORD_VALIDATORS = []
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
@@ -412,3 +397,55 @@ else:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
+
+# =============================================================================
+# CORS Configuration
+# =============================================================================
+# Allow frontend to make requests to the API from different origins
+
+if IS_CLOUD_RUN:
+    # Production: Allow specific frontend domains
+    CORS_ALLOWED_ORIGINS = os.environ.get(
+        'CORS_ALLOWED_ORIGINS',
+        ''
+    ).split(',') if os.environ.get('CORS_ALLOWED_ORIGINS') else []
+    
+    # Allow credentials (cookies, authorization headers)
+    CORS_ALLOW_CREDENTIALS = True
+else:
+    # Local development: Allow localhost on common ports
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:5173',  # Vite dev server
+        'http://localhost:3000',  # Alternative React port
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000',
+    ]
+    
+    # Allow credentials
+    CORS_ALLOW_CREDENTIALS = True
+    
+    # For local development, you can also use CORS_ALLOW_ALL_ORIGINS = True
+    # but it's better to be explicit for security
+
+# Allow common headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Allow common methods
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]

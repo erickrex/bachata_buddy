@@ -663,7 +663,7 @@ def task_detail(request, task_id):
     
     if request.method == 'GET':
         # Get task status (polls database)
-        serializer = ChoreographyTaskSerializer(task)
+        serializer = ChoreographyTaskSerializer(task, context={'request': request})
         return Response(serializer.data)
     
     elif request.method == 'DELETE':
@@ -1257,3 +1257,91 @@ def generate_with_ai(request):
         'message': 'AI choreography generation started',
         'poll_url': f'/api/choreography/tasks/{task_id}'
     }, status=status.HTTP_202_ACCEPTED)
+
+
+@extend_schema(
+    summary="Serve choreography video",
+    description="""
+    Serve the generated choreography video file.
+    
+    This endpoint streams the video file for a completed choreography task.
+    The video is served with proper content-type headers for browser playback.
+    
+    **Access Control:**
+    - Requires authentication
+    - Users can only access their own videos
+    
+    **Response:**
+    - Content-Type: video/mp4
+    - Supports range requests for seeking
+    """,
+    responses={
+        200: OpenApiResponse(description="Video file stream"),
+        404: OpenApiResponse(description="Video not found or task not completed"),
+        403: OpenApiResponse(description="Not authorized to access this video"),
+    },
+    tags=['Choreography']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def serve_video(request, task_id):
+    """
+    Serve the generated choreography video file.
+    
+    Streams the video file for browser playback with proper headers.
+    """
+    from django.http import FileResponse, Http404
+    import os
+    from django.conf import settings
+    
+    # Get the task and verify ownership
+    task = get_object_or_404(ChoreographyTask, task_id=task_id)
+    
+    # Check if user owns this task
+    if task.user_id != request.user.id:
+        return Response(
+            {'error': 'You do not have permission to access this video'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if task is completed
+    if task.status != 'completed':
+        return Response(
+            {'error': 'Video is not ready yet. Task status: ' + task.status},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Get video path from task result
+    if not task.result or 'output_path' not in task.result:
+        logger.error(f'No output_path in task result for task {task_id}')
+        return Response(
+            {'error': 'Video path not found in task result'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Construct full path - result contains relative path like "output/user_123/video.mp4"
+    output_path = task.result.get('output_path', '')
+    local_path = os.path.join('/app/data', output_path)
+    
+    # Verify file exists
+    if not os.path.exists(local_path):
+        logger.error(f'Video file not found: {local_path}')
+        return Response(
+            {'error': 'Video file not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Open and serve the file
+    try:
+        video_file = open(local_path, 'rb')
+        video_filename = os.path.basename(local_path)
+        response = FileResponse(video_file, content_type='video/mp4')
+        response['Content-Disposition'] = f'inline; filename="{video_filename}"'
+        response['Accept-Ranges'] = 'bytes'
+        return response
+    except Exception as e:
+        logger.error(f'Error serving video: {str(e)}')
+        return Response(
+            {'error': 'Error serving video file'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

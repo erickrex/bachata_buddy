@@ -107,12 +107,45 @@ class CloudRunJobsService:
         )
         
         if self.client is None:
-            # Local development mode - return mock execution name
+            # Local development mode - create trigger file for external job runner
             execution_name = f"local-dev-execution-{task_id}"
             logger.info(
-                f"Mock job execution created: {execution_name}",
+                f"Local development mode: creating job trigger file",
                 extra={'task_id': task_id, 'execution_name': execution_name, 'mode': 'local-dev'}
             )
+            
+            # Create a trigger file that an external watcher can pick up
+            try:
+                import os
+                import json
+                
+                # Create triggers directory if it doesn't exist
+                triggers_dir = '/app/data/job_triggers'
+                os.makedirs(triggers_dir, exist_ok=True)
+                
+                # Write trigger file with task information
+                trigger_file = os.path.join(triggers_dir, f'{task_id}.trigger')
+                with open(trigger_file, 'w') as f:
+                    json.dump({
+                        'task_id': task_id,
+                        'user_id': user_id,
+                        'timestamp': time.time(),
+                        'status': 'pending'
+                    }, f)
+                
+                logger.info(
+                    f"Job trigger file created: {trigger_file}",
+                    extra={'task_id': task_id, 'trigger_file': trigger_file}
+                )
+                
+            except Exception as e:
+                logger.error(
+                    f"Failed to create job trigger file for task {task_id}: {e}",
+                    extra={'task_id': task_id, 'error': str(e)},
+                    exc_info=True
+                )
+                # Don't fail the request - just log the error
+            
             return execution_name
         
         # Validate required parameters (blueprint_json is required)

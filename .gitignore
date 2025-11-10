@@ -1,9 +1,10 @@
 .env
 data/output
 data/user_collections
+data/choreographies
 data/temp
 .kiro/
-
+frontend/node_modules/
 # Generated content directories
 data/temp/
 data/cache/

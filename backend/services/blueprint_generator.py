@@ -622,7 +622,7 @@ Generate the sequence now:
                 'user_id': user_id
             },
             'output_config': {
-                'output_path': f"choreographies/choreography_{task_id}.mp4",
+                'output_path': f"output/user_{user_id}/choreography_{task_id}.mp4",
                 'output_format': 'mp4',
                 'video_codec': 'libx264',
                 'audio_codec': 'aac',

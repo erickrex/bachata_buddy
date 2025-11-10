@@ -4,7 +4,29 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bachata Buddy - Choreography Generator</title>
+    <meta name="description" content="AI-powered bachata choreography generator - Create custom dance routines with ease" />
+    
+    <!-- Content Security Policy -->
+    <!-- Restricts resource loading to prevent XSS and other injection attacks -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+      img-src 'self' data: https:;
+      media-src 'self' http://localhost:8001 https: blob:;
+      connect-src 'self' http://localhost:8000 http://localhost:8001 https://*.bachatbuddy.com;
+      frame-ancestors 'none';
+      base-uri 'self';
+      form-action 'self';
+    ">
+    
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <title>Bachata Buddy - AI Choreography Generator</title>
   </head>
   <body>
     <div id="root"></div>

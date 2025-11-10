@@ -72,11 +72,43 @@ class ChoreographyTaskSerializer(serializers.ModelSerializer):
     progress = serializers.IntegerField(read_only=True, min_value=0, max_value=100)
     stage = serializers.CharField(read_only=True)
     message = serializers.CharField(read_only=True)
-    result = serializers.JSONField(read_only=True, allow_null=True)
+    result = serializers.SerializerMethodField()
     error = serializers.CharField(read_only=True, allow_null=True)
     song = SongSerializer(read_only=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
+    
+    def get_result(self, obj):
+        """
+        Convert file:// URLs to HTTP URLs for video access.
+        
+        The job stores file:// paths, but the frontend needs HTTP URLs.
+        """
+        if not obj.result:
+            return None
+        
+        result = obj.result.copy() if isinstance(obj.result, dict) else {}
+        
+        # Convert file:// URL to HTTP URL
+        if 'video_url' in result and result['video_url']:
+            video_url = result['video_url']
+            # If it's a file:// URL, convert to HTTP endpoint
+            if video_url.startswith('file://'):
+                # Generate HTTP URL for video serving endpoint
+                request = self.context.get('request')
+                if request:
+                    result['video_url'] = request.build_absolute_uri(
+                        f'/api/choreography/videos/{obj.task_id}/'
+                    )
+            elif not video_url.startswith('http'):
+                # If it's a relative path, also convert to HTTP
+                request = self.context.get('request')
+                if request:
+                    result['video_url'] = request.build_absolute_uri(
+                        f'/api/choreography/videos/{obj.task_id}/'
+                    )
+        
+        return result
     
     class Meta:
         model = ChoreographyTask
@@ -84,7 +116,7 @@ class ChoreographyTaskSerializer(serializers.ModelSerializer):
             'task_id', 'status', 'progress', 'stage', 'message',
             'result', 'error', 'song', 'created_at', 'updated_at'
         ]
-        read_only_fields = fields
+        read_only_fields = ['task_id', 'status', 'progress', 'stage', 'message', 'error', 'song', 'created_at', 'updated_at']
 
 
 class ChoreographyTaskListSerializer(serializers.ModelSerializer):

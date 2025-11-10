@@ -6,7 +6,8 @@ from .views import (
     generate_with_ai,
     list_songs,
     song_detail,
-    generate_from_song
+    generate_from_song,
+    serve_video
 )
 from .mock_views import (
     complete_mock_job,
@@ -28,6 +29,9 @@ urlpatterns = [
     # Task management endpoints
     path('tasks/', list_tasks, name='list-tasks'),
     path('tasks/<uuid:task_id>/', task_detail, name='task-detail'),
+    
+    # Video serving endpoint
+    path('videos/<uuid:task_id>/', serve_video, name='serve-video'),
     
     # Mock endpoints for local development
     path('mock/complete/<uuid:task_id>/', complete_mock_job, name='mock-complete'),

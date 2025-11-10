@@ -59,13 +59,23 @@ class SavedChoreographySerializer(serializers.ModelSerializer):
     
     Represents a choreography saved to the user's collection with metadata.
     """
+    task_id = serializers.SerializerMethodField(
+        help_text='Task ID from generation parameters (for video playback)'
+    )
+    
+    def get_task_id(self, obj):
+        """Extract task_id from generation_parameters"""
+        if obj.generation_parameters and isinstance(obj.generation_parameters, dict):
+            return obj.generation_parameters.get('task_id')
+        return None
+    
     class Meta:
         model = SavedChoreography
         fields = [
             'id', 'title', 'video_path', 'difficulty', 'duration',
-            'music_info', 'generation_parameters', 'created_at'
+            'music_info', 'generation_parameters', 'created_at', 'task_id'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'created_at', 'task_id']
         extra_kwargs = {
             'title': {'help_text': 'Choreography title'},
             'video_path': {'help_text': 'URL or path to the video file'},

@@ -74,39 +74,6 @@ services:
     profiles:
       - microservices
   
-  # Current Monolithic Django App (for development)
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: bachata_web
-    command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-      - .:/app
-      - ./data:/app/data
-    ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=local
-      - DJANGO_DEBUG=True
-      - DJANGO_SECRET_KEY=local-dev-secret-key-change-in-production
-      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
-      - DB_NAME=bachata_vibes
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_HOST=db
-      - DB_PORT=5432
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GCP_LOCATION=us-central1
-      - YOLOV8_MODEL=yolov8n-pose.pt
-      - YOLOV8_CONFIDENCE=0.3
-      - YOLOV8_DEVICE=cpu
-      - YOLOV8_IOU_THRESHOLD=0.5
-      - YOLOV8_MAX_DET=10
-    depends_on:
-      db:
-        condition: service_healthy
-  
   # Video Processing Job (for testing Cloud Run Jobs locally)
   job:
     build:

@@ -169,9 +169,12 @@ def test_imports() -> Tuple[List[str], List[str]]:
     
     Returns tuple of (successful_imports, failed_imports)
     """
-    # Setup Django environment
+    # Setup Django environment - Use backend API settings
     import django
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bachata_buddy.settings')
+    import sys
+    backend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
+    sys.path.insert(0, backend_path)
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'api.settings')
     try:
         django.setup()
     except Exception as e:

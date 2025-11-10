@@ -5,9 +5,10 @@ import os
 import sys
 import django
 
-# Setup Django
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bachata_buddy.settings')
+# Setup Django - Use backend API settings
+backend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
+sys.path.insert(0, backend_path)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'api.settings')
 django.setup()
 
 from choreography.models import ChoreographyTask

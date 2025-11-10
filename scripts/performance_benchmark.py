@@ -28,8 +28,11 @@ import statistics
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-# Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bachata_buddy.settings')
+# Setup Django - Use backend API settings
+import sys
+backend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
+sys.path.insert(0, backend_path)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'api.settings')
 import django
 django.setup()
 

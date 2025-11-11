@@ -36,5 +36,5 @@ ENV UV_SYSTEM_PYTHON=1
 EXPOSE 8000
 
 # Default command (can be overridden in docker-compose.yml)
-# Use uv run to ensure proper environment
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Use system Python since we installed packages with --system
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

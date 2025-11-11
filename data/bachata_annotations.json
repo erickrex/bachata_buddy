@@ -1,400 +1,1223 @@
 {
   "instructions": "Annotations for bachata video training clips",
   "move_categories": [
-    "basic_step",
+    "arm_styling",
+    "basic",
+    "bodywaves",
+    "bolero",
     "cross_body_lead",
-    "lady_right_turn",
-    "dips",
-    "forward_backward",
-    "double_cross_body_lead",
-    "lady_left_turn",
-    "body_roll",
+    "footwork",
+    "golpes",
     "hammerlock",
-    "shadow_position",
-    "combination",
-    "arm_styling"
+    "headrolls",
+    "hiprolls",
+    "intros",
+    "ladyturn",
+    "outro",
+    "shadow",
+    "spin",
+    "style"
   ],
   "clips": [
     {
-      "clip_id": "basic_step_1",
-      "video_path": "Bachata_steps/basic_steps/basic_step_1.mp4",
-      "move_label": "basic_step",
-      "energy_level": "medium",
-      "estimated_tempo": 110,
-      "difficulty": "beginner",
-      "lead_follow_roles": "both",
-      "notes": "Continuous basic steps throughout 14 seconds",
-      "song": "https://www.youtube.com/watch?v=sB18w6ETyKg"
-    },
-    {
-      "clip_id": "basic_step_2",
-      "video_path": "Bachata_steps/basic_steps/basic_step_2.mp4",
-      "move_label": "basic_step",
+      "clip_id": "energetic_arms_cross_sensual_shadow",
+      "video_path": "arm_styling/energetic_arms_cross_sensual_shadow.mp4",
+      "move_label": "arm_styling",
       "energy_level": "high",
-      "estimated_tempo": 139,
-      "difficulty": "beginner",
-      "lead_follow_roles": "lead_focus",
-      "notes": "Continuous basic steps throughout 18 seconds"
+      "estimated_tempo": 129,
+      "difficulty": "high"
     },
     {
-      "clip_id": "basic_step_3",
-      "video_path": "Bachata_steps/basic_steps/basic_step_3.mp4",
-      "move_label": "basic_step",
-      "energy_level": "high",
-      "estimated_tempo": 139,
-      "difficulty": "beginner",
-      "lead_follow_roles": "lead_focus",
-      "notes": "Continuous basic steps throughout 15 seconds"
-    },
-    {
-      "clip_id": "cross_body_lead_1",
-      "video_path": "Bachata_steps/cross_body_lead/cross_body_lead_1.mp4",
-      "move_label": "cross_body_lead",
+      "clip_id": "paseala",
+      "video_path": "arm_styling/paseala.mp4",
+      "move_label": "arm_styling",
       "energy_level": "medium",
-      "estimated_tempo": 130,
-      "difficulty": "beginner",
-      "lead_follow_roles": "lead_focus",
-      "notes": "Cross body lead throughout 7 seconds"
+      "estimated_tempo": 136,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "cross_body_lead_2",
-      "video_path": "Bachata_steps/cross_body_lead/cross_body_lead_2.mp4",
-      "move_label": "cross_body_lead",
-      "energy_level": "medium",
-      "estimated_tempo": 130,
-      "difficulty": "beginner",
-      "lead_follow_roles": "lead_focus",
-      "notes": "Cross body lead throughout 6 seconds"
-    },
-    {
-      "clip_id": "cross_body_lead_3",
-      "video_path": "Bachata_steps/cross_body_lead/cross_body_lead_3.mp4",
-      "move_label": "cross_body_lead",
+      "clip_id": "paseala2",
+      "video_path": "arm_styling/paseala2.mp4",
+      "move_label": "arm_styling",
       "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "paseala3",
+      "video_path": "arm_styling/paseala3.mp4",
+      "move_label": "arm_styling",
+      "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "paseala_spin",
+      "video_path": "arm_styling/paseala_spin.mp4",
+      "move_label": "arm_styling",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "right_arm_brush",
+      "video_path": "arm_styling/right_arm_brush.mp4",
+      "move_label": "arm_styling",
+      "energy_level": "low",
       "estimated_tempo": 108,
-      "difficulty": "beginner",
-      "lead_follow_roles": "both",
-      "notes": "Cross body lead throughout 4 seconds"
+      "difficulty": "low"
     },
     {
-      "clip_id": "cross_body_lead_4",
-      "video_path": "Bachata_steps/cross_body_lead/cross_body_lead_4.mp4",
-      "move_label": "cross_body_lead",
+      "clip_id": "basic",
+      "video_path": "basic/basic.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "basic_2",
+      "video_path": "basic/basic_2.mp4",
+      "move_label": "basic",
       "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "basic_front",
+      "video_path": "basic/basic_front.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "basic_front2",
+      "video_path": "basic/basic_front2.mp4",
+      "move_label": "basic",
+      "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_basic",
+      "video_path": "basic/energetic_basic.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "energetic_basic2",
+      "video_path": "basic/energetic_basic2.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "front_step",
+      "video_path": "basic/front_step.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "sensual_basic",
+      "video_path": "basic/sensual_basic.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "sensual_basic2",
+      "video_path": "basic/sensual_basic2.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "sensual_basic3",
+      "video_path": "basic/sensual_basic3.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "sensual_basic4",
+      "video_path": "basic/sensual_basic4.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "sensual_basic_completo",
+      "video_path": "basic/sensual_basic_completo.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "sensual_basic_headroll",
+      "video_path": "basic/sensual_basic_headroll.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sensual_bolero",
+      "video_path": "basic/sensual_bolero.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "slow_basic",
+      "video_path": "basic/slow_basic.mp4",
+      "move_label": "basic",
+      "energy_level": "medium",
       "estimated_tempo": 108,
-      "difficulty": "beginner",
-      "lead_follow_roles": "both",
-      "notes": "Cross body lead throughout 5 seconds"
+      "difficulty": "low"
     },
     {
-      "clip_id": "lady_right_turn_1",
-      "video_path": "Bachata_steps/lady_right_turn/lady_right_turn_1.mp4",
-      "move_label": "lady_right_turn",
+      "clip_id": "slow_basic2",
+      "video_path": "basic/slow_basic2.mp4",
+      "move_label": "basic",
       "energy_level": "medium",
-      "estimated_tempo": 125,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Lady right turn throughout 6 seconds"
+      "estimated_tempo": 108,
+      "difficulty": "low"
     },
     {
-      "clip_id": "lady_right_turn_2",
-      "video_path": "Bachata_steps/lady_right_turn/lady_right_turn_2.mp4",
-      "move_label": "lady_right_turn",
+      "clip_id": "slow_basic3",
+      "video_path": "basic/slow_basic3.mp4",
+      "move_label": "basic",
       "energy_level": "medium",
-      "estimated_tempo": 125,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Lady right turn throughout 5 seconds"
+      "estimated_tempo": 108,
+      "difficulty": "low"
     },
     {
-      "clip_id": "dip_1",
-      "video_path": "Bachata_steps/dip/dip_1.mp4",
-      "move_label": "dips",
+      "clip_id": "bodywaves",
+      "video_path": "bodywaves/bodywaves.mp4",
+      "move_label": "bodywaves",
       "energy_level": "high",
       "estimated_tempo": 136,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Dip from second 7 to 10"
+      "difficulty": "high"
     },
     {
-      "clip_id": "dip_2",
-      "video_path": "Bachata_steps/dip/dip_2.mp4",
-      "move_label": "dips",
+      "clip_id": "bodywaves_double",
+      "video_path": "bodywaves/bodywaves_double.mp4",
+      "move_label": "bodywaves",
       "energy_level": "high",
-      "estimated_tempo": 130,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Dip from second 6 to 8"
+      "estimated_tempo": 136,
+      "difficulty": "high"
     },
     {
-      "clip_id": "dip_3",
-      "video_path": "Bachata_steps/dip/dip_3.mp4",
-      "move_label": "dips",
-      "energy_level": "high",
-      "estimated_tempo": 135,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Shadow position followed by back dip from seconds 0 to 7"
-    },
-    {
-      "clip_id": "dip_4",
-      "video_path": "Bachata_steps/dip/dip_4.mp4",
-      "move_label": "dips",
-      "energy_level": "high",
-      "estimated_tempo": 128,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "both",
-      "notes": "Shadow position followed by back dip from seconds 0 to 7"
-    },
-    {
-      "clip_id": "forward_backward_1",
-      "video_path": "Bachata_steps/forward_backward/forward_backward_1.mp4",
-      "move_label": "forward_backward",
+      "clip_id": "energetic_bodywaves",
+      "video_path": "bodywaves/energetic_bodywaves.mp4",
+      "move_label": "bodywaves",
       "energy_level": "medium",
-      "estimated_tempo": 109,
-      "difficulty": "beginner",
-      "lead_follow_roles": "both",
-      "notes": "Forward and backward throughout 6 seconds"
+      "estimated_tempo": 117,
+      "difficulty": "high"
     },
     {
-      "clip_id": "forward_backward_2",
-      "video_path": "Bachata_steps/forward_backward/forward_backward_2.mp4",
-      "move_label": "forward_backward",
+      "clip_id": "energetic_golpes_pinza",
+      "video_path": "bodywaves/energetic_golpes_pinza.mp4",
+      "move_label": "bodywaves",
       "energy_level": "medium",
-      "estimated_tempo": 106,
-      "difficulty": "beginner",
-      "lead_follow_roles": "lead_focus",
-      "notes": "Forward and backward throughout 5 seconds"
+      "estimated_tempo": 129,
+      "difficulty": "high"
     },
     {
-      "clip_id": "forward_backward_3",
-      "video_path": "Bachata_steps/forward_backward/forward_backward_3.mp4",
-      "move_label": "forward_backward",
+      "clip_id": "machete_bodywave_doublespin",
+      "video_path": "bodywaves/machete_bodywave_doublespin.mp4",
+      "move_label": "bodywaves",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "machete_bodywaves_shadow",
+      "video_path": "bodywaves/machete_bodywaves_shadow.mp4",
+      "move_label": "bodywaves",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sensual_basic_machete_bodywave",
+      "video_path": "bodywaves/sensual_basic_machete_bodywave.mp4",
+      "move_label": "bodywaves",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin_bodywaves",
+      "video_path": "bodywaves/spin_bodywaves.mp4",
+      "move_label": "bodywaves",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "triple_bodywave",
+      "video_path": "bodywaves/triple_bodywave.mp4",
+      "move_label": "bodywaves",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "triple_bodywave2",
+      "video_path": "bodywaves/triple_bodywave2.mp4",
+      "move_label": "bodywaves",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "basic_completo",
+      "video_path": "bolero/basic_completo.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "basic_completo2",
+      "video_path": "bolero/basic_completo2.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "completo",
+      "video_path": "bolero/completo.mp4",
+      "move_label": "bolero",
       "energy_level": "high",
-      "estimated_tempo": 121,
-      "difficulty": "beginner",
-      "lead_follow_roles": "lead_focus",
-      "notes": "Forward and backward throughout 10 seconds"
+      "estimated_tempo": 129,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "double_cross_body_lead_1",
-      "video_path": "Bachata_steps/double_cross_body_lead/double_cross_body_lead_1.mp4",
+      "clip_id": "completo2",
+      "video_path": "bolero/completo2.mp4",
+      "move_label": "bolero",
+      "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "completo_paseala",
+      "video_path": "bolero/completo_paseala.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "machete_completo",
+      "video_path": "bolero/machete_completo.mp4",
+      "move_label": "bolero",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "machete_completo2",
+      "video_path": "bolero/machete_completo2.mp4",
+      "move_label": "bolero",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "machete_completo3",
+      "video_path": "bolero/machete_completo3.mp4",
+      "move_label": "bolero",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "machete_completo4",
+      "video_path": "bolero/machete_completo4.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "machete_sensual_basic",
+      "video_path": "bolero/machete_sensual_basic.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "paseala",
+      "video_path": "bolero/paseala.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "slow_completo",
+      "video_path": "bolero/slow_completo.mp4",
+      "move_label": "bolero",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "cross_body_lead",
+      "video_path": "cross_body_lead/cross_body_lead.mp4",
       "move_label": "cross_body_lead",
       "energy_level": "medium",
       "estimated_tempo": 129,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "both",
-      "notes": "Double cross body lead throughout 10 seconds"
+      "difficulty": "low"
     },
     {
-      "clip_id": "double_cross_body_lead_2",
-      "video_path": "Bachata_steps/double_cross_body_lead/double_cross_body_lead_2.mp4",
+      "clip_id": "double_cross_body_lead",
+      "video_path": "cross_body_lead/double_cross_body_lead.mp4",
       "move_label": "cross_body_lead",
       "energy_level": "medium",
-      "estimated_tempo": 112,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "both",
-      "notes": "Double cross body lead throughout 8 seconds"
+      "estimated_tempo": 129,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "double_cross_body_lead_3",
-      "video_path": "Bachata_steps/double_cross_body_lead/double_cross_body_lead_3.mp4",
-      "move_label": "cross_body_lead",
+      "clip_id": "basic_footwork",
+      "video_path": "footwork/basic_footwork.mp4",
+      "move_label": "footwork",
       "energy_level": "medium",
-      "estimated_tempo": 114,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "both",
-      "notes": "Double cross body lead throughout 10 seconds"
+      "estimated_tempo": 117,
+      "difficulty": "high"
     },
     {
-      "clip_id": "lady_left_turn_1",
-      "video_path": "Bachata_steps/lady_left_turn/lady_left_turn_1.mp4",
-      "move_label": "lady_left_turn",
-      "energy_level": "low",
-      "estimated_tempo": 104,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Lady left turn throughout 4 seconds"
+      "clip_id": "basic_madrid",
+      "video_path": "footwork/basic_madrid.mp4",
+      "move_label": "footwork",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "lady_left_turn_2",
-      "video_path": "Bachata_steps/lady_left_turn/lady_left_turn_2.mp4",
-      "move_label": "lady_left_turn",
-      "energy_level": "low",
-      "estimated_tempo": 102,
-      "difficulty": "intermediate",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Lady left turn throughout 3 seconds"
-    },
-    {
-      "clip_id": "body_roll_1",
-      "video_path": "Bachata_steps/body_roll/body_roll_1.mp4",
-      "move_label": "body_roll",
+      "clip_id": "energetic_basic_madrid",
+      "video_path": "footwork/energetic_basic_madrid.mp4",
+      "move_label": "footwork",
       "energy_level": "high",
-      "estimated_tempo": 140,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Body roll throughout 10 seconds"
+      "estimated_tempo": 136,
+      "difficulty": "high"
     },
     {
-      "clip_id": "body_roll_2",
-      "video_path": "Bachata_steps/body_roll/body_roll_2.mp4",
-      "move_label": "body_roll",
+      "clip_id": "madrid",
+      "video_path": "footwork/madrid.mp4",
+      "move_label": "footwork",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "madrid2",
+      "video_path": "footwork/madrid2.mp4",
+      "move_label": "footwork",
       "energy_level": "high",
-      "estimated_tempo": 130,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Body roll throughout 6 seconds"
+      "estimated_tempo": 136,
+      "difficulty": "high"
     },
     {
-      "clip_id": "body_roll_3",
-      "video_path": "Bachata_steps/body_roll/body_roll_3.mp4",
-      "move_label": "body_roll",
-      "energy_level": "high",
-      "estimated_tempo": 135,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Body roll throughout 8 seconds"
+      "clip_id": "madrid_bodywave",
+      "video_path": "footwork/madrid_bodywave.mp4",
+      "move_label": "footwork",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "high"
     },
     {
-      "clip_id": "body_roll_4",
-      "video_path": "Bachata_steps/body_roll/body_roll_4.mp4",
-      "move_label": "body_roll",
-      "energy_level": "high",
-      "estimated_tempo": 142,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Body roll throughout 12 seconds"
+      "clip_id": "ochos_1",
+      "video_path": "footwork/ochos_1.mp4",
+      "move_label": "footwork",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
     },
     {
-      "clip_id": "hammerlock_1",
-      "video_path": "Bachata_steps/hammerlock/hammerlock_1.mp4",
-      "move_label": "hammerlock",
-      "energy_level": "high",
-      "estimated_tempo": 138,
-      "difficulty": "advanced",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Hammerlock throughout 10 seconds"
+      "clip_id": "ochos_2",
+      "video_path": "footwork/ochos_2.mp4",
+      "move_label": "footwork",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
     },
     {
-      "clip_id": "hammerlock_2",
-      "video_path": "Bachata_steps/hammerlock/hammerlock_2.mp4",
-      "move_label": "hammerlock",
-      "energy_level": "high",
-      "estimated_tempo": 140,
-      "difficulty": "advanced",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Hammerlock throughout 12 seconds"
-    },
-    {
-      "clip_id": "shadow_position_1",
-      "video_path": "Bachata_steps/shadow_position/shadow_position_1.mp4",
-      "move_label": "shadow_position",
-      "energy_level": "high",
-      "estimated_tempo": 150,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Shadow position throughout 9 seconds"
-    },
-    {
-      "clip_id": "shadow_position_2",
-      "video_path": "Bachata_steps/shadow_position/shadow_position_2.mp4",
-      "move_label": "shadow_position",
-      "energy_level": "high",
-      "estimated_tempo": 137,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Shadow position throughout 12 seconds"
-    },
-    {
-      "clip_id": "combination_1",
-      "video_path": "Bachata_steps/combination/combination_1.mp4",
-      "move_label": "combination",
+      "clip_id": "bolero_pinza",
+      "video_path": "golpes/bolero_pinza.mp4",
+      "move_label": "golpes",
       "energy_level": "medium",
       "estimated_tempo": 108,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Combination throughout 13 seconds"
+      "difficulty": "high"
     },
     {
-      "clip_id": "combination_2",
-      "video_path": "Bachata_steps/combination/combination_2.mp4",
-      "move_label": "combination",
+      "clip_id": "energetic_golpes_spin",
+      "video_path": "golpes/energetic_golpes_spin.mp4",
+      "move_label": "golpes",
+      "energy_level": "high",
+      "estimated_tempo": 136,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "energetic_shadow_golpes",
+      "video_path": "golpes/energetic_shadow_golpes.mp4",
+      "move_label": "golpes",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "golpes",
+      "video_path": "golpes/golpes.mp4",
+      "move_label": "golpes",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "golpes_cambre",
+      "video_path": "golpes/golpes_cambre.mp4",
+      "move_label": "golpes",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "golpes_pinza_sensual_dip",
+      "video_path": "golpes/golpes_pinza_sensual_dip.mp4",
+      "move_label": "golpes",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "shadow_golpes",
+      "video_path": "golpes/shadow_golpes.mp4",
+      "move_label": "golpes",
+      "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "energetic_hammerlock",
+      "video_path": "hammerlock/energetic_hammerlock.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_paseala_hammerlock",
+      "video_path": "hammerlock/energetic_paseala_hammerlock.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "hammerlock_hiproll",
+      "video_path": "hammerlock/hammerlock_hiproll.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "hammerlock_hiproll1",
+      "video_path": "hammerlock/hammerlock_hiproll1.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "hammerlock_hiproll2",
+      "video_path": "hammerlock/hammerlock_hiproll2.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "hammerlock_hiproll3",
+      "video_path": "hammerlock/hammerlock_hiproll3.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "hammerlock_hiproll4",
+      "video_path": "hammerlock/hammerlock_hiproll4.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "ladyturn_left_hammerlock",
+      "video_path": "hammerlock/ladyturn_left_hammerlock.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "locked_basic",
+      "video_path": "hammerlock/locked_basic.mp4",
+      "move_label": "hammerlock",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "double_headroll",
+      "video_path": "headrolls/double_headroll.mp4",
+      "move_label": "headrolls",
+      "energy_level": "medium",
+      "estimated_tempo": 152,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "double_headroll2",
+      "video_path": "headrolls/double_headroll2.mp4",
+      "move_label": "headrolls",
+      "energy_level": "medium",
+      "estimated_tempo": 86,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "double_headroll_back",
+      "video_path": "headrolls/double_headroll_back.mp4",
+      "move_label": "headrolls",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "energetic_caricia",
+      "video_path": "headrolls/energetic_caricia.mp4",
+      "move_label": "headrolls",
+      "energy_level": "high",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "headrolls_back",
+      "video_path": "headrolls/headrolls_back.mp4",
+      "move_label": "headrolls",
       "energy_level": "medium",
       "estimated_tempo": 112,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Combination throughout 10 seconds"
+      "difficulty": "high"
     },
     {
-      "clip_id": "combination_3",
-      "video_path": "Bachata_steps/combination/combination_3.mp4",
-      "move_label": "combination",
-      "energy_level": "high",
-      "estimated_tempo": 135,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Combination throughout 18 seconds"
-    },
-    {
-      "clip_id": "combination_4",
-      "video_path": "Bachata_steps/combination/combination_4.mp4",
-      "move_label": "combination",
-      "energy_level": "high",
-      "estimated_tempo": 150,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Combination throughout 12 seconds"
-    },
-    {
-      "clip_id": "combination_5",
-      "video_path": "Bachata_steps/combination/combination_5.mp4",
-      "move_label": "combination",
-      "energy_level": "high",
-      "estimated_tempo": 150,
-      "difficulty": "advanced",
-      "lead_follow_roles": "both",
-      "notes": "Combination throughout 15 seconds"
-    },
-    {
-      "clip_id": "arm_styling_1",
-      "video_path": "Bachata_steps/arm_styling/arm_styling_1.mp4",
-      "move_label": "arm_styling",
+      "clip_id": "double_hiproll",
+      "video_path": "hiprolls/double_hiproll.mp4",
+      "move_label": "hiprolls",
       "energy_level": "medium",
-      "estimated_tempo": 116,
-      "difficulty": "advanced",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Arm styling throughout 10 seconds"
+      "estimated_tempo": 108,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "arm_styling_2",
-      "video_path": "Bachata_steps/arm_styling/arm_styling_2.mp4",
-      "move_label": "arm_styling",
+      "clip_id": "double_spin_hiproll",
+      "video_path": "hiprolls/double_spin_hiproll.mp4",
+      "move_label": "hiprolls",
       "energy_level": "medium",
-      "estimated_tempo": 120,
-      "difficulty": "advanced",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Arm styling throughout 17 seconds"
+      "estimated_tempo": 129,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "arm_styling_3",
-      "video_path": "Bachata_steps/arm_styling/arm_styling_3.mp4",
-      "move_label": "arm_styling",
+      "clip_id": "energetic_hiproll",
+      "video_path": "hiprolls/energetic_hiproll.mp4",
+      "move_label": "hiprolls",
       "energy_level": "medium",
-      "estimated_tempo": 121,
-      "difficulty": "advanced",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Arm styling throughout 17 seconds"
+      "estimated_tempo": 129,
+      "difficulty": "medium"
     },
     {
-      "clip_id": "arm_styling_4",
-      "video_path": "Bachata_steps/arm_styling/arm_styling_4.mp4",
-      "move_label": "arm_styling",
+      "clip_id": "energetic_hiproll_spin",
+      "video_path": "hiprolls/energetic_hiproll_spin.mp4",
+      "move_label": "hiprolls",
       "energy_level": "medium",
-      "estimated_tempo": 114,
-      "difficulty": "advanced",
-      "lead_follow_roles": "follow_focus",
-      "notes": "Arm styling throughout 9 seconds"
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "hiproll",
+      "video_path": "hiprolls/hiproll.mp4",
+      "move_label": "hiprolls",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "hiproll_back",
+      "video_path": "hiprolls/hiproll_back.mp4",
+      "move_label": "hiprolls",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "hiproll_basic",
+      "video_path": "hiprolls/hiproll_basic.mp4",
+      "move_label": "hiprolls",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "hiproll_basic2",
+      "video_path": "hiprolls/hiproll_basic2.mp4",
+      "move_label": "hiprolls",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "slow_hiproll",
+      "video_path": "hiprolls/slow_hiproll.mp4",
+      "move_label": "hiprolls",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "slow_hiproll2",
+      "video_path": "hiprolls/slow_hiproll2.mp4",
+      "move_label": "hiprolls",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "basic_intro",
+      "video_path": "intros/basic_intro.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 152,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_intro",
+      "video_path": "intros/energetic_intro.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "intro",
+      "video_path": "intros/intro.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "intro3",
+      "video_path": "intros/intro3.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "intro4",
+      "video_path": "intros/intro4.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "intro5",
+      "video_path": "intros/intro5.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "intro_basic",
+      "video_path": "intros/intro_basic.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "intro_energetic",
+      "video_path": "intros/intro_energetic.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "intro_shadow",
+      "video_path": "intros/intro_shadow.mp4",
+      "move_label": "intros",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "energetic_ladyturn",
+      "video_path": "ladyturn/energetic_ladyturn.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_ladyturn_left",
+      "video_path": "ladyturn/energetic_ladyturn_left.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "energetic_ladyturn_left2",
+      "video_path": "ladyturn/energetic_ladyturn_left2.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "energetic_ladyturn_left3",
+      "video_path": "ladyturn/energetic_ladyturn_left3.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "lady_double_turn",
+      "video_path": "ladyturn/lady_double_turn.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "ladyturn_double",
+      "video_path": "ladyturn/ladyturn_double.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "ladyturn_left",
+      "video_path": "ladyturn/ladyturn_left.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "ladyturn_left1",
+      "video_path": "ladyturn/ladyturn_left1.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "ladyturn_left2",
+      "video_path": "ladyturn/ladyturn_left2.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "ladyturn_left3",
+      "video_path": "ladyturn/ladyturn_left3.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "ladyturn_left4",
+      "video_path": "ladyturn/ladyturn_left4.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "ladyturn_left_back",
+      "video_path": "ladyturn/ladyturn_left_back.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "ladyturn_right",
+      "video_path": "ladyturn/ladyturn_right.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "low",
+      "estimated_tempo": 108,
+      "difficulty": "low"
+    },
+    {
+      "clip_id": "left_ladyturn_right_arm_brush",
+      "video_path": "ladyturn/left_ladyturn_right_arm_brush.mp4",
+      "move_label": "ladyturn",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "outro",
+      "video_path": "outro/outro.mp4",
+      "move_label": "outro",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "outro2",
+      "video_path": "outro/outro2.mp4",
+      "move_label": "outro",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "outro3",
+      "video_path": "outro/outro3.mp4",
+      "move_label": "outro",
+      "energy_level": "medium",
+      "estimated_tempo": 123,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "outro4",
+      "video_path": "outro/outro4.mp4",
+      "move_label": "outro",
+      "energy_level": "medium",
+      "estimated_tempo": 123,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "basic_shadow",
+      "video_path": "shadow/basic_shadow.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_shadow",
+      "video_path": "shadow/energetic_shadow.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "sensual_shadow2",
+      "video_path": "shadow/sensual_shadow2.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sensual_shadown",
+      "video_path": "shadow/sensual_shadown.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "shadow",
+      "video_path": "shadow/shadow.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "shadow_basic",
+      "video_path": "shadow/shadow_basic.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "shadow_basic3",
+      "video_path": "shadow/shadow_basic3.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "shadow_basic_spin",
+      "video_path": "shadow/shadow_basic_spin.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "shadow_completo",
+      "video_path": "shadow/shadow_completo.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "shadow_completo3",
+      "video_path": "shadow/shadow_completo3.mp4",
+      "move_label": "shadow",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "double_spin",
+      "video_path": "spin/double_spin.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 117,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "double_spin2",
+      "video_path": "spin/double_spin2.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "double_spin3",
+      "video_path": "spin/double_spin3.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_basic_completo",
+      "video_path": "spin/energetic_basic_completo.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_caricia_spin",
+      "video_path": "spin/energetic_caricia_spin.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "energetic_double_spin",
+      "video_path": "spin/energetic_double_spin.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "slow_cross_spin",
+      "video_path": "spin/slow_cross_spin.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "slow_left_spin",
+      "video_path": "spin/slow_left_spin.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 152,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin",
+      "video_path": "spin/spin.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin1",
+      "video_path": "spin/spin1.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin2",
+      "video_path": "spin/spin2.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin_cross",
+      "video_path": "spin/spin_cross.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin_cross2",
+      "video_path": "spin/spin_cross2.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 108,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spin_double_caricia",
+      "video_path": "spin/spin_double_caricia.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "spin_right_ladyturn_left",
+      "video_path": "spin/spin_right_ladyturn_left.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "spins_double",
+      "video_path": "spin/spins_double.mp4",
+      "move_label": "spin",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "madrid_vuelta",
+      "video_path": "style/madrid_vuelta.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sensual_shadow_sidedip",
+      "video_path": "style/sensual_shadow_sidedip.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "shadow_side_dip",
+      "video_path": "style/shadow_side_dip.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sidedip3",
+      "video_path": "style/sidedip3.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sidedip4",
+      "video_path": "style/sidedip4.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sidedip_2",
+      "video_path": "style/sidedip_2.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "sidedip_back",
+      "video_path": "style/sidedip_back.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "high"
+    },
+    {
+      "clip_id": "styled_caricia_headroll.2",
+      "video_path": "style/styled_caricia_headroll.2.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 136,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "styled_caricia_headroll",
+      "video_path": "style/styled_caricia_headroll.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 68,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "styled_spin",
+      "video_path": "style/styled_spin.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
+    },
+    {
+      "clip_id": "styled_spin2",
+      "video_path": "style/styled_spin2.mp4",
+      "move_label": "style",
+      "energy_level": "medium",
+      "estimated_tempo": 129,
+      "difficulty": "medium"
     }
   ]
 }

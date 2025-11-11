@@ -163,12 +163,13 @@ class VectorSearchService:
         
         return combined_emb
     
-    def __init__(self, cache_ttl_seconds: int = 3600):
+    def __init__(self, cache_ttl_seconds: int = 3600, use_gpu: Optional[bool] = None):
         """
         Initialize vector search service.
         
         Args:
             cache_ttl_seconds: Time-to-live for cached embeddings and index (default: 1 hour)
+            use_gpu: Whether to use GPU acceleration (None = auto-detect)
         """
         self.cache_ttl_seconds = cache_ttl_seconds
         self.faiss_index = None
@@ -178,13 +179,105 @@ class VectorSearchService:
         self.cache_timestamp = None
         self.use_faiss = FAISS_AVAILABLE
         
+        # GPU configuration
+        self.use_gpu = self._should_use_gpu(use_gpu)
+        self.gpu_resources = None
+        
         if not FAISS_AVAILABLE:
             logger.warning(
                 "FAISS is not available. Falling back to NumPy-based search. "
                 "Install FAISS for better performance: pip install faiss-cpu"
             )
         
-        logger.info(f"VectorSearchService initialized (FAISS: {self.use_faiss})")
+        # Initialize GPU resources if needed
+        if self.use_gpu:
+            self._init_gpu_resources()
+        
+        logger.info(
+            f"VectorSearchService initialized (FAISS: {self.use_faiss}, GPU: {self.use_gpu})"
+        )
+    
+    def _should_use_gpu(self, use_gpu: Optional[bool]) -> bool:
+        """
+        Determine if GPU should be used for FAISS.
+        
+        Args:
+            use_gpu: Explicit GPU preference (None = auto-detect)
+        
+        Returns:
+            True if GPU should be used, False otherwise
+        """
+        # If explicitly set, use that value
+        if use_gpu is not None:
+            if use_gpu and not FAISS_AVAILABLE:
+                logger.warning("GPU requested but FAISS not available")
+                return False
+            return use_gpu
+        
+        # Auto-detect from configuration
+        try:
+            from services.gpu_utils import GPUConfig, check_faiss_gpu_available
+            
+            config = GPUConfig()
+            if not config.faiss_gpu:
+                logger.debug("FAISS GPU disabled in configuration")
+                return False
+            
+            # Check if FAISS GPU is actually available
+            gpu_available = check_faiss_gpu_available()
+            if gpu_available:
+                logger.info("FAISS GPU detected and enabled")
+            else:
+                logger.info("FAISS GPU not available, using CPU")
+            
+            return gpu_available
+            
+        except Exception as e:
+            logger.warning(f"Error checking GPU availability: {e}")
+            return False
+    
+    def _init_gpu_resources(self) -> None:
+        """
+        Initialize GPU resources for FAISS.
+        
+        This method sets up the GPU resources needed for FAISS GPU operations.
+        If initialization fails, it falls back to CPU mode.
+        """
+        if not FAISS_AVAILABLE:
+            logger.warning("Cannot initialize GPU resources: FAISS not available")
+            self.use_gpu = False
+            return
+        
+        try:
+            # Check if FAISS has GPU support
+            if not hasattr(faiss, 'StandardGpuResources'):
+                logger.warning("FAISS GPU not available (faiss-cpu installed?)")
+                self.use_gpu = False
+                return
+            
+            # Initialize GPU resources
+            self.gpu_resources = faiss.StandardGpuResources()
+            
+            # Configure GPU memory
+            try:
+                from services.gpu_utils import GPUConfig
+                config = GPUConfig()
+                
+                # Set memory fraction (FAISS uses bytes, not fraction)
+                # We'll let FAISS manage memory automatically
+                logger.info(
+                    f"GPU resources initialized (memory fraction: {config.memory_fraction})"
+                )
+            except Exception as e:
+                logger.warning(f"Could not load GPU config: {e}")
+            
+            logger.info("FAISS GPU resources initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize GPU resources: {e}")
+            logger.info("Falling back to CPU mode")
+            self.use_gpu = False
+            self.gpu_resources = None
     
     def load_embeddings_from_db(self) -> None:
         """
@@ -275,6 +368,8 @@ class VectorSearchService:
         Uses IndexFlatIP (inner product) for exact search. Embeddings are
         normalized to unit length so that inner product equals cosine similarity.
         
+        If GPU is enabled, the index is transferred to GPU for faster search.
+        
         Args:
             embeddings: numpy array of shape (n_moves, embedding_dim)
         
@@ -284,23 +379,65 @@ class VectorSearchService:
         if not FAISS_AVAILABLE:
             raise ValueError("FAISS is not available. Cannot build index.")
         
-        logger.info("Building FAISS index...")
+        logger.info(f"Building FAISS index (GPU: {self.use_gpu})...")
         
         # Normalize embeddings for cosine similarity
         # After normalization, inner product = cosine similarity
         faiss.normalize_L2(embeddings)
         
-        # Create FAISS index (IndexFlatIP for inner product)
+        # Create CPU index first
         dimension = embeddings.shape[1]
-        self.faiss_index = faiss.IndexFlatIP(dimension)
+        cpu_index = faiss.IndexFlatIP(dimension)
         
-        # Add embeddings to index
-        self.faiss_index.add(embeddings)
+        # Add embeddings to CPU index
+        cpu_index.add(embeddings)
         
-        logger.info(
-            f"FAISS index built with {self.faiss_index.ntotal} vectors "
-            f"(dimension: {dimension})"
-        )
+        # Transfer to GPU if enabled
+        if self.use_gpu and self.gpu_resources is not None:
+            try:
+                self.faiss_index = self._index_cpu_to_gpu(cpu_index)
+                logger.info(
+                    f"FAISS GPU index built with {self.faiss_index.ntotal} vectors "
+                    f"(dimension: {dimension})"
+                )
+            except Exception as e:
+                logger.error(f"Failed to transfer index to GPU: {e}")
+                logger.info("Falling back to CPU index")
+                self.faiss_index = cpu_index
+                self.use_gpu = False
+        else:
+            self.faiss_index = cpu_index
+            logger.info(
+                f"FAISS CPU index built with {self.faiss_index.ntotal} vectors "
+                f"(dimension: {dimension})"
+            )
+    
+    def _index_cpu_to_gpu(self, cpu_index: 'faiss.Index') -> 'faiss.Index':
+        """
+        Transfer FAISS index from CPU to GPU.
+        
+        Args:
+            cpu_index: CPU-based FAISS index
+        
+        Returns:
+            GPU-based FAISS index
+        
+        Raises:
+            RuntimeError: If GPU transfer fails
+        """
+        if not self.use_gpu or self.gpu_resources is None:
+            raise RuntimeError("GPU resources not initialized")
+        
+        try:
+            # Transfer index to GPU (device 0)
+            gpu_index = faiss.index_cpu_to_gpu(self.gpu_resources, 0, cpu_index)
+            
+            logger.info("Successfully transferred FAISS index to GPU")
+            return gpu_index
+            
+        except Exception as e:
+            logger.error(f"Failed to transfer index to GPU: {e}")
+            raise RuntimeError(f"GPU index transfer failed: {e}")
     
     def search_similar_moves(
         self,
@@ -363,6 +500,9 @@ class VectorSearchService:
         """
         Perform FAISS-based similarity search.
         
+        Supports both CPU and GPU indices. Automatically falls back to CPU
+        if GPU search fails.
+        
         Args:
             query_embedding: Normalized query vector
             filters: Metadata filters
@@ -371,44 +511,73 @@ class VectorSearchService:
         Returns:
             List of MoveResult objects
         """
-        # Normalize query for cosine similarity
-        faiss.normalize_L2(query_embedding)
-        
-        # Search for more candidates than needed to allow for filtering
-        search_k = min(top_k * 5, self.faiss_index.ntotal)
-        
-        # Perform FAISS search
-        distances, indices = self.faiss_index.search(query_embedding, search_k)
-        
-        # Convert to results
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx == -1:  # FAISS returns -1 for empty slots
-                continue
+        try:
+            # Normalize query for cosine similarity
+            faiss.normalize_L2(query_embedding)
             
-            metadata = self.move_metadata[idx]
+            # Search for more candidates than needed to allow for filtering
+            search_k = min(top_k * 5, self.faiss_index.ntotal)
             
-            # Apply metadata filters
-            if filters and not self._matches_filters(metadata, filters):
-                continue
+            # Perform FAISS search (works on both CPU and GPU indices)
+            distances, indices = self.faiss_index.search(query_embedding, search_k)
             
-            results.append(MoveResult(
-                move_id=metadata['move_id'],
-                move_name=metadata['move_name'],
-                video_path=metadata['video_path'],
-                similarity_score=float(dist),  # Inner product = cosine similarity
-                difficulty=metadata['difficulty'],
-                energy_level=metadata['energy_level'],
-                style=metadata['style'],
-                duration=metadata['duration'],
-            ))
+            # Convert to results
+            results = []
+            for dist, idx in zip(distances[0], indices[0]):
+                if idx == -1:  # FAISS returns -1 for empty slots
+                    continue
+                
+                metadata = self.move_metadata[idx]
+                
+                # Apply metadata filters
+                if filters and not self._matches_filters(metadata, filters):
+                    continue
+                
+                results.append(MoveResult(
+                    move_id=metadata['move_id'],
+                    move_name=metadata['move_name'],
+                    video_path=metadata['video_path'],
+                    similarity_score=float(dist),  # Inner product = cosine similarity
+                    difficulty=metadata['difficulty'],
+                    energy_level=metadata['energy_level'],
+                    style=metadata['style'],
+                    duration=metadata['duration'],
+                ))
+                
+                # Stop when we have enough results
+                if len(results) >= top_k:
+                    break
             
-            # Stop when we have enough results
-            if len(results) >= top_k:
-                break
-        
-        logger.debug(f"FAISS search returned {len(results)} results")
-        return results
+            search_type = "GPU" if self.use_gpu else "CPU"
+            logger.debug(f"FAISS {search_type} search returned {len(results)} results")
+            return results
+            
+        except Exception as e:
+            # If GPU search fails, try to rebuild with CPU
+            if self.use_gpu:
+                logger.error(f"GPU search failed: {e}")
+                logger.info("Attempting to rebuild index on CPU")
+                
+                try:
+                    # Disable GPU and rebuild index
+                    self.use_gpu = False
+                    self.gpu_resources = None
+                    
+                    # Rebuild index on CPU
+                    if self.embeddings is not None:
+                        self.build_faiss_index(self.embeddings)
+                        
+                        # Retry search on CPU
+                        return self._faiss_search(query_embedding, filters, top_k)
+                    else:
+                        raise RuntimeError("No embeddings available for CPU fallback")
+                        
+                except Exception as fallback_error:
+                    logger.error(f"CPU fallback also failed: {fallback_error}")
+                    raise
+            else:
+                # Already on CPU, re-raise the error
+                raise
     
     def _numpy_search(
         self,
@@ -519,30 +688,70 @@ class VectorSearchService:
                 'embedding_dimension': None,
                 'cache_age_seconds': None,
                 'cache_valid': False,
+                'using_gpu': False,
             }
         
         age = datetime.now() - self.cache_timestamp
         
-        return {
+        info = {
             'cached': True,
             'num_moves': len(self.move_metadata),
             'embedding_dimension': self.embedding_dimension,
             'cache_age_seconds': age.total_seconds(),
             'cache_valid': self._is_cache_valid(),
             'using_faiss': self.use_faiss and self.faiss_index is not None,
+            'using_gpu': self.use_gpu,
         }
+        
+        # Add GPU memory info if available
+        if self.use_gpu and self.gpu_resources is not None:
+            try:
+                # Get GPU memory usage
+                import torch
+                if torch.cuda.is_available():
+                    info['gpu_memory_allocated'] = torch.cuda.memory_allocated(0)
+                    info['gpu_memory_reserved'] = torch.cuda.memory_reserved(0)
+            except Exception as e:
+                logger.debug(f"Could not get GPU memory info: {e}")
+        
+        return info
+    
+    def get_gpu_info(self) -> Dict[str, Any]:
+        """
+        Get GPU-specific information.
+        
+        Returns:
+            Dictionary with GPU information
+        """
+        info = {
+            'gpu_enabled': self.use_gpu,
+            'gpu_resources_initialized': self.gpu_resources is not None,
+        }
+        
+        if self.use_gpu:
+            try:
+                from services.gpu_utils import get_gpu_info
+                gpu_details = get_gpu_info()
+                info.update(gpu_details)
+            except Exception as e:
+                logger.warning(f"Could not get GPU info: {e}")
+        
+        return info
 
 
 # Global instance for reuse across requests
 _vector_search_service = None
 
 
-def get_vector_search_service() -> VectorSearchService:
+def get_vector_search_service(use_gpu: Optional[bool] = None) -> VectorSearchService:
     """
     Get or create the global vector search service instance.
     
     This ensures we reuse the same service instance (and its cache)
     across multiple requests.
+    
+    Args:
+        use_gpu: Whether to use GPU acceleration (None = auto-detect from config)
     
     Returns:
         VectorSearchService instance
@@ -552,6 +761,9 @@ def get_vector_search_service() -> VectorSearchService:
     if _vector_search_service is None:
         # Get cache TTL from environment variable
         cache_ttl = int(os.getenv('MOVE_EMBEDDINGS_CACHE_TTL', '3600'))
-        _vector_search_service = VectorSearchService(cache_ttl_seconds=cache_ttl)
+        _vector_search_service = VectorSearchService(
+            cache_ttl_seconds=cache_ttl,
+            use_gpu=use_gpu
+        )
     
     return _vector_search_service

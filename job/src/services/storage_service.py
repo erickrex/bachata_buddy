@@ -383,6 +383,9 @@ class StorageService:
         if source_path.startswith('file://'):
             source_path = source_path.replace('file://', '')
         else:
+            # Strip 'data/' prefix if present to avoid doubling
+            if source_path.startswith('data/'):
+                source_path = source_path[5:]  # Remove 'data/' prefix
             source_path = os.path.join(self.config.local_storage_path, source_path)
         
         if not os.path.exists(source_path):
@@ -500,6 +503,9 @@ class StorageService:
             if file_path.startswith('file://'):
                 file_path = file_path.replace('file://', '')
             else:
+                # Strip 'data/' prefix if present to avoid doubling
+                if file_path.startswith('data/'):
+                    file_path = file_path[5:]  # Remove 'data/' prefix
                 file_path = os.path.join(self.config.local_storage_path, file_path)
             return os.path.exists(file_path)
         
@@ -638,6 +644,9 @@ class StorageService:
             if file_path.startswith('file://'):
                 file_path = file_path.replace('file://', '')
             else:
+                # Strip 'data/' prefix if present to avoid doubling
+                if file_path.startswith('data/'):
+                    file_path = file_path[5:]  # Remove 'data/' prefix
                 file_path = os.path.join(self.config.local_storage_path, file_path)
             
             if os.path.exists(file_path):

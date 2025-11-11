@@ -449,3 +449,25 @@ CORS_ALLOW_METHODS = [
     'POST',
     'PUT',
 ]
+
+# =============================================================================
+# GPU Acceleration Configuration
+# =============================================================================
+# GPU acceleration for vector search, video encoding, and audio processing
+# Requires NVIDIA GPU with CUDA support (e.g., L4 on Cloud Run)
+
+# Global GPU enable/disable flag
+USE_GPU = os.environ.get('USE_GPU', 'false').lower() == 'true'
+
+# Per-service GPU flags
+FAISS_USE_GPU = os.environ.get('FAISS_USE_GPU', str(USE_GPU)).lower() == 'true'
+FFMPEG_USE_NVENC = os.environ.get('FFMPEG_USE_NVENC', str(USE_GPU)).lower() == 'true'
+AUDIO_USE_GPU = os.environ.get('AUDIO_USE_GPU', str(USE_GPU)).lower() == 'true'
+
+# GPU memory settings
+GPU_MEMORY_FRACTION = float(os.environ.get('GPU_MEMORY_FRACTION', '0.8'))
+
+# GPU fallback settings
+GPU_FALLBACK_ENABLED = os.environ.get('GPU_FALLBACK_ENABLED', 'true').lower() == 'true'
+GPU_TIMEOUT_SECONDS = int(os.environ.get('GPU_TIMEOUT_SECONDS', '30'))
+GPU_RETRY_COUNT = int(os.environ.get('GPU_RETRY_COUNT', '3'))

@@ -23,12 +23,12 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     container_name: bachata_api
-    command: uv run python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./backend:/app
       - ./data:/app/data
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     environment:
       - DEBUG=True
       - DB_NAME=bachata_vibes

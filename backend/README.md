@@ -115,7 +115,51 @@ uv sync
 
 This will automatically update `backend/pyproject.toml` and install the package.
 
-## Dockerfile.dev
+## Docker Images
+
+### Dockerfile (Production - CPU)
+
+The standard `Dockerfile` is optimized for Cloud Run deployment:
+
+- **Multi-stage build**: Separate build and runtime stages for smaller image size
+- **Python 3.12**: Latest stable Python version
+- **Gunicorn**: Production WSGI server with 1 worker, 8 threads
+- **Health checks**: Built-in health check endpoint
+- **Size**: ~500MB
+
+### Dockerfile.gpu (Production - GPU)
+
+The `Dockerfile.gpu` is optimized for GPU-accelerated Cloud Run deployment:
+
+- **NVIDIA CUDA 12.2**: Base image with CUDA runtime
+- **FAISS GPU**: GPU-accelerated vector similarity search
+- **PyTorch with CUDA**: GPU-accelerated audio processing
+- **Multi-stage build**: Optimized for smaller image size
+- **Size**: ~3GB (includes CUDA libraries)
+
+**Build GPU image:**
+```bash
+# Set your project ID
+export GCP_PROJECT_ID=your-project-id
+
+# Build and push
+./build_gpu_image.sh
+```
+
+**Deploy to Cloud Run with GPU:**
+```bash
+gcloud run deploy bachata-api \
+  --image gcr.io/PROJECT_ID/bachata-api-gpu:latest \
+  --region europe-west1 \
+  --platform managed \
+  --memory 16Gi \
+  --cpu 4 \
+  --gpu 1 \
+  --gpu-type nvidia-l4 \
+  --set-env-vars USE_GPU=true,FAISS_USE_GPU=true,AUDIO_USE_GPU=true
+```
+
+### Dockerfile.dev (Development)
 
 The `Dockerfile.dev` is optimized for local development:
 
@@ -124,15 +168,16 @@ The `Dockerfile.dev` is optimized for local development:
 - **Fast builds**: Uses UV for dependency management
 - **Port 8000**: Standard Django development port
 
-### Key Differences from Monolithic Dockerfile
+### Image Comparison
 
-| Feature | Monolithic Dockerfile.dev | API Dockerfile.dev |
-|---------|--------------------------|-------------------|
-| Video Processing | ✅ FFmpeg, YOLOv8 | ❌ Not needed |
-| System Dependencies | Heavy (gcc, g++, libgl1, etc.) | Minimal (gcc, libpq-dev) |
-| Port | 8080 | 8000 |
-| Purpose | Full application | API only |
-| Size | ~2GB | ~500MB |
+| Feature | Dockerfile | Dockerfile.gpu | Dockerfile.dev |
+|---------|-----------|---------------|----------------|
+| Base Image | python:3.12-slim | nvidia/cuda:12.2.0 | python:3.12-slim |
+| GPU Support | ❌ | ✅ CUDA 12.2 | ❌ |
+| FAISS | CPU | GPU | CPU |
+| PyTorch | ❌ | ✅ with CUDA | ❌ |
+| Size | ~500MB | ~3GB | ~500MB |
+| Purpose | Production (CPU) | Production (GPU) | Development |
 
 ## Database Connection
 
@@ -213,6 +258,15 @@ VECTOR_SEARCH_TOP_K=50            # Number of similar moves to return
 FAISS_USE_GPU=false               # Enable GPU acceleration (requires FAISS-GPU)
 FAISS_NPROBE=10                   # Search accuracy for IVF indices
 
+# GPU Acceleration Configuration (Optional)
+USE_GPU=false                     # Global GPU enable/disable flag
+FFMPEG_USE_NVENC=false           # FFmpeg NVENC for video encoding (job container)
+AUDIO_USE_GPU=false              # Audio GPU processing with torchaudio
+GPU_MEMORY_FRACTION=0.8          # GPU memory allocation (0.0-1.0)
+GPU_FALLBACK_ENABLED=true        # Enable CPU fallback on GPU errors
+GPU_TIMEOUT_SECONDS=30           # GPU operation timeout
+GPU_RETRY_COUNT=3                # Retry count for transient GPU errors
+
 # Google Cloud
 GCP_PROJECT_ID=local-dev
 GCP_REGION=us-central1
@@ -270,6 +324,97 @@ The API is configured to accept requests from the React frontend. CORS settings 
 - Standard CORS headers
 
 **Configuration Location:** `backend/api/settings.py`
+
+## GPU Acceleration (Optional)
+
+The backend supports GPU acceleration for improved performance when running on NVIDIA GPUs (e.g., L4 on Cloud Run).
+
+### GPU Features
+
+1. **FAISS GPU** - Vector similarity search acceleration (10-50x speedup)
+2. **FFmpeg NVENC** - Video encoding acceleration (6-8x speedup, job container only)
+3. **Audio GPU** - Audio processing with torchaudio (3-5x speedup)
+
+### Requirements
+
+- NVIDIA GPU with CUDA support (e.g., L4, T4, A100)
+- CUDA 12.2 or later
+- GPU-enabled Docker image (see `Dockerfile.gpu`)
+- Cloud Run with GPU support (europe-west1 or europe-west4)
+
+### Configuration
+
+GPU acceleration is controlled via environment variables:
+
+```bash
+# Enable GPU globally
+USE_GPU=true
+
+# Per-service GPU flags (override USE_GPU)
+FAISS_USE_GPU=true          # Vector search GPU
+FFMPEG_USE_NVENC=true       # Video encoding GPU (job container)
+AUDIO_USE_GPU=true          # Audio processing GPU
+
+# GPU settings
+GPU_MEMORY_FRACTION=0.8     # GPU memory allocation (80%)
+GPU_FALLBACK_ENABLED=true   # Auto-fallback to CPU on errors
+GPU_TIMEOUT_SECONDS=30      # Operation timeout
+```
+
+### GPU Detection
+
+The backend automatically detects GPU availability at runtime:
+
+```python
+from services.gpu_utils import get_gpu_info
+
+# Get GPU information
+gpu_info = get_gpu_info()
+print(gpu_info)
+# {
+#   'cuda_available': True,
+#   'faiss_gpu_available': True,
+#   'nvenc_available': True,
+#   'device_name': 'NVIDIA L4',
+#   ...
+# }
+```
+
+### Graceful Fallback
+
+If GPU is unavailable or encounters errors, the backend automatically falls back to CPU:
+
+- FAISS GPU → FAISS CPU
+- FFmpeg NVENC → FFmpeg libx264
+- torchaudio GPU → librosa CPU
+
+This ensures the application works in all environments without code changes.
+
+### Local Development
+
+GPU features are disabled by default for local development. To test GPU features locally:
+
+1. Ensure you have an NVIDIA GPU with CUDA installed
+2. Install GPU-enabled packages: `uv add faiss-gpu torch torchaudio`
+3. Set `USE_GPU=true` in your `.env` file
+4. Restart the API server
+
+### Cloud Run Deployment
+
+To deploy with GPU support:
+
+```bash
+gcloud run deploy bachata-api \
+  --image gcr.io/PROJECT_ID/bachata-api:gpu \
+  --region europe-west1 \
+  --gpu 1 \
+  --gpu-type nvidia-l4 \
+  --memory 16Gi \
+  --cpu 4 \
+  --set-env-vars USE_GPU=true,FAISS_USE_GPU=true,AUDIO_USE_GPU=true
+```
+
+See the GPU acceleration spec for detailed implementation guide.
 
 ## API Endpoints
 

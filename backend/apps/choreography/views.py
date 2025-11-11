@@ -420,7 +420,8 @@ def generate_from_song(request):
     try:
         # Generate blueprint using BlueprintGenerator
         # Initialize services
-        vector_search = VectorSearchService()
+        from services.vector_search_service import get_vector_search_service
+        vector_search = get_vector_search_service()
         gemini_service = GeminiService()
         
         # Import MusicAnalyzer from job container (temporary until we move it to backend)
@@ -1152,10 +1153,10 @@ def generate_with_ai(request):
     try:
         # Generate blueprint using BlueprintGenerator
         from services.blueprint_generator import BlueprintGenerator
-        from services.vector_search_service import VectorSearchService
+        from services.vector_search_service import get_vector_search_service
         
         # Initialize services
-        vector_search = VectorSearchService()
+        vector_search = get_vector_search_service()
         gemini_svc = GeminiService()
         
         # Import MusicAnalyzer from job container (temporary until we move it to backend)

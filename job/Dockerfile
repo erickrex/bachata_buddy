@@ -28,7 +28,7 @@ RUN uv pip install --system --no-cache \
     "python-dotenv>=1.0"
 
 # Copy job code
-COPY job/src/ ./src/
+COPY src/ ./src/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

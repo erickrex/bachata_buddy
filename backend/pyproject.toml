@@ -43,6 +43,8 @@ dependencies = [
     # Vector Search (FAISS for similarity search)
     "faiss-cpu>=1.7.4",
     "drf-spectacular-sidecar>=2025.10.1",
+    # Text Embeddings
+    "sentence-transformers>=3.0.0",
 ]
 
 [project.optional-dependencies]

@@ -977,7 +977,9 @@ graph LR
 9. **Video Assembly** → FFmpeg concatenates clips with transitions
 10. **Upload & Complete** → Video saved to Cloud Storage, task updated
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete deployment instructions.
+**Detailed Architecture Documentation:**
+- **[DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md)** - Complete deployment architecture with blueprint communication flow
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Step-by-step deployment instructions
 
 ---
 

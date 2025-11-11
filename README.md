@@ -187,40 +187,39 @@ overall_similarity =
 
 1. **Offline Generation** (one-time setup):
    ```
-   Video → YOLOv8 → Pose Embeddings (1280D)
-   Audio → Librosa → Audio Embeddings (128D)
+   150 Videos → YOLOv8-Pose → Pose Embeddings (512D)
+   150 Videos → Extract Audio → Audio Embeddings (128D) 
    Metadata → Sentence-Transformers → Text Embeddings (384D)
    ↓
-   Elasticsearch Index (38 moves × 1792D each)
+   PostgreSQL Database (149 moves × 1024D each)
    ```
 
 2. **Runtime Choreography Generation**:
    ```
-   User Song → Audio Analysis (128D)
+   User Song → Librosa Analysis → Audio Features (128D)
+   User Query → Gemini AI → Semantic Understanding
    ↓
-   Elasticsearch: Fetch all 38 move embeddings
+   PostgreSQL: Fetch all 149 move embeddings
    ↓
-   Compute Similarities:
-   - Audio similarity (cosine)
-   - Text similarity (cosine)
-   - Lead pose similarity (cosine)
-   - Follow pose similarity (cosine)
-   - Interaction similarity (cosine)
+   Compute Similarities (Cosine):
+   - Audio similarity (song vs move audio)
+   - Text similarity (query vs move description)
+   - Pose similarity (movement patterns)
    ↓
    Weighted Fusion: 0.35×text + 0.35×audio + 0.30×pose
    ↓
-   Filter by difficulty/energy → Rank → Select moves
+   Filter by difficulty/energy/style → Rank → Select moves
    ↓
-   Assemble video sequence
+   Generate Blueprint → Assemble video
    ```
 
 **Key Innovations:**
-- **Separate Storage**: Each embedding modality stored independently (no compression)
-- **Fast Retrieval**: Single query fetches all embeddings (<10ms)
-- **Flexible Weighting**: Adjustable weights for different modalities
-- **Quality Validation**: Automatic NaN/Inf detection
+- **Real Embeddings**: Generated from actual video analysis (YOLOv8 + Sentence-Transformers)
+- **Database Storage**: PostgreSQL with indexed queries (<10ms retrieval)
+- **Trimodal Fusion**: Combines movement, music, and meaning
+- **Quality Validation**: Normalized vectors, NaN/Inf detection
 - **Semantic Grouping**: Text embeddings enable intelligent clustering
-- **Serverless Ready**: Compatible with Elasticsearch Serverless
+- **Scalable**: 150 clips, ready for expansion
 
 #### 6. **Intelligent Choreography Pipeline** 🎬 (Assembly System) - `video_processing`
 ```python
@@ -591,11 +590,13 @@ from common.exceptions import VideoGenerationError
 - **Fixed Issues**: Resolved attribute errors in CouplePose and angle calculation inconsistencies
 
 ### Trimodal Embeddings (Audio + Pose + Text) ✅
-- **1792D Total**: No compression, maximum quality
+- **1024D Total**: 512D pose + 128D audio + 384D text
+- **Real Embeddings**: Generated from actual videos using YOLOv8-Pose + Sentence-Transformers
+- **150 Video Clips**: 149 embeddings in database (1 duplicate)
 - **Weighted Fusion**: 35% text + 35% audio + 30% pose
-- **Semantic Understanding**: NLP for intelligent grouping
-- **Fast Retrieval**: <50ms recommendations via Elasticsearch
-- **Robust Processing**: Handles missing keypoints with NaN handling
+- **Semantic Understanding**: NLP for intelligent move grouping
+- **Fast Retrieval**: <10ms via PostgreSQL indexed queries
+- **Robust Processing**: Normalized vectors, handles missing keypoints
 
 ### Production Infrastructure ✅
 - **Elasticsearch 9.1**: Vector similarity search (Serverless compatible)
@@ -645,11 +646,12 @@ from common.exceptions import VideoGenerationError
 
 
 #### 6. **Video Library** 📹
-- **38 annotated moves** across 12 manually curated categories
+- **150 video clips** across 16 move categories
+- **149 embeddings** in database (real pose + text embeddings)
 - **Quality validated** with comprehensive metadata
-- **Difficulty distribution**: Beginner (26%), Intermediate (21%), Advanced (53%)
-- **Energy levels**: Low (5%), Medium (42%), High (53%)
-- **Tempo range**: 102-150 BPM
+- **Difficulty distribution**: Beginner (15%), Intermediate (52%), Advanced (33%)
+- **Energy levels**: Low (7%), Medium (83%), High (10%)
+- **Categories**: arm_styling, basic, bodywaves, bolero, cross_body_lead, footwork, golpes, hammerlock, headrolls, hiprolls, intros, ladyturn, outro, shadow, spin, style
 
 ---
 
@@ -801,9 +803,9 @@ uv run pytest tests/ -m "not slow" -v
 
 ---
 
-## 🏗️ Production Infrastructure
+## 🏗️ Google Cloud Production Architecture
 
-Bachata Buddy runs on Google Cloud Platform with optimized architecture for video-heavy workloads:
+### System Architecture
 
 ```mermaid
 graph TB
@@ -812,45 +814,168 @@ graph TB
     end
     
     subgraph "Google Cloud Platform"
-        subgraph "Compute Layer"
-            CE[Compute Engine<br/>e2-medium<br/>2 vCPU, 4GB RAM]
-            LD[Local Disk<br/>Training Videos: 81MB<br/>Songs: 78MB]
-            CE --> LD
+        subgraph "API Layer - Django Backend"
+            API[Cloud Run API<br/>2GB RAM, 2 vCPU<br/>Blueprint Generation]
+            BG[Blueprint Generator<br/>Audio Analysis<br/>Move Selection<br/>Trimodal Fusion]
+            API --> BG
         end
         
-        subgraph "Data Layer"
-            SQL[(Cloud SQL<br/>PostgreSQL<br/>User Data & Choreographies)]
-            ES[Elasticsearch Serverless<br/>Vector Search<br/>1792D Embeddings]
+        subgraph "Processing Layer - Video Assembly"
+            JOB[Cloud Run Job<br/>512MB RAM, 1 vCPU<br/>FFmpeg Assembly]
+            BP[Blueprint JSON<br/>Complete Instructions]
+            BG --> BP
+            BP --> JOB
         end
         
-        subgraph "Security Layer"
-            SM[Secret Manager<br/>API Keys & Credentials]
+        subgraph "Storage Layer"
+            GCS[Cloud Storage<br/>Video Clips: 150<br/>Songs: 8<br/>Output Videos]
+            SQL[(Cloud SQL PostgreSQL<br/>Users & Tasks<br/>Blueprints<br/>149 Embeddings)]
         end
         
-        subgraph "AI Services"
-            GEMINI[Gemini 1.5 Flash<br/>Natural Language Processing]
+        subgraph "AI/ML Layer"
+            GEMINI[Gemini 1.5 Flash<br/>Natural Language<br/>Query Parsing]
+            YOLO[YOLOv8-Pose<br/>Pose Detection<br/>512D Embeddings]
+            ST[Sentence-Transformers<br/>Text Embeddings<br/>384D Semantic]
+            LIB[Librosa<br/>Audio Analysis<br/>128D Features]
+        end
+        
+        subgraph "Security"
+            SM[Secret Manager<br/>API Keys<br/>DB Credentials]
         end
     end
     
-    U -->|HTTPS| CE
-    CE -->|Django ORM| SQL
-    CE -->|Vector Search| ES
-    CE -->|Fetch Secrets| SM
-    CE -->|NLP Queries| GEMINI
+    U -->|HTTPS Request| API
+    API -->|Query| SQL
+    API -->|NLP| GEMINI
+    BG -->|Pose Analysis| YOLO
+    BG -->|Text Embeddings| ST
+    BG -->|Audio Features| LIB
+    JOB -->|Fetch Media| GCS
+    JOB -->|Update Status| SQL
+    JOB -->|Upload Video| GCS
+    API -->|Secrets| SM
+    JOB -->|Secrets| SM
     
-    style CE fill:#4285f4,color:#fff
+    style API fill:#4285f4,color:#fff
+    style JOB fill:#4285f4,color:#fff
+    style BG fill:#34a853,color:#fff
+    style BP fill:#fbbc04,color:#000
     style SQL fill:#34a853,color:#fff
-    style ES fill:#fbbc04,color:#000
-    style SM fill:#ea4335,color:#fff
+    style GCS fill:#ea4335,color:#fff
     style GEMINI fill:#9334e6,color:#fff
+    style YOLO fill:#ff6d00,color:#fff
+    style ST fill:#00bfa5,color:#fff
+    style LIB fill:#d500f9,color:#fff
+    style SM fill:#ea4335,color:#fff
 ```
 
-**Key Architecture Decisions:**
+### Trimodal Embedding Architecture
 
-- **Compute Engine over Cloud Run**: Local disk storage provides 10x faster video access for FFmpeg processing
-- **Elasticsearch Serverless**: Managed vector search with <10ms retrieval times
-- **Cloud SQL**: Managed PostgreSQL for reliability and automatic backups
-- **Secret Manager**: Secure credential storage with IAM-based access control
+**Core Innovation: 3-Modal Vector Fusion for Dance Move Matching**
+
+```mermaid
+graph LR
+    subgraph "Input: 150 Video Clips"
+        V[Video Files<br/>data/Bachata_steps/]
+        A[Audio Tracks<br/>Extracted]
+        M[Metadata<br/>Annotations JSON]
+    end
+    
+    subgraph "Embedding Generation"
+        V -->|YOLOv8-Pose| P[Pose Embeddings<br/>512D<br/>Keypoint Features]
+        A -->|Librosa| AU[Audio Embeddings<br/>128D<br/>MFCC + Rhythm]
+        M -->|Sentence-Transformers| T[Text Embeddings<br/>384D<br/>Semantic Meaning]
+    end
+    
+    subgraph "Storage: PostgreSQL"
+        DB[(149 Move Embeddings<br/>Each with 3 vectors)]
+        P --> DB
+        AU --> DB
+        T --> DB
+    end
+    
+    subgraph "Runtime: Choreography Generation"
+        US[User Song<br/>Audio Analysis]
+        UQ[User Query<br/>Difficulty/Style]
+        
+        US -->|Librosa| SA[Song Audio<br/>128D]
+        UQ -->|Gemini AI| SQ[Query Semantic<br/>384D]
+        
+        SA -->|Cosine| CS[Audio Similarity<br/>35% weight]
+        SQ -->|Cosine| TS[Text Similarity<br/>35% weight]
+        DB -->|Fetch All| PS[Pose Similarity<br/>30% weight]
+        
+        CS --> F[Weighted Fusion<br/>Final Scores]
+        TS --> F
+        PS --> F
+        
+        F --> R[Ranked Moves<br/>Top-K Selection]
+        R --> BP[Blueprint<br/>Video Assembly]
+    end
+    
+    style P fill:#ff6d00,color:#fff
+    style AU fill:#d500f9,color:#fff
+    style T fill:#00bfa5,color:#fff
+    style DB fill:#34a853,color:#fff
+    style F fill:#fbbc04,color:#000
+    style BP fill:#4285f4,color:#fff
+```
+
+### Embedding Specifications
+
+| Modality | Dimensions | Model/Library | Purpose | Weight |
+|----------|-----------|---------------|---------|--------|
+| **Pose** | 512D | YOLOv8-Pose | Body movement patterns, keypoint features | 30% |
+| **Audio** | 128D | Librosa | Tempo, rhythm, energy, MFCC features | 35% |
+| **Text** | 384D | Sentence-Transformers (all-MiniLM-L6-v2) | Semantic meaning, difficulty, style | 35% |
+| **Total** | 1024D | - | Combined trimodal representation | 100% |
+
+### Architecture Benefits
+
+| Feature | Benefit | Impact |
+|---------|---------|--------|
+| **Blueprint-Based** | API generates complete instructions | 75% memory reduction in job |
+| **Trimodal Fusion** | Multi-dimensional move matching | Higher quality choreographies |
+| **Cloud Run Jobs** | Serverless video processing | 50% cost reduction |
+| **Local Storage** | Videos on disk vs GCS | 10x faster FFmpeg access |
+| **PostgreSQL** | Embeddings in database | No Elasticsearch needed |
+| **Sentence-Transformers** | Real semantic understanding | Intelligent move grouping |
+| **YOLOv8-Pose** | Modern pose detection | 70-75% mAP accuracy |
+
+### Resource Configuration
+
+| Component | Memory | CPU | Timeout | Cost/Month* |
+|-----------|--------|-----|---------|-------------|
+| **API Backend** | 2GB | 2 vCPU | 300s | ~$20 |
+| **Video Job** | 512MB | 1 vCPU | 300s | ~$5 |
+| **Cloud SQL** | db-f1-micro | - | - | ~$10 |
+| **Cloud Storage** | - | - | - | ~$1 |
+| **Total** | - | - | - | **~$36** |
+
+*Based on 100 videos/month, moderate usage
+
+### Performance Metrics
+
+| Metric | Value | Optimization |
+|--------|-------|--------------|
+| **Blueprint Generation** | 2-5s | Trimodal fusion, cached embeddings |
+| **Video Assembly** | 40-50s | FFmpeg optimization, local storage |
+| **Embedding Retrieval** | <10ms | PostgreSQL indexed queries |
+| **Total Pipeline** | 45-55s | End-to-end optimized |
+| **Video Quality** | 1280x720, 24fps | ~51MB per video |
+
+### Data Flow
+
+1. **User Request** → API receives song + preferences
+2. **Audio Analysis** → Librosa extracts 128D features
+3. **Query Parsing** → Gemini AI interprets natural language
+4. **Embedding Fetch** → PostgreSQL returns 149 move embeddings
+5. **Trimodal Fusion** → Weighted similarity (35% audio + 35% text + 30% pose)
+6. **Move Selection** → Top-K moves filtered by difficulty/energy
+7. **Blueprint Generation** → Complete video assembly instructions
+8. **Job Trigger** → Cloud Run Job receives blueprint
+9. **Video Assembly** → FFmpeg concatenates clips with transitions
+10. **Upload & Complete** → Video saved to Cloud Storage, task updated
 
 See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete deployment instructions.
 

@@ -5,13 +5,19 @@ This package contains service modules for:
 - Blueprint parsing and validation
 - Video assembly with FFmpeg
 - Database operations (status updates)
-- Cloud Storage operations (local/GCS)
+- Storage operations (local/S3)
 """
 
 from .blueprint_parser import BlueprintParser, BlueprintValidationError
 from .video_assembler import VideoAssembler, VideoAssemblyError
 from .database import update_task_status, close_connection_pool
-from .storage_service import StorageService, StorageConfig, StorageError
+from .storage import (
+    StorageBackend,
+    LocalStorageBackend,
+    S3StorageBackend,
+    get_storage_backend,
+    reset_storage_backend
+)
 
 __all__ = [
     # Blueprint
@@ -24,7 +30,9 @@ __all__ = [
     "update_task_status",
     "close_connection_pool",
     # Storage
-    "StorageService",
-    "StorageConfig",
-    "StorageError",
+    "StorageBackend",
+    "LocalStorageBackend",
+    "S3StorageBackend",
+    "get_storage_backend",
+    "reset_storage_backend",
 ]

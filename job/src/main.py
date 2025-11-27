@@ -382,18 +382,23 @@ class BlueprintVideoAssembler:
             print("-" * 80)
             
             try:
-                from services.storage_service import StorageService, StorageConfig
+                from services.storage import get_storage_backend
                 
-                storage_config = StorageConfig(
-                    bucket_name=self.config.get('gcs_bucket_name', 'bachata-buddy-videos'),
-                    project_id=self.config.get('gcp_project_id'),
-                    use_local_storage=not self.config.get('use_gcs', False),
-                    local_storage_path=os.environ.get('LOCAL_STORAGE_PATH', '/app/data')
-                )
+                # Set environment variables for storage backend
+                use_s3 = self.config.get('use_s3', False)
+                if use_s3:
+                    os.environ['STORAGE_BACKEND'] = 's3'
+                    os.environ['AWS_STORAGE_BUCKET_NAME'] = self.config.get('s3_bucket_name', 'bachata-buddy-videos')
+                    os.environ['AWS_REGION'] = self.config.get('aws_region', 'us-east-1')
+                    if self.config.get('cloudfront_domain'):
+                        os.environ['AWS_CLOUDFRONT_DOMAIN'] = self.config.get('cloudfront_domain')
+                else:
+                    os.environ['STORAGE_BACKEND'] = 'local'
+                    os.environ['LOCAL_STORAGE_PATH'] = os.environ.get('LOCAL_STORAGE_PATH', '/app/data')
                 
-                storage_service = StorageService(config=storage_config)
+                storage_service = get_storage_backend()
                 print("✅ Storage service initialized")
-                print(f"   Mode: {'Google Cloud Storage' if self.config.get('use_gcs') else 'Local filesystem'}")
+                print(f"   Mode: {'AWS S3' if use_s3 else 'Local filesystem'}")
                 
             except Exception as e:
                 error_msg = f"Failed to initialize storage service: {str(e)}"
@@ -566,8 +571,10 @@ class BlueprintVideoAssembler:
                 output_path = self.blueprint.get('output_config', {}).get('output_path')
                 file_size = None
                 
-                if storage_config.use_local_storage and output_path:
-                    full_path = os.path.join(storage_config.local_storage_path, output_path)
+                # Try to get file size from local storage
+                if os.environ.get('STORAGE_BACKEND', 'local') == 'local' and output_path:
+                    base_path = os.environ.get('LOCAL_STORAGE_PATH', '/app/data')
+                    full_path = os.path.join(base_path, output_path)
                     if os.path.exists(full_path):
                         file_size = os.path.getsize(full_path)
                 

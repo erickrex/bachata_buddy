@@ -24,7 +24,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Only what's needed for: video assembly, database updates, storage access, config
 RUN uv pip install --system --no-cache \
     "psycopg2-binary>=2.9" \
-    "google-cloud-storage>=2.10" \
+    "boto3>=1.28" \
     "python-dotenv>=1.0"
 
 # Copy job code

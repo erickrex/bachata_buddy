@@ -5,10 +5,9 @@ Microservices architecture - API service only.
 
 This settings file is configured to work in two environments:
 1. Local Development: Docker Compose with local PostgreSQL and Elasticsearch
-2. Cloud Run Production: Cloud SQL (Unix socket), Elasticsearch Serverless, GCS
+2. Production: Standard PostgreSQL connection, Elasticsearch, S3 storage
 
 Environment detection:
-- IS_CLOUD_RUN: Detected via K_SERVICE environment variable (set by Cloud Run)
 - ENVIRONMENT: Explicitly set to 'local', 'staging', or 'production'
 """
 
@@ -28,11 +27,11 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # Environment detection
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'local')
-IS_CLOUD_RUN = os.environ.get('K_SERVICE') is not None  # Cloud Run sets K_SERVICE
+IS_PRODUCTION = ENVIRONMENT == 'production'
 
 # ALLOWED_HOSTS configuration
-if IS_CLOUD_RUN:
-    # Cloud Run: Allow Cloud Run URLs
+if IS_PRODUCTION:
+    # Production: Allow specific hosts
     ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 else:
     # Local development
@@ -42,17 +41,11 @@ else:
 if 'test' in sys.argv or os.environ.get('PYTEST_CURRENT_TEST'):
     ALLOWED_HOSTS.append('testserver')
 
-# CSRF trusted origins for Cloud Run
+# CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = [
     f'https://{host}' for host in ALLOWED_HOSTS 
     if host not in ['localhost', '127.0.0.1', '0.0.0.0', '*']
 ]
-
-# Add Cloud Run service URL if available
-if IS_CLOUD_RUN:
-    service_url = os.environ.get('K_SERVICE_URL')
-    if service_url and service_url not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(service_url)
 
 # Application definition
 INSTALLED_APPS = [
@@ -113,8 +106,6 @@ WSGI_APPLICATION = 'api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-CLOUD_SQL_CONNECTION_NAME = os.environ.get('CLOUD_SQL_CONNECTION_NAME')
-
 # Database configuration
 import sys
 
@@ -126,23 +117,16 @@ if 'test' in sys.argv:
             'NAME': ':memory:',
         }
     }
-elif IS_CLOUD_RUN and CLOUD_SQL_CONNECTION_NAME:
-    # Production: Cloud Run with Cloud SQL Unix socket
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'bachata_buddy'),
-            'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD'),
-            'HOST': f'/cloudsql/{CLOUD_SQL_CONNECTION_NAME}',
-            'CONN_MAX_AGE': 60,  # Connection pooling
-            'OPTIONS': {
-                'connect_timeout': 10,
-            }
-        }
-    }
 else:
-    # Local development: TCP/IP connection
+    # Standard PostgreSQL connection (local or RDS Aurora)
+    db_options = {
+        'connect_timeout': 10,
+    }
+    
+    # Add SSL/TLS configuration for production (RDS Aurora)
+    if IS_PRODUCTION:
+        db_options['sslmode'] = os.environ.get('DB_SSLMODE', 'require')
+    
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -151,7 +135,8 @@ else:
             'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
             'HOST': os.environ.get('DB_HOST', 'db'),
             'PORT': os.environ.get('DB_PORT', '5432'),
-            'CONN_MAX_AGE': 0,  # No connection pooling for local dev
+            'CONN_MAX_AGE': 60 if IS_PRODUCTION else 0,  # Connection pooling in production
+            'OPTIONS': db_options,
         }
     }
 
@@ -205,7 +190,7 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-if IS_CLOUD_RUN:
+if IS_PRODUCTION:
     # Production: Specific frontend origins
     CORS_ALLOWED_ORIGINS = os.environ.get(
         'CORS_ALLOWED_ORIGINS',
@@ -239,10 +224,11 @@ CORS_ALLOW_HEADERS = [
 
 # OpenAPI/Swagger Settings
 # Determine the correct server URL based on environment
-if IS_CLOUD_RUN:
-    # In production, use the Cloud Run service URL
+if IS_PRODUCTION:
+    # In production, use the configured API URL
+    api_url = os.environ.get('API_URL', 'https://api.example.com')
     SPECTACULAR_SERVERS = [
-        {'url': os.environ.get('K_SERVICE_URL', 'https://api.example.com'), 'description': 'Production server'},
+        {'url': api_url, 'description': 'Production server'},
     ]
 else:
     # In local development, use localhost:8001 (external port)
@@ -273,15 +259,8 @@ SPECTACULAR_SETTINGS = {
     'ENUM_NAME_OVERRIDES': {},
 }
 
-# Google Cloud Settings
-GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'local-dev')
-GCP_REGION = os.environ.get('GCP_REGION', 'us-central1')
-
-# Cloud Run Jobs Settings
-CLOUD_RUN_JOB_NAME = os.environ.get('CLOUD_RUN_JOB_NAME', 'video-processor')
-
 # Elasticsearch Settings
-if IS_CLOUD_RUN:
+if IS_PRODUCTION:
     # Production: Elasticsearch Serverless
     ELASTICSEARCH_HOST = os.environ.get('ELASTICSEARCH_HOST', '')
     ELASTICSEARCH_API_KEY = os.environ.get('ELASTICSEARCH_API_KEY', '')
@@ -294,30 +273,32 @@ else:
 
 ELASTICSEARCH_INDEX = os.environ.get('ELASTICSEARCH_INDEX', 'bachata_move_embeddings')
 
-# Google Cloud Storage Settings
-if IS_CLOUD_RUN:
-    # Production: Use GCS
-    GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME')
-    USE_GCS = True
-else:
-    # Local development: Use local filesystem
-    GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', '')
-    USE_GCS = False
+# Storage Settings
+# Storage backend will be configured via abstraction layer (local or S3)
+STORAGE_BACKEND = os.environ.get('STORAGE_BACKEND', 'local')  # 'local' or 's3'
+
+# AWS S3 Configuration (for production)
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+AWS_CLOUDFRONT_DOMAIN = os.environ.get('AWS_CLOUDFRONT_DOMAIN', '')
+
+# AWS Credentials (optional - boto3 will use IAM roles if not provided)
+# In AWS App Runner, use IAM roles instead of access keys for better security
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
 
 # Media files configuration
-if USE_GCS:
-    # Production: Store media in GCS
-    DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    GS_BUCKET_NAME = GCS_BUCKET_NAME
-    MEDIA_URL = f'https://storage.googleapis.com/{GCS_BUCKET_NAME}/'
+# Point to data directory where videos are stored
+MEDIA_URL = '/media/'
+# In Docker: /app/data, locally: backend/../data
+if os.path.exists('/app/data'):
+    MEDIA_ROOT = Path('/app/data')
 else:
-    # Local development: Store media locally
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
+    MEDIA_ROOT = BASE_DIR.parent / 'data'
 
 # Logging
-if IS_CLOUD_RUN:
-    # Production: Structured logging for Cloud Logging
+if IS_PRODUCTION:
+    # Production: Structured logging for CloudWatch
     LOGGING = {
         'version': 1,
         'disable_existing_loggers': False,
@@ -381,7 +362,7 @@ else:
     }
 
 # Security settings for production
-if IS_CLOUD_RUN:
+if IS_PRODUCTION:
     # Production security settings
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
@@ -398,76 +379,6 @@ else:
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
 
-# =============================================================================
-# CORS Configuration
-# =============================================================================
-# Allow frontend to make requests to the API from different origins
 
-if IS_CLOUD_RUN:
-    # Production: Allow specific frontend domains
-    CORS_ALLOWED_ORIGINS = os.environ.get(
-        'CORS_ALLOWED_ORIGINS',
-        ''
-    ).split(',') if os.environ.get('CORS_ALLOWED_ORIGINS') else []
-    
-    # Allow credentials (cookies, authorization headers)
-    CORS_ALLOW_CREDENTIALS = True
-else:
-    # Local development: Allow localhost on common ports
-    CORS_ALLOWED_ORIGINS = [
-        'http://localhost:5173',  # Vite dev server
-        'http://localhost:3000',  # Alternative React port
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:3000',
-    ]
-    
-    # Allow credentials
-    CORS_ALLOW_CREDENTIALS = True
-    
-    # For local development, you can also use CORS_ALLOW_ALL_ORIGINS = True
-    # but it's better to be explicit for security
 
-# Allow common headers
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
 
-# Allow common methods
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
-]
-
-# =============================================================================
-# GPU Acceleration Configuration
-# =============================================================================
-# GPU acceleration for vector search, video encoding, and audio processing
-# Requires NVIDIA GPU with CUDA support (e.g., L4 on Cloud Run)
-
-# Global GPU enable/disable flag
-USE_GPU = os.environ.get('USE_GPU', 'false').lower() == 'true'
-
-# Per-service GPU flags
-FAISS_USE_GPU = os.environ.get('FAISS_USE_GPU', str(USE_GPU)).lower() == 'true'
-FFMPEG_USE_NVENC = os.environ.get('FFMPEG_USE_NVENC', str(USE_GPU)).lower() == 'true'
-AUDIO_USE_GPU = os.environ.get('AUDIO_USE_GPU', str(USE_GPU)).lower() == 'true'
-
-# GPU memory settings
-GPU_MEMORY_FRACTION = float(os.environ.get('GPU_MEMORY_FRACTION', '0.8'))
-
-# GPU fallback settings
-GPU_FALLBACK_ENABLED = os.environ.get('GPU_FALLBACK_ENABLED', 'true').lower() == 'true'
-GPU_TIMEOUT_SECONDS = int(os.environ.get('GPU_TIMEOUT_SECONDS', '30'))
-GPU_RETRY_COUNT = int(os.environ.get('GPU_RETRY_COUNT', '3'))

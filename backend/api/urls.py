@@ -4,6 +4,8 @@ URL configuration for Bachata Buddy REST API.
 import os
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -38,3 +40,7 @@ if os.environ.get('ENVIRONMENT', 'development') == 'development':
     urlpatterns += [
         path('api/choreography/mock/', include('apps.choreography.mock_urls')),
     ]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

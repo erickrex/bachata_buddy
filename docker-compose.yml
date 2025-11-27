@@ -37,17 +37,16 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GCP_PROJECT_ID=local-dev
-      - GCP_REGION=us-central1
       - DJANGO_SECRET_KEY=local-dev-secret-key-change-in-production
       - DJANGO_SETTINGS_MODULE=api.settings
       - ENVIRONMENT=local
       - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      # Storage Configuration
+      - STORAGE_BACKEND=local
       # Vector Search Configuration
       - MOVE_EMBEDDINGS_CACHE_TTL=${MOVE_EMBEDDINGS_CACHE_TTL:-3600}
       - VECTOR_SEARCH_TOP_K=${VECTOR_SEARCH_TOP_K:-50}
-      - FAISS_USE_GPU=${FAISS_USE_GPU:-false}
       - FAISS_NPROBE=${FAISS_NPROBE:-10}
     depends_on:
       db:
@@ -74,7 +73,7 @@ services:
     profiles:
       - microservices
   
-  # Video Processing Job (for testing Cloud Run Jobs locally)
+  # Video Processing Job (for testing background jobs locally)
   job:
     build:
       context: .
@@ -99,13 +98,10 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       
-      # Google Cloud configuration
-      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-local-dev}
-      - GCP_REGION=${GCP_REGION:-us-central1}
-      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
-      - USE_LOCAL_STORAGE=true
+      # Storage configuration (local filesystem for development)
+      - STORAGE_BACKEND=local
       
-      # FFmpeg configuration
+      # FFmpeg configuration (CPU-based encoding)
       - VIDEO_OUTPUT_FORMAT=${VIDEO_OUTPUT_FORMAT:-mp4}
       - VIDEO_CODEC=${VIDEO_CODEC:-libx264}
       - VIDEO_CRF=${VIDEO_CRF:-23}

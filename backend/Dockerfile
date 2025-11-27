@@ -1,5 +1,5 @@
 # Production Dockerfile for Django REST API
-# Optimized for Cloud Run deployment with multi-stage build
+# Optimized for containerized deployment with multi-stage build
 
 # Stage 1: Build stage
 FROM python:3.12-slim AS builder
@@ -67,11 +67,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 8080
 
 # Run with gunicorn
-# - bind to PORT environment variable (Cloud Run requirement)
-# - 1 worker with 8 threads (optimal for Cloud Run)
+# - bind to PORT environment variable
+# - 1 worker with 8 threads (optimal for containerized environments)
 # - timeout 0 for long-running requests
-# - access log to stdout for Cloud Logging
-# - error log to stderr for Cloud Logging
+# - access log to stdout
+# - error log to stderr
 CMD exec gunicorn \
     --bind :$PORT \
     --workers 1 \

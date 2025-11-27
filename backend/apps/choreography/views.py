@@ -17,7 +17,7 @@ from .serializers import (
     SongDetailSerializer,
     SongGenerationSerializer
 )
-from services.jobs_service import CloudRunJobsService
+from services.jobs_service import JobsService as CloudRunJobsService
 from services.gemini_service import GeminiService
 import logging
 

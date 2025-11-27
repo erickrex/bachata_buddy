@@ -1,6 +1,7 @@
 """
 Additional tests to increase coverage of views.py
 """
+import uuid
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -108,8 +109,10 @@ class TaskViewsCoverageTests(TestCase):
         )
         self.client.force_authenticate(user=self.user)
         
-        # Create test task
+        # Create test task (task_id is the primary key and must be a valid UUID)
+        self.task_uuid = str(uuid.uuid4())
         self.task = ChoreographyTask.objects.create(
+            task_id=self.task_uuid,
             user=self.user,
             status='completed',
             stage='completed',
@@ -130,7 +133,7 @@ class TaskViewsCoverageTests(TestCase):
     
     def test_task_detail(self):
         """Test retrieving a single task"""
-        response = self.client.get(f'/api/choreography/tasks/{self.task.id}/')
+        response = self.client.get(f'/api/choreography/tasks/{self.task.task_id}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'completed')
     
@@ -146,10 +149,12 @@ class TaskViewsCoverageTests(TestCase):
             email='other@example.com',
             password='testpass123'
         )
+        other_task_uuid = str(uuid.uuid4())
         other_task = ChoreographyTask.objects.create(
+            task_id=other_task_uuid,
             user=other_user,
-            status='pending'
+            status='started'
         )
         
-        response = self.client.get(f'/api/choreography/tasks/{other_task.id}/')
+        response = self.client.get(f'/api/choreography/tasks/{other_task.task_id}/')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

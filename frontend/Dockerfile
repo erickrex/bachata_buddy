@@ -31,7 +31,7 @@ COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Expose port 8080 (Cloud Run requirement)
+# Expose port 8080 (standard for containerized web apps)
 EXPOSE 8080
 
 # Set default PORT if not provided

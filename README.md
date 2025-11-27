@@ -2,7 +2,7 @@
 
 **AI Bachata Choreography Generator and Library**
 
-Bachata Buddy generates personalized Bachata choreographies using multi-modal machine learning. It combines computer vision (YOLOv8-Pose) to create couples pose embeddings, audio signal processing (Librosa) to create song embeddings, natural language understanding (Sentence-Transformers + Gemini AI), and GPU-accelerated vector similarity search (FAISS) to create text embeddings and generate contextually appropriate dance sequences from music.
+Bachata Buddy generates personalized Bachata choreographies using multi-modal machine learning. It combines computer vision (YOLOv8-Pose) to create couples pose embeddings, audio signal processing (Librosa) to create song embeddings, natural language understanding (Sentence-Transformers + Gemini AI), and vector similarity search (FAISS) to create text embeddings and generate contextually appropriate dance sequences from music.
 
 > **🌟 Unique Innovation:** First open-source system to use multi-person pose detection for partner dance choreography generation with trimodal embeddings (audio + visual + semantic).
 
@@ -28,9 +28,9 @@ This isn't a typical CRUD app or simple ML demo. It's a **production-ready resea
 
 3. **Production-Ready Architecture** 🏗️
    - Full Django web application with user management
-   - FAISS GPU for vector similarity search (<50ms recommendations, 11x faster than CPU)
+   - FAISS for vector similarity search (<50ms recommendations)
    - Comprehensive testing (67%+ coverage, 30+ unit tests)
-   - Docker deployment with Google Cloud Run + NVIDIA L4 GPU support
+   - Docker deployment ready for AWS App Runner
    - Simple installation (just `uv sync` - no complex dependencies!)
 
 ---
@@ -102,7 +102,7 @@ The system includes **11 core ML/AI services** organized across two specialized 
 
 **`ai_services` App** (ML/AI Services)
 - Gemini AI integration
-- FAISS GPU vector search (11x faster than CPU)
+- FAISS vector search
 - Text embeddings (Sentence-Transformers)
 - Recommendation engine
 - Feature fusion & quality metrics
@@ -244,8 +244,8 @@ class ChoreographyPipeline:
 | **YOLOv8 Detection** | Accuracy (mAP) | 70-75% | Modern multi-person detection |
 | **Couple Detection** | Frame Coverage | >65% both dancers | IoU tracking, quality filtering |
 | **Text Embeddings** | Processing Speed | <5 sec/38 clips | Batch processing, model caching |
-| **FAISS GPU Search** | Retrieval Time | <50ms lookup | GPU-accelerated vector similarity, 11x faster than CPU |
-| **Recommendation** | Response Time | <50ms total | Weighted similarity, GPU acceleration |
+| **FAISS Search** | Retrieval Time | <50ms lookup | Vector similarity search |
+| **Recommendation** | Response Time | <50ms total | Weighted similarity |
 | **Embedding Validation** | Accuracy | 100% valid | NaN/Inf detection, dimension checks |
 | **Memory Usage** | Peak Consumption | <500MB | Lazy loading, automatic cleanup |
 | **Video Generation** | Rendering Speed | 1-2x realtime | FFmpeg optimization, quality modes |
@@ -336,8 +336,6 @@ bachata_buddy/
 ├── video_processing/           # Video/audio processing
 │   ├── services/
 │   │   ├── video_generator.py             # FFmpeg video assembly
-│   │   ├── video_storage_service.py       # GCS video storage
-│   │   ├── audio_storage_service.py       # GCS audio storage
 │   │   ├── yolov8_couple_detector.py      # Multi-person pose detection
 │   │   ├── pose_feature_extractor.py      # Keypoint feature extraction
 │   │   ├── pose_embedding_generator.py    # 1280D pose embeddings
@@ -513,7 +511,7 @@ from common.exceptions import VideoGenerationError
 
 **`ai_services` - AI/ML Services**
 - Google Gemini API integration
-- FAISS GPU vector search (11x faster than CPU)
+- FAISS vector search
 - Text embeddings (Sentence-Transformers)
 - Move recommendations
 - Feature fusion (trimodal)
@@ -598,8 +596,8 @@ from common.exceptions import VideoGenerationError
 - **Robust Processing**: Normalized vectors, handles missing keypoints
 
 ### Production Infrastructure ✅
-- **FAISS GPU**: GPU-accelerated vector similarity search (11x faster than CPU, <50ms queries)
-- **Google Cloud Deployment**: Cloud Run with NVIDIA L4 GPU support
+- **FAISS**: Vector similarity search (<50ms queries)
+- **AWS Deployment Ready**: Infrastructure as Code with AWS CDK
 - **Quality Validation**: NaN/Inf detection, dimension checks
 - **Backup/Restore**: Full embedding backup with numpy serialization support
 - **Comprehensive Testing**: 67%+ coverage, unified structure
@@ -660,7 +658,8 @@ from common.exceptions import VideoGenerationError
 - Python 3.12+
 - UV package manager
 - FFmpeg and libsndfile (for audio processing)
-- CUDA 12.2+ (for GPU acceleration, optional)
+- Docker and Docker Compose (for local development)
+- PostgreSQL 15+ (or use Docker Compose)
 
 ### Installation
 
@@ -682,23 +681,22 @@ uv sync
 # That's it! YOLOv8 models download automatically on first use
 
 # 3. Configure environment
-cat > .env << EOF
-ENVIRONMENT=local
-USE_GPU=true
-FAISS_USE_GPU=true
-YOLOV8_MODEL=yolov8n-pose.pt
-YOLOV8_CONFIDENCE=0.3
-DJANGO_SECRET_KEY=your-dev-secret-key
-DJANGO_DEBUG=True
-EOF
+cp backend/.env.example backend/.env
+# Edit backend/.env with your configuration:
+# - Set DJANGO_SECRET_KEY
+# - Configure database connection (or use Docker Compose)
+# - Set STORAGE_BACKEND=local for local development
 
-# 4. Set up Django
-uv run python manage.py migrate
-uv run python manage.py createsuperuser
+# 4. Start services with Docker Compose
+docker-compose up -d
 
-# 5. Run server
-uv run python manage.py runserver
-# Visit http://localhost:8000/
+# 5. Run migrations
+docker-compose exec backend uv run python manage.py migrate
+docker-compose exec backend uv run python manage.py createsuperuser
+
+# 6. Access the application
+# Backend API: http://localhost:8000
+# Frontend: http://localhost:3000
 ```
 
 ### Generate Embeddings (One-Time Setup)
@@ -723,9 +721,317 @@ uv run python scripts/restore_embeddings.py \
 **Troubleshooting:**
 - Embeddings are stored in PostgreSQL database
 - FAISS index is built in-memory from database embeddings
-- For GPU acceleration, ensure CUDA 12.2+ is installed
-- CPU fallback is automatic if GPU is unavailable stop && colima start
+- Ensure PostgreSQL is running (via Docker Compose or local installation)
+- Check logs with `docker-compose logs -f backend`
 ```
+
+---
+
+## 🔧 Environment Variables
+
+### Backend Configuration
+
+All backend environment variables are documented in `backend/.env.example`. Key variables:
+
+#### Django Settings
+- `DJANGO_SECRET_KEY` - Secret key for Django (generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`)
+- `DEBUG` - Debug mode (True for local, False for production)
+- `ENVIRONMENT` - Environment name (local, production)
+- `ALLOWED_HOSTS` - Comma-separated list of allowed hosts
+
+#### Database
+- `DB_NAME` - Database name (default: bachata_buddy)
+- `DB_USER` - Database user (default: postgres)
+- `DB_PASSWORD` - Database password
+- `DB_HOST` - Database host (localhost, db, or RDS endpoint)
+- `DB_PORT` - Database port (default: 5432)
+- `DB_SSLMODE` - SSL mode for RDS (require, verify-ca, verify-full)
+
+#### Storage
+- `STORAGE_BACKEND` - Storage backend (local or s3)
+- `AWS_STORAGE_BUCKET_NAME` - S3 bucket name (production only)
+- `AWS_REGION` - AWS region (default: us-east-1)
+- `AWS_CLOUDFRONT_DOMAIN` - CloudFront domain (optional)
+
+#### AI Services
+- `GOOGLE_API_KEY` - Gemini API key (get from https://makersuite.google.com/app/apikey)
+
+#### Vector Search
+- `MOVE_EMBEDDINGS_CACHE_TTL` - Cache TTL in seconds (default: 3600)
+- `VECTOR_SEARCH_TOP_K` - Number of top moves to return (default: 50)
+- `FAISS_NPROBE` - FAISS search accuracy (default: 10)
+
+#### CORS
+- `CORS_ALLOWED_ORIGINS` - Comma-separated allowed origins
+
+#### JWT
+- `JWT_ACCESS_TOKEN_LIFETIME` - Access token lifetime in minutes (default: 60)
+- `JWT_REFRESH_TOKEN_LIFETIME` - Refresh token lifetime in days (default: 7)
+
+### Frontend Configuration
+
+Frontend environment variables are in `frontend/.env.example`:
+
+- `VITE_API_URL` - Backend API URL (http://localhost:8000 for local, App Runner URL for production)
+- `VITE_ENVIRONMENT` - Environment name (local, production)
+
+---
+
+## 🐛 Troubleshooting
+
+### Local Development Issues
+
+#### Docker Compose Won't Start
+
+**Problem:** `docker-compose up` fails
+
+**Solutions:**
+```bash
+# Check Docker is running
+docker ps
+
+# Check for port conflicts
+lsof -i :8000  # Backend
+lsof -i :3000  # Frontend
+lsof -i :5432  # PostgreSQL
+
+# Remove old containers and volumes
+docker-compose down -v
+docker-compose up -d
+```
+
+#### Database Connection Errors
+
+**Problem:** `django.db.utils.OperationalError: could not connect to server`
+
+**Solutions:**
+```bash
+# Verify PostgreSQL is running
+docker-compose ps
+
+# Check database logs
+docker-compose logs postgres
+
+# Verify environment variables
+cat backend/.env | grep DB_
+
+# Test connection manually
+docker-compose exec postgres psql -U postgres -d bachata_buddy
+```
+
+#### Missing Dependencies
+
+**Problem:** `ModuleNotFoundError` or import errors
+
+**Solutions:**
+```bash
+# Reinstall backend dependencies
+cd backend
+uv sync
+
+# Reinstall frontend dependencies
+cd frontend
+npm install
+
+# Rebuild Docker containers
+docker-compose build --no-cache
+```
+
+#### FFmpeg Errors
+
+**Problem:** Video generation fails with FFmpeg errors
+
+**Solutions:**
+```bash
+# Install FFmpeg (macOS)
+brew install ffmpeg
+
+# Install FFmpeg (Ubuntu/Debian)
+sudo apt-get install ffmpeg
+
+# Verify FFmpeg installation
+ffmpeg -version
+
+# Check FFmpeg in Docker container
+docker-compose exec backend ffmpeg -version
+```
+
+#### Embedding Generation Fails
+
+**Problem:** `generate_embeddings.py` fails
+
+**Solutions:**
+```bash
+# Verify video files exist
+ls -la data/Bachata_steps/
+
+# Verify annotations file exists
+cat data/bachata_annotations.json
+
+# Check YOLOv8 model download
+ls -la ~/.cache/torch/hub/checkpoints/
+
+# Run with verbose logging
+uv run python scripts/generate_embeddings.py \
+  --video_dir data/Bachata_steps \
+  --annotations data/bachata_annotations.json \
+  --environment local \
+  --verbose
+```
+
+### Production Deployment Issues
+
+#### CDK Bootstrap Fails
+
+**Problem:** `cdk bootstrap` fails with permission errors
+
+**Solutions:**
+```bash
+# Verify AWS credentials
+aws sts get-caller-identity
+
+# Check IAM permissions (need AdministratorAccess or equivalent)
+aws iam get-user
+
+# Re-configure AWS CLI
+aws configure
+```
+
+#### Docker Image Push Fails
+
+**Problem:** Cannot push to ECR
+
+**Solutions:**
+```bash
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# Verify repository exists
+aws ecr describe-repositories
+
+# Check Docker daemon is running
+docker ps
+```
+
+#### App Runner Service Won't Start
+
+**Problem:** App Runner service fails health checks
+
+**Solutions:**
+```bash
+# Check service logs
+aws logs tail /aws/apprunner/<service-name> --follow
+
+# Verify environment variables
+aws apprunner describe-service --service-arn <service-arn>
+
+# Check Docker image exists in ECR
+aws ecr list-images --repository-name <repo-name>
+
+# Test Docker image locally
+docker run -p 8000:8000 <ecr-image-url>
+```
+
+#### Database Connection Fails in Production
+
+**Problem:** App Runner cannot connect to RDS
+
+**Solutions:**
+```bash
+# Verify RDS is running
+aws rds describe-db-instances
+
+# Check security group rules
+aws ec2 describe-security-groups --group-ids <sg-id>
+
+# Verify VPC connector configuration
+aws apprunner describe-vpc-connector --vpc-connector-arn <arn>
+
+# Test connection from App Runner
+# (Use AWS Systems Manager Session Manager or CloudShell)
+```
+
+#### Frontend Not Loading
+
+**Problem:** CloudFront returns errors
+
+**Solutions:**
+```bash
+# Verify S3 bucket exists and has files
+aws s3 ls s3://<bucket-name>/
+
+# Check CloudFront distribution status
+aws cloudfront get-distribution --id <distribution-id>
+
+# Verify Origin Access Identity
+aws cloudfront list-cloud-front-origin-access-identities
+
+# Create cache invalidation
+aws cloudfront create-invalidation \
+  --distribution-id <distribution-id> \
+  --paths "/*"
+```
+
+### Common Error Messages
+
+#### "No module named 'core'"
+
+**Cause:** Old import paths from before app refactoring
+
+**Solution:** Update imports to use new app structure:
+```python
+# Old (wrong)
+from core.services.video_generator import VideoGenerator
+
+# New (correct)
+from video_processing.services.video_generator import VideoGenerator
+```
+
+#### "FAISS index not found"
+
+**Cause:** Embeddings not generated or database empty
+
+**Solution:**
+```bash
+# Generate embeddings
+uv run python scripts/generate_embeddings.py \
+  --video_dir data/Bachata_steps \
+  --annotations data/bachata_annotations.json \
+  --environment local
+```
+
+#### "Gemini API key not found"
+
+**Cause:** Missing or invalid GOOGLE_API_KEY
+
+**Solution:**
+```bash
+# Get API key from https://makersuite.google.com/app/apikey
+# Add to backend/.env
+echo "GOOGLE_API_KEY=your-key-here" >> backend/.env
+```
+
+#### "Storage backend not configured"
+
+**Cause:** STORAGE_BACKEND not set or invalid
+
+**Solution:**
+```bash
+# For local development
+echo "STORAGE_BACKEND=local" >> backend/.env
+
+# For production
+echo "STORAGE_BACKEND=s3" >> backend/.env
+echo "AWS_STORAGE_BUCKET_NAME=your-bucket" >> backend/.env
+```
+
+### Getting Help
+
+- **Documentation:** Check [DEPLOYMENT.md](DEPLOYMENT.md) and [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Logs:** Always check logs first (`docker-compose logs` or CloudWatch)
+- **Issues:** Report bugs at <repository-issues-url>
+- **AWS Support:** https://console.aws.amazon.com/support/
 
 ---
 
@@ -753,7 +1059,7 @@ uv run pytest tests/ -m "not slow" -v
 
 ---
 
-## 🏗️ Google Cloud Production Architecture
+## 🏗️ Local Development Architecture
 
 ### System Architecture
 
@@ -763,23 +1069,23 @@ graph TB
         U[Users/Browsers]
     end
     
-    subgraph "Google Cloud Platform"
+    subgraph "Docker Compose Environment"
         subgraph "API Layer - Django Backend"
-            API[Cloud Run API<br/>2GB RAM, 2 vCPU<br/>Blueprint Generation]
+            API[Backend Container<br/>Django REST API<br/>Blueprint Generation]
             BG[Blueprint Generator<br/>Audio Analysis<br/>Move Selection<br/>Trimodal Fusion]
             API --> BG
         end
         
         subgraph "Processing Layer - Video Assembly"
-            JOB[Cloud Run Job<br/>512MB RAM, 1 vCPU<br/>FFmpeg Assembly]
+            JOB[Job Container<br/>FFmpeg Assembly]
             BP[Blueprint JSON<br/>Complete Instructions]
             BG --> BP
             BP --> JOB
         end
         
         subgraph "Storage Layer"
-            GCS[Cloud Storage<br/>Video Clips: 150<br/>Songs: 8<br/>Output Videos]
-            SQL[(Cloud SQL PostgreSQL<br/>Users & Tasks<br/>Blueprints<br/>149 Embeddings)]
+            FS[Local Filesystem<br/>Video Clips: 150<br/>Songs: 8<br/>Output Videos]
+            SQL[(PostgreSQL Container<br/>Users & Tasks<br/>Blueprints<br/>149 Embeddings)]
         end
         
         subgraph "AI/ML Layer"
@@ -789,22 +1095,21 @@ graph TB
             LIB[Librosa<br/>Audio Analysis<br/>128D Features]
         end
         
-        subgraph "Security"
-            SM[Secret Manager<br/>API Keys<br/>DB Credentials]
+        subgraph "Frontend"
+            FE[React Frontend<br/>Vite Dev Server<br/>Port 3000]
         end
     end
     
-    U -->|HTTPS Request| API
+    U -->|HTTP Request| FE
+    FE -->|API Calls| API
     API -->|Query| SQL
     API -->|NLP| GEMINI
     BG -->|Pose Analysis| YOLO
     BG -->|Text Embeddings| ST
     BG -->|Audio Features| LIB
-    JOB -->|Fetch Media| GCS
+    JOB -->|Fetch Media| FS
     JOB -->|Update Status| SQL
-    JOB -->|Upload Video| GCS
-    API -->|Secrets| SM
-    JOB -->|Secrets| SM
+    JOB -->|Save Video| FS
     
     style API fill:#4285f4,color:#fff
     style JOB fill:#4285f4,color:#fff
@@ -886,23 +1191,20 @@ graph LR
 |---------|---------|--------|
 | **Blueprint-Based** | API generates complete instructions | 75% memory reduction in job |
 | **Trimodal Fusion** | Multi-dimensional move matching | Higher quality choreographies |
-| **Cloud Run Jobs** | Serverless video processing | 50% cost reduction |
-| **FAISS GPU** | GPU-accelerated vector search | 11x faster than CPU (<50ms) |
+| **Docker Compose** | Easy local development | Simple setup and testing |
+| **FAISS** | Vector similarity search | Fast recommendations (<50ms) |
 | **PostgreSQL** | Embeddings in database | Simple, reliable storage |
 | **Sentence-Transformers** | Real semantic understanding | Intelligent move grouping |
 | **YOLOv8-Pose** | Modern pose detection | 70-75% mAP accuracy |
 
-### Resource Configuration
+### Local Development Services
 
-| Component | Memory | CPU | Timeout | Cost/Month* |
-|-----------|--------|-----|---------|-------------|
-| **API Backend** | 2GB | 2 vCPU | 300s | ~$20 |
-| **Video Job** | 512MB | 1 vCPU | 300s | ~$5 |
-| **Cloud SQL** | db-f1-micro | - | - | ~$10 |
-| **Cloud Storage** | - | - | - | ~$1 |
-| **Total** | - | - | - | **~$36** |
-
-*Based on 100 videos/month, moderate usage
+| Component | Container | Port | Purpose |
+|-----------|-----------|------|---------|
+| **Backend API** | backend | 8000 | Django REST API |
+| **Frontend** | frontend | 3000 | React development server |
+| **Database** | postgres | 5432 | PostgreSQL database |
+| **Job Service** | job | - | Video assembly (triggered by API) |
 
 ### Performance Metrics
 
@@ -910,7 +1212,7 @@ graph LR
 |--------|-------|--------------|
 | **Blueprint Generation** | 2-5s | Trimodal fusion, cached embeddings |
 | **Video Assembly** | 40-50s | FFmpeg optimization, local storage |
-| **Vector Search (FAISS GPU)** | <50ms | GPU-accelerated similarity search |
+| **Vector Search (FAISS)** | <50ms | Vector similarity search |
 | **Total Pipeline** | 45-55s | End-to-end optimized |
 | **Video Quality** | 1280x720, 24fps | ~51MB per video |
 
@@ -923,67 +1225,64 @@ graph LR
 5. **Trimodal Fusion** → Weighted similarity (35% audio + 35% text + 30% pose)
 6. **Move Selection** → Top-K moves filtered by difficulty/energy
 7. **Blueprint Generation** → Complete video assembly instructions
-8. **Job Trigger** → Cloud Run Job receives blueprint
+8. **Job Trigger** → Job service receives blueprint
 9. **Video Assembly** → FFmpeg concatenates clips with transitions
-10. **Upload & Complete** → Video saved to Cloud Storage, task updated
+10. **Save & Complete** → Video saved to storage, task updated
 
-**Detailed Architecture Documentation:**
-- **[DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md)** - Complete deployment architecture with blueprint communication flow
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Step-by-step deployment instructions
+**Architecture Documentation:**
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - AWS deployment instructions
 
 ---
 
-## 🚀 Deployment Documentation
+## 🚀 Deployment
 
-### Blueprint-Based Architecture (November 2025)
+### AWS Deployment with CDK
 
-The video processing system uses a **blueprint-based architecture** for efficient, scalable video generation:
+The application is designed to deploy to AWS using Infrastructure as Code (AWS CDK in TypeScript).
 
-**Architecture:**
-- **API/Backend**: Generates complete video assembly instructions (blueprints)
-- **Cloud Run Job**: Receives blueprint and assembles video using FFmpeg
-- **No Elasticsearch in job**: All intelligence moved to API
+**Target Architecture:**
+- **Backend**: AWS App Runner (containerized Django API)
+- **Frontend**: S3 + CloudFront (static hosting with CDN)
+- **Database**: RDS Aurora PostgreSQL Serverless v2
+- **Storage**: S3 (media files and video outputs)
+- **Jobs**: AWS App Runner (video processing service)
 
-**Benefits:**
-- ✅ **75% memory reduction** (2GB → 512MB)
-- ✅ **60% faster builds** (<2 min vs 5+ min)
-- ✅ **50% cost reduction** (lower resource usage)
-- ✅ **Simpler debugging** (clear separation of concerns)
-
-### Deployment Guides
+**Deployment Guides:**
 
 | Guide | Description |
 |-------|-------------|
-| **[DEPLOYMENT.md](DEPLOYMENT.md)** | Main deployment guide (Compute Engine + Cloud Run) |
-| **[docs/CLOUD_RUN_JOB_DEPLOYMENT.md](docs/CLOUD_RUN_JOB_DEPLOYMENT.md)** | Cloud Run Jobs deployment (video processing) |
-| **[docs/BLUEPRINT_MIGRATION_GUIDE.md](docs/BLUEPRINT_MIGRATION_GUIDE.md)** | Migration from old to new architecture |
-| **[docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md)** | Complete deployment checklist |
-| **[docs/BLUEPRINT_SCHEMA.md](docs/BLUEPRINT_SCHEMA.md)** | Blueprint JSON schema documentation |
-| **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** | Common issues and solutions |
+| **[DEPLOYMENT.md](DEPLOYMENT.md)** | Complete AWS deployment guide with CDK |
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | AWS architecture diagrams and design |
+| **[infrastructure/README.md](infrastructure/README.md)** | CDK project documentation |
 
-### Quick Deploy
+### Quick Deploy to AWS
 
 ```bash
-# Deploy backend API
-cd backend
-./scripts/deploy_to_cloud_run.sh
+# Prerequisites: AWS CLI, CDK CLI, Node.js 18+
+# Configure AWS credentials first
 
-# Deploy video processing job
+# 1. Deploy infrastructure
+cd infrastructure
+npm install
+cdk bootstrap  # First time only
+cdk deploy --all
+
+# 2. Build and push Docker images
+cd ../bachata_buddy/backend
+docker build -t <ecr-repo-url>:latest .
+docker push <ecr-repo-url>:latest
+
 cd ../job
-./scripts/deploy_job_to_cloud_run.sh
+docker build -t <ecr-job-repo-url>:latest .
+docker push <ecr-job-repo-url>:latest
 
-# Verify deployment
-./scripts/verify_deployment_config.sh
+# 3. Build and deploy frontend
+cd ../frontend
+npm run build
+aws s3 sync dist/ s3://<frontend-bucket>/
+aws cloudfront create-invalidation --distribution-id <dist-id> --paths "/*"
 ```
 
-### Resource Configuration
-
-| Component | Memory | CPU | Timeout | Cost/Month |
-|-----------|--------|-----|---------|------------|
-| Backend API | 2Gi | 2 | 300s | ~$20 |
-| Video Job | 512Mi | 1 | 300s | ~$5 |
-| Cloud SQL | db-f1-micro | - | - | ~$10 |
-| **Total** | - | - | - | **~$35** |
-
-*Costs based on moderate usage (100 videos/month)*
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 

@@ -26,7 +26,11 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
         setIsLoadingVideo(true);
         const token = localStorage.getItem('accessToken');
         
-        const response = await fetch(videoUrl, {
+        // Build full URL if videoUrl is relative
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+        const fullVideoUrl = videoUrl.startsWith('http') ? videoUrl : `${API_BASE_URL}${videoUrl}`;
+        
+        const response = await fetch(fullVideoUrl, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

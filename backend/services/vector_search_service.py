@@ -214,27 +214,9 @@ class VectorSearchService:
                 return False
             return use_gpu
         
-        # Auto-detect from configuration
-        try:
-            from services.gpu_utils import GPUConfig, check_faiss_gpu_available
-            
-            config = GPUConfig()
-            if not config.faiss_gpu:
-                logger.debug("FAISS GPU disabled in configuration")
-                return False
-            
-            # Check if FAISS GPU is actually available
-            gpu_available = check_faiss_gpu_available()
-            if gpu_available:
-                logger.info("FAISS GPU detected and enabled")
-            else:
-                logger.info("FAISS GPU not available, using CPU")
-            
-            return gpu_available
-            
-        except Exception as e:
-            logger.warning(f"Error checking GPU availability: {e}")
-            return False
+        # GPU support removed - always use CPU
+        logger.debug("GPU support removed, using CPU for FAISS")
+        return False
     
     def _init_gpu_resources(self) -> None:
         """
@@ -258,18 +240,8 @@ class VectorSearchService:
             # Initialize GPU resources
             self.gpu_resources = faiss.StandardGpuResources()
             
-            # Configure GPU memory
-            try:
-                from services.gpu_utils import GPUConfig
-                config = GPUConfig()
-                
-                # Set memory fraction (FAISS uses bytes, not fraction)
-                # We'll let FAISS manage memory automatically
-                logger.info(
-                    f"GPU resources initialized (memory fraction: {config.memory_fraction})"
-                )
-            except Exception as e:
-                logger.warning(f"Could not load GPU config: {e}")
+            # GPU memory configuration removed
+            logger.info("GPU resources initialized")
             
             logger.info("FAISS GPU resources initialized successfully")
             
@@ -728,13 +700,7 @@ class VectorSearchService:
             'gpu_resources_initialized': self.gpu_resources is not None,
         }
         
-        if self.use_gpu:
-            try:
-                from services.gpu_utils import get_gpu_info
-                gpu_details = get_gpu_info()
-                info.update(gpu_details)
-            except Exception as e:
-                logger.warning(f"Could not get GPU info: {e}")
+        # GPU info removed - GPU support has been removed from the codebase
         
         return info
 

@@ -1,104 +1,145 @@
 """
-Google Cloud Storage Service
+Storage Service
 
-Handles file uploads and downloads from GCS.
+Provides a unified interface for file storage operations using the storage
+abstraction layer. This service wraps the storage backend and provides
+backward compatibility with the old GCS-based interface.
 """
-import os
 import logging
+from typing import Optional
+
+from .storage.factory import get_storage_backend
 
 logger = logging.getLogger(__name__)
 
 
 class StorageService:
-    """Service for managing Google Cloud Storage"""
+    """
+    Service for managing file storage.
+    
+    This class provides a backward-compatible interface while using the
+    new storage abstraction layer underneath. It delegates all operations
+    to the configured storage backend (local or S3).
+    """
     
     def __init__(self):
-        self.bucket_name = os.environ.get('GCS_BUCKET_NAME', '')
-        
-        # Only import google-cloud-storage in production
-        if self.bucket_name:
-            try:
-                from google.cloud import storage
-                self.client = storage.Client()
-                self.bucket = self.client.bucket(self.bucket_name)
-            except ImportError:
-                logger.warning("google-cloud-storage not installed")
-                self.client = None
-                self.bucket = None
-        else:
-            self.client = None
-            self.bucket = None
-            logger.info("GCS_BUCKET_NAME not set, storage disabled")
+        """Initialize storage service with the configured backend"""
+        self.backend = get_storage_backend()
+        logger.info(f"StorageService initialized with backend: {type(self.backend).__name__}")
     
-    def upload_file(self, local_path, gcs_path):
-        """Upload a file to GCS"""
-        if not self.bucket:
-            logger.warning(f"GCS not configured, skipping upload: {gcs_path}")
-            return None
+    def upload_file(self, local_path: str, remote_path: str) -> Optional[str]:
+        """
+        Upload a file to storage.
         
+        Args:
+            local_path: Path to the local file to upload
+            remote_path: Destination path in storage (supports legacy GCS paths)
+            
+        Returns:
+            URL to access the uploaded file, or None on failure
+        """
         try:
-            blob = self.bucket.blob(gcs_path)
-            blob.upload_from_filename(local_path)
-            logger.info(f"Uploaded {local_path} to gs://{self.bucket_name}/{gcs_path}")
-            return blob.public_url
-        except Exception as e:
-            logger.error(f"Failed to upload file: {e}")
-            raise
-    
-    def download_file(self, gcs_path, local_path):
-        """Download a file from GCS"""
-        if not self.bucket:
-            logger.warning(f"GCS not configured, skipping download: {gcs_path}")
-            return None
-        
-        try:
-            blob = self.bucket.blob(gcs_path)
-            blob.download_to_filename(local_path)
-            logger.info(f"Downloaded gs://{self.bucket_name}/{gcs_path} to {local_path}")
-            return local_path
-        except Exception as e:
-            logger.error(f"Failed to download file: {e}")
-            raise
-    
-    def get_signed_url(self, gcs_path, expiration=3600):
-        """Generate a signed URL for temporary access"""
-        if not self.bucket:
-            return None
-        
-        try:
-            blob = self.bucket.blob(gcs_path)
-            url = blob.generate_signed_url(expiration=expiration)
+            url = self.backend.upload_file(local_path, remote_path)
+            logger.info(f"Uploaded {local_path} to {remote_path}")
             return url
         except Exception as e:
-            logger.error(f"Failed to generate signed URL: {e}")
-            raise
+            logger.error(f"Failed to upload file {local_path}: {e}")
+            return None
     
-    def file_exists(self, gcs_path):
-        """Check if a file exists in GCS"""
-        if not self.bucket:
-            logger.warning(f"GCS not configured, cannot check file existence: {gcs_path}")
-            return False
+    def download_file(self, remote_path: str, local_path: str) -> Optional[str]:
+        """
+        Download a file from storage.
         
+        Args:
+            remote_path: Path to the file in storage (supports legacy GCS paths)
+            local_path: Destination path for the downloaded file
+            
+        Returns:
+            Path to the downloaded file, or None on failure
+        """
         try:
-            # Remove gs://bucket-name/ prefix if present
-            if gcs_path.startswith('gs://'):
-                # Extract path after bucket name
-                parts = gcs_path.replace('gs://', '').split('/', 1)
-                if len(parts) > 1:
-                    gcs_path = parts[1]
-                else:
-                    gcs_path = ''
-            
-            # Remove /media/ prefix if present (from FileField)
-            if gcs_path.startswith('/media/'):
-                gcs_path = gcs_path[7:]
-            elif gcs_path.startswith('media/'):
-                gcs_path = gcs_path[6:]
-            
-            blob = self.bucket.blob(gcs_path)
-            exists = blob.exists()
-            logger.debug(f"File existence check for {gcs_path}: {exists}")
-            return exists
+            result = self.backend.download_file(remote_path, local_path)
+            logger.info(f"Downloaded {remote_path} to {local_path}")
+            return result
         except Exception as e:
-            logger.error(f"Failed to check file existence for {gcs_path}: {e}")
+            logger.error(f"Failed to download file {remote_path}: {e}")
+            return None
+    
+    def get_signed_url(self, remote_path: str, expiration: int = 3600) -> Optional[str]:
+        """
+        Generate a URL for accessing a file.
+        
+        Args:
+            remote_path: Path to the file in storage (supports legacy GCS paths)
+            expiration: URL expiration time in seconds (for signed URLs)
+            
+        Returns:
+            URL to access the file, or None on failure
+        """
+        try:
+            url = self.backend.get_url(remote_path, expiration)
+            return url
+        except Exception as e:
+            logger.error(f"Failed to generate URL for {remote_path}: {e}")
+            return None
+    
+    def get_url(self, remote_path: str, expiration: int = 3600) -> Optional[str]:
+        """
+        Alias for get_signed_url for backward compatibility.
+        
+        Args:
+            remote_path: Path to the file in storage
+            expiration: URL expiration time in seconds
+            
+        Returns:
+            URL to access the file, or None on failure
+        """
+        return self.get_signed_url(remote_path, expiration)
+    
+    def file_exists(self, remote_path: str) -> bool:
+        """
+        Check if a file exists in storage.
+        
+        Args:
+            remote_path: Path to the file in storage (supports legacy GCS paths)
+            
+        Returns:
+            True if file exists, False otherwise
+        """
+        try:
+            return self.backend.file_exists(remote_path)
+        except Exception as e:
+            logger.error(f"Failed to check file existence for {remote_path}: {e}")
             return False
+    
+    def delete_file(self, remote_path: str) -> bool:
+        """
+        Delete a file from storage.
+        
+        Args:
+            remote_path: Path to the file in storage (supports legacy GCS paths)
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            return self.backend.delete_file(remote_path)
+        except Exception as e:
+            logger.error(f"Failed to delete file {remote_path}: {e}")
+            return False
+    
+    def list_files(self, prefix: str = "") -> list[str]:
+        """
+        List files in storage with optional prefix filter.
+        
+        Args:
+            prefix: Optional prefix to filter files
+            
+        Returns:
+            List of file paths
+        """
+        try:
+            return self.backend.list_files(prefix)
+        except Exception as e:
+            logger.error(f"Failed to list files with prefix '{prefix}': {e}")
+            return []

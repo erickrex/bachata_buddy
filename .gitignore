@@ -68,6 +68,12 @@ logs/
 .env.test
 .env.production
 
+# AWS
+.aws/
+*.pem
+cdk.out/
+.cdk.staging/
+
 # Test coverage
 htmlcov/
 .coverage
@@ -75,6 +81,11 @@ htmlcov/
 coverage.xml
 *.cover
 .pytest_cache/
+.hypothesis/
+
+# Test artifacts (Hypothesis generates random folder names)
+backend/test_*/
+backend/[!a-zA-Z0-9_]*/
 
 # Media files (too large for git)
 *.wav

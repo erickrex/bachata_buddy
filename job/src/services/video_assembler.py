@@ -58,14 +58,13 @@ class VideoAssembler:
     # Parallel download configuration
     MAX_PARALLEL_DOWNLOADS = 10
     
-    def __init__(self, storage_service, temp_dir: Optional[str] = None, use_gpu: Optional[bool] = None):
+    def __init__(self, storage_service, temp_dir: Optional[str] = None):
         """
         Initialize video assembler.
         
         Args:
             storage_service: Storage service instance for file operations
             temp_dir: Temporary directory for intermediate files (optional)
-            use_gpu: Whether to use GPU acceleration (None = auto-detect)
         """
         self.storage = storage_service
         self.temp_dir = temp_dir or tempfile.mkdtemp(prefix='video_assembly_')
@@ -73,43 +72,27 @@ class VideoAssembler:
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
         
-        # GPU configuration
-        self.use_gpu = self._should_use_gpu(use_gpu)
-        
-        # Initialize FFmpeg command builder
+        # Initialize FFmpeg command builder (CPU-only)
         try:
             from services.ffmpeg_builder import FFmpegCommandBuilder
-            self.ffmpeg_builder = FFmpegCommandBuilder(use_gpu=self.use_gpu)
-            logger.info(f"FFmpeg builder initialized (GPU: {self.ffmpeg_builder.use_gpu})")
+            self.ffmpeg_builder = FFmpegCommandBuilder()
+            logger.info("FFmpeg builder initialized (CPU-only)")
         except Exception as e:
             logger.warning(f"Failed to initialize FFmpeg builder: {e}")
             self.ffmpeg_builder = None
+        
+        # Determine storage mode from backend type
+        storage_mode = 'S3' if hasattr(storage_service, 's3_client') else 'Local'
         
         logger.info(
             f"Video assembler initialized",
             extra={
                 'temp_dir': self.temp_dir,
-                'storage_mode': 'GCS' if not storage_service.config.use_local_storage else 'Local',
-                'use_gpu': self.use_gpu
+                'storage_mode': storage_mode
             }
         )
     
-    def _should_use_gpu(self, use_gpu: Optional[bool]) -> bool:
-        """
-        Determine if GPU should be used for video encoding.
-        
-        Args:
-            use_gpu: Explicit GPU preference (None = auto-detect)
-        
-        Returns:
-            True if GPU should be used, False otherwise
-        """
-        # If explicitly set, use that value
-        if use_gpu is not None:
-            return use_gpu
-        
-        # Auto-detect from environment
-        return os.getenv('FFMPEG_USE_NVENC', 'false').lower() == 'true'
+
     
     def assemble_video(
         self,
@@ -334,11 +317,14 @@ class VideoAssembler:
                 }
             )
             
-            video_files = self.storage.download_files_parallel(
-                file_paths=video_paths,
-                local_dir=video_clips_dir,
-                max_workers=self.MAX_PARALLEL_DOWNLOADS
-            )
+            # Download video files sequentially
+            video_files = []
+            for idx, video_path in enumerate(video_paths):
+                filename = f'clip_{idx:04d}.mp4'
+                local_path = os.path.join(video_clips_dir, filename)
+                self.storage.download_file(video_path, local_path)
+                video_files.append(local_path)
+                logger.debug(f"Downloaded clip {idx+1}/{len(video_paths)}: {video_path}")
             
             # Verify all video files exist and are not empty
             for idx, video_file in enumerate(video_files):
@@ -416,8 +402,7 @@ class VideoAssembler:
         normalized_dir = os.path.join(self.temp_dir, 'normalized')
         os.makedirs(normalized_dir, exist_ok=True)
         
-        encoding_type = "GPU (NVENC)" if (self.ffmpeg_builder and self.ffmpeg_builder.use_gpu) else "CPU"
-        logger.info(f"Normalizing {len(video_files)} clips to 30 fps using {encoding_type}...")
+        logger.info(f"Normalizing {len(video_files)} clips to 30 fps using CPU...")
         
         for idx, video_file in enumerate(video_files):
             output_file = os.path.join(normalized_dir, f'normalized_{idx:04d}.mp4')
@@ -464,87 +449,15 @@ class VideoAssembler:
             except subprocess.TimeoutExpired:
                 error_msg = f"Normalization timed out for clip {idx}"
                 logger.error(error_msg)
-                
-                # Try CPU fallback if GPU failed
-                if self.ffmpeg_builder and self.ffmpeg_builder.use_gpu:
-                    logger.info(f"Retrying clip {idx} with CPU encoding...")
-                    try:
-                        normalized_files.append(
-                            self._normalize_clip_cpu_fallback(video_file, output_file, idx)
-                        )
-                        continue
-                    except Exception:
-                        pass
-                
                 raise VideoAssemblyError(error_msg)
             except subprocess.CalledProcessError as e:
                 error_msg = f"FFmpeg normalization failed for clip {idx}: {e.stderr[-500:] if e.stderr else ''}"
                 logger.error(error_msg)
-                
-                # Try CPU fallback if GPU failed
-                if self.ffmpeg_builder and self.ffmpeg_builder.use_gpu:
-                    logger.info(f"Retrying clip {idx} with CPU encoding...")
-                    try:
-                        normalized_files.append(
-                            self._normalize_clip_cpu_fallback(video_file, output_file, idx)
-                        )
-                        continue
-                    except Exception:
-                        pass
-                
                 raise VideoAssemblyError(error_msg)
         
-        logger.info(f"All {len(normalized_files)} clips normalized successfully using {encoding_type}")
+        logger.info(f"All {len(normalized_files)} clips normalized successfully using CPU")
         return normalized_files
     
-    def _normalize_clip_cpu_fallback(self, video_file: str, output_file: str, idx: int) -> str:
-        """
-        Fallback to CPU encoding for a single clip.
-        
-        Args:
-            video_file: Input video file
-            output_file: Output video file
-            idx: Clip index for logging
-        
-        Returns:
-            Path to normalized file
-        
-        Raises:
-            VideoAssemblyError: If CPU fallback also fails
-        """
-        ffmpeg_cmd = [
-            'ffmpeg',
-            '-i', video_file,
-            '-c:v', 'libx264',
-            '-r', '30',
-            '-preset', 'ultrafast',
-            '-crf', '18',
-            '-pix_fmt', 'yuv420p',
-            '-an',
-            '-y',
-            output_file
-        ]
-        
-        try:
-            subprocess.run(
-                ffmpeg_cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=60
-            )
-            
-            if not os.path.exists(output_file):
-                raise VideoAssemblyError(f"CPU fallback: Normalized clip {idx} not created")
-            
-            logger.info(f"Clip {idx} normalized successfully with CPU fallback")
-            return output_file
-            
-        except Exception as e:
-            error_msg = f"CPU fallback also failed for clip {idx}: {str(e)}"
-            logger.error(error_msg)
-            raise VideoAssemblyError(error_msg)
-
     def _concatenate_videos(self, video_files: List[str], blueprint: Dict) -> str:
         """
         Concatenate video clips using FFmpeg.
@@ -844,9 +757,8 @@ class VideoAssembler:
                 output_file
             ]
         
-        encoding_type = "GPU (NVENC)" if (self.ffmpeg_builder and self.ffmpeg_builder.use_gpu) else "CPU"
         logger.debug(
-            f"Executing FFmpeg audio addition using {encoding_type}",
+            f"Executing FFmpeg audio addition using CPU",
             extra={
                 'command': ' '.join(ffmpeg_cmd),
                 'video_input': video_file,

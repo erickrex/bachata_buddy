@@ -115,14 +115,57 @@ VITE_API_URL=http://localhost:8000
 For production:
 
 ```bash
-VITE_API_URL=https://bachata-api-xxx.run.app
+VITE_API_URL=https://your-app-runner-service-url.us-east-1.awsapprunner.com
 ```
+
+See `.env.example` for all available environment variables.
 
 ## Deployment
 
-The frontend is deployed to Google Cloud Run as a static site served by nginx.
+### AWS Deployment (Production)
 
-See the production `Dockerfile` for the multi-stage build configuration.
+The frontend is deployed to AWS using the following architecture:
+
+1. **Build**: Static files are built using Vite (`npm run build`)
+2. **Storage**: Built files are uploaded to an S3 bucket
+3. **CDN**: CloudFront distribution serves the files globally
+4. **Infrastructure**: Managed via AWS CDK (TypeScript)
+
+**Deployment Steps:**
+
+```bash
+# 1. Set the API URL for production
+export VITE_API_URL=https://your-app-runner-service-url.us-east-1.awsapprunner.com
+
+# 2. Build the frontend
+npm run build
+
+# 3. Deploy using AWS CDK (from infrastructure directory)
+cd ../../infrastructure
+cdk deploy FrontendStack
+```
+
+The CDK stack will:
+- Create an S3 bucket for static files
+- Create a CloudFront distribution
+- Upload the built files to S3
+- Configure caching and security headers
+
+See the `infrastructure/` directory for CDK configuration.
+
+### Docker Deployment (Alternative)
+
+The frontend can also be deployed as a containerized application using the production `Dockerfile`:
+
+```bash
+# Build the Docker image
+docker build -t bachata-frontend .
+
+# Run the container
+docker run -p 8080:8080 -e VITE_API_URL=https://your-api-url.com bachata-frontend
+```
+
+This serves the static files using nginx.
 
 ## Architecture Philosophy
 

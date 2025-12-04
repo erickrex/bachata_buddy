@@ -1079,6 +1079,223 @@ All features from the legacy Django monolith are available via REST API:
 - 100% endpoint coverage
 - Automated test suite
 
+### OpenAI Agent Orchestration (Path 2)
+
+The API includes an intelligent agent orchestration system for conversational choreography generation:
+
+#### Architecture
+
+**OpenAI Function Calling:**
+- Uses OpenAI GPT-4o-mini for workflow orchestration
+- Python service functions exposed as tools to OpenAI
+- LLM autonomously decides function call sequence
+- Maintains stateful conversation across multiple calls
+
+**Key Components:**
+
+1. **Parameter Extractor Service** (`services/parameter_extractor.py`)
+   - Extracts difficulty, style, energy from natural language
+   - Uses OpenAI JSON mode for structured output
+   - Falls back to keyword extraction on errors
+   - Validates and applies defaults
+
+2. **Agent Service** (`services/agent_service.py`)
+   - Orchestrates workflow using OpenAI function calling
+   - Defines tool schemas for service functions
+   - Executes functions and returns results to OpenAI
+   - Updates task status after each step
+   - Handles errors and timeouts gracefully
+
+3. **Service Functions:**
+   - `analyze_music(song_path)` - Audio analysis
+   - `search_moves(features, filters)` - Move recommendations
+   - `generate_blueprint(moves, metadata)` - Blueprint creation
+   - `assemble_video(blueprint)` - Video assembly trigger
+
+#### API Endpoint
+
+**POST /api/choreography/describe**
+
+Accepts natural language choreography requests:
+
+```bash
+curl -X POST http://localhost:8001/api/choreography/describe/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_request": "Create a romantic beginner choreography"
+  }'
+
+# Response (202 Accepted):
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "pending",
+  "message": "Agent workflow started",
+  "poll_url": "/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Request Body:**
+- `user_request` (string, required) - Natural language choreography description
+  - Examples: "Create a romantic beginner dance", "Generate an energetic advanced routine"
+  - Min length: 10 characters
+  - Max length: 500 characters
+
+**Response:**
+- `task_id` (UUID) - Unique task identifier for polling
+- `status` (string) - Initial status ("pending")
+- `message` (string) - Human-readable status message
+- `poll_url` (string) - Endpoint for status polling
+
+**Status Updates:**
+
+Poll `/api/choreography/tasks/{task_id}` for real-time updates:
+
+```json
+{
+  "task_id": "550e8400-...",
+  "status": "processing",
+  "stage": "analyzing_music",
+  "message": "Analyzing music features...",
+  "progress": 25,
+  "created_at": "2025-11-29T10:00:00Z",
+  "updated_at": "2025-11-29T10:00:15Z"
+}
+```
+
+**Stages:**
+1. `extracting_parameters` - Parsing natural language request
+2. `analyzing_music` - Audio feature extraction
+3. `searching_moves` - Finding matching moves
+4. `generating_blueprint` - Creating assembly instructions
+5. `assembling_video` - Video generation in progress
+6. `completed` - Video ready
+
+#### Configuration
+
+**Environment Variables:**
+
+```bash
+# OpenAI API Configuration
+OPENAI_API_KEY=sk-proj-...your-key-here...
+
+# Agent Service Configuration
+AGENT_ENABLED=True          # Enable/disable agent orchestration
+AGENT_TIMEOUT=300           # Workflow timeout in seconds (5 minutes)
+```
+
+**Django Settings:**
+
+```python
+# api/settings.py
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+AGENT_ENABLED = os.getenv('AGENT_ENABLED', 'True').lower() == 'true'
+AGENT_TIMEOUT = int(os.getenv('AGENT_TIMEOUT', '300'))
+
+# Validate OpenAI API key at startup
+if AGENT_ENABLED and not OPENAI_API_KEY:
+    raise ImproperlyConfigured('OPENAI_API_KEY is required when AGENT_ENABLED=True')
+```
+
+#### Testing
+
+**Unit Tests:**
+
+```bash
+# Test parameter extraction
+uv run pytest services/test_parameter_extractor_properties.py -v
+
+# Test agent service
+uv run pytest services/test_agent_service_properties.py -v
+
+# Test Path 1 bypass (ensure Path 1 unchanged)
+uv run pytest apps/choreography/test_path1_agent_bypass_properties.py -v
+```
+
+**Property-Based Tests:**
+
+The agent orchestration includes comprehensive property-based tests:
+
+1. **Parameter Extraction Completeness** - Verifies all required parameters extracted
+2. **Default Parameter Application** - Ensures defaults applied correctly
+3. **Workflow Data Flow** - Validates data continuity across function calls
+4. **Parameter Validation** - Checks validation catches invalid values
+5. **Task Status Updates** - Verifies task records updated correctly
+6. **Workflow State Persistence** - Ensures conversation state maintained
+7. **Path 1 Agent Bypass** - Confirms Path 1 unaffected by agent changes
+
+**Integration Tests:**
+
+```bash
+# End-to-end agent workflow test
+uv run pytest apps/choreography/test_e2e_integration.py -v
+```
+
+#### Dual Workflow Support
+
+**Path 1 (Traditional) - Unchanged:**
+- POST /api/choreography/generate-from-song
+- Manual parameter selection
+- Direct service orchestration
+- No agent involvement
+
+**Path 2 (Conversational) - New:**
+- POST /api/choreography/describe
+- Natural language input
+- Agent orchestration
+- Autonomous workflow management
+
+Both paths use identical underlying services and produce identical outputs.
+
+#### Error Handling
+
+**OpenAI API Errors:**
+- Automatic retry with exponential backoff
+- Fallback to keyword extraction on parameter extraction failures
+- Graceful degradation to Path 1 workflow if agent fails
+
+**Timeout Handling:**
+- Configurable timeout via AGENT_TIMEOUT
+- Task status updated to "failed" on timeout
+- Detailed error messages in task.message field
+
+**Service Errors:**
+- Each function call wrapped in try/catch
+- Errors logged with full context
+- Task status updated with error details
+- User-friendly error messages returned
+
+#### Performance
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Parameter Extraction | 1-2s | OpenAI API call |
+| Agent Orchestration | 5-10s | Function calling loop |
+| Total Workflow | 45-60s | Including video assembly |
+| OpenAI API Cost | $0.01-0.02 | Per choreography generation |
+
+#### Monitoring
+
+**Logging:**
+
+```python
+# Agent service logs all function calls
+logger.info(f"Executing function: {function_name}")
+logger.info(f"Function arguments: {arguments}")
+logger.info(f"Function result: {result}")
+
+# Parameter extractor logs extraction attempts
+logger.info(f"Extracting parameters from: {user_request}")
+logger.info(f"Extracted parameters: {parameters}")
+```
+
+**Metrics to Monitor:**
+- OpenAI API latency
+- Function execution times
+- Error rates by function
+- Timeout occurrences
+- Fallback usage frequency
+
 ### Frontend Integration
 
 The API is designed for seamless React frontend integration:

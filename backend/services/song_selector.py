@@ -70,8 +70,8 @@ class SongSelector:
             }
         )
         
-        # Start with all bachata songs
-        songs = Song.objects.filter(genre='bachata')
+        # Start with all bachata songs (case-insensitive contains)
+        songs = Song.objects.filter(genre__icontains='bachata')
         
         if not songs.exists():
             # Try any genre

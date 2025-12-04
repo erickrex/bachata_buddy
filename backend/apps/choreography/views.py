@@ -15,10 +15,12 @@ from .serializers import (
     AIGenerationSerializer,
     SongSerializer,
     SongDetailSerializer,
-    SongGenerationSerializer
+    SongGenerationSerializer,
+    DescribeChoreographySerializer
 )
 from services.jobs_service import JobsService as CloudRunJobsService
 from services.gemini_service import GeminiService
+from django.conf import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -424,12 +426,7 @@ def generate_from_song(request):
         vector_search = get_vector_search_service()
         gemini_service = GeminiService()
         
-        # Import MusicAnalyzer from job container (temporary until we move it to backend)
-        import sys
-        import os
-        job_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '..', '..', 'job', 'src', 'services')
-        if job_path not in sys.path:
-            sys.path.insert(0, job_path)
+        # Import MusicAnalyzer from backend
         from music_analyzer import MusicAnalyzer
         
         music_analyzer = MusicAnalyzer()
@@ -1159,12 +1156,7 @@ def generate_with_ai(request):
         vector_search = get_vector_search_service()
         gemini_svc = GeminiService()
         
-        # Import MusicAnalyzer from job container (temporary until we move it to backend)
-        import sys
-        import os
-        job_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '..', '..', 'job', 'src', 'services')
-        if job_path not in sys.path:
-            sys.path.insert(0, job_path)
+        # Import MusicAnalyzer from backend
         from music_analyzer import MusicAnalyzer
         
         music_analyzer = MusicAnalyzer()
@@ -1346,3 +1338,251 @@ def serve_video(request, task_id):
             {'error': 'Error serving video file'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+
+@extend_schema(
+    summary="Generate choreography from natural language description (Path 2)",
+    description="""
+    Generate choreography using natural language description with agent orchestration.
+    
+    This is the Path 2 endpoint that uses OpenAI function calling for intelligent
+    workflow orchestration. The agent autonomously decides which services to call
+    and in what order based on the user's natural language request.
+    
+    **Agent Workflow:**
+    1. Extract parameters from natural language using OpenAI
+    2. Analyze music features
+    3. Search for matching dance moves
+    4. Generate choreography blueprint
+    5. Trigger video assembly job
+    
+    **Examples:**
+    - "Create a romantic beginner choreography"
+    - "I want an energetic intermediate routine"
+    - "Make me a sensual advanced bachata"
+    
+    **Agent Features:**
+    - Natural language understanding
+    - Intelligent function calling orchestration
+    - Real-time reasoning updates
+    - Adaptive workflow based on request
+    
+    **Response:**
+    - Returns immediately with task_id (202 Accepted)
+    - Poll /api/choreography/tasks/{task_id} for status
+    - Task message field contains agent reasoning steps
+    - When complete, result includes video URL
+    
+    **Performance:**
+    - Parameter extraction: 1-3 seconds
+    - Total generation: 2-5 minutes (depending on audio length)
+    """,
+    request=DescribeChoreographySerializer,
+    responses={
+        202: OpenApiResponse(
+            description="Agent workflow started successfully",
+            examples=[
+                OpenApiExample(
+                    'Task Created',
+                    value={
+                        'task_id': '550e8400-e29b-41d4-a716-446655440000',
+                        'status': 'started',
+                        'message': 'Analyzing your request...',
+                        'poll_url': '/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000'
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description="Invalid request",
+            examples=[
+                OpenApiExample(
+                    'Empty Request',
+                    value={'user_request': ['Request cannot be empty']}
+                ),
+                OpenApiExample(
+                    'Too Short',
+                    value={'user_request': ['Request must be at least 10 characters long']}
+                )
+            ]
+        ),
+        500: OpenApiResponse(
+            description="Failed to start agent workflow",
+            examples=[
+                OpenApiExample(
+                    'Workflow Failed',
+                    value={'error': 'Failed to start agent workflow'}
+                )
+            ]
+        ),
+        401: OpenApiResponse(description="Authentication required")
+    },
+    tags=['Choreography']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def describe_choreography(request):
+    """
+    Generate choreography from natural language description using agent orchestration.
+    
+    This is the Path 2 endpoint that uses OpenAI function calling to orchestrate
+    the choreography generation workflow. The agent autonomously decides which
+    services to call based on the user's natural language request.
+    """
+    # Validate request
+    serializer = DescribeChoreographySerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    user_request = serializer.validated_data['user_request']
+    
+    # Create task
+    import uuid
+    task_id = str(uuid.uuid4())
+    task = ChoreographyTask.objects.create(
+        task_id=task_id,
+        user=request.user,
+        status='pending',
+        progress=0,
+        stage='parsing_request',
+        message='Analyzing your request...'
+    )
+    
+    logger.info(
+        f"Created Path 2 agent task {task_id}",
+        extra={
+            'task_id': task_id,
+            'user_id': request.user.id,
+            'user_request': user_request[:100]
+        }
+    )
+    
+    # Select a song from the database based on the user request
+    # This ensures the agent has a valid song path to work with
+    try:
+        from services.song_selector import SongSelector
+        from services.parameter_extractor import ParameterExtractor
+        import os
+        
+        # Extract parameters from user request to help with song selection
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        param_extractor = ParameterExtractor(openai_api_key=openai_api_key)
+        params = param_extractor.extract_parameters(user_request)
+        
+        difficulty = params.get('difficulty', 'intermediate')
+        energy_level = params.get('energy_level', 'medium')
+        style = params.get('style', 'modern')
+        
+        song_selector = SongSelector()
+        song = song_selector.select_song_for_choreography(
+            query=user_request,
+            difficulty=difficulty,
+            energy_level=energy_level,
+            style=style
+        )
+        
+        # Link song to task
+        task.song = song
+        task.save()
+        
+        logger.info(
+            f"Selected song {song.id} ({song.title} by {song.artist}) for Path 2 task {task_id}",
+            extra={
+                'song_id': song.id,
+                'song_title': song.title,
+                'song_path': song.audio_path,
+                'task_id': task_id
+            }
+        )
+        
+    except Exception as e:
+        logger.error(
+            f"Failed to select song for Path 2 task {task_id}: {e}",
+            exc_info=True
+        )
+        task.status = 'failed'
+        task.error = f'Song selection failed: {str(e)}'
+        task.save()
+        return Response(
+            {'error': 'Failed to select song for choreography'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # Initialize agent service using factory function
+    try:
+        from services import get_agent_service
+        
+        agent_service = get_agent_service()
+        
+        logger.info(f"Initialized agent service for task {task_id}")
+        
+    except Exception as e:
+        logger.error(
+            f"Failed to initialize agent service for task {task_id}: {e}",
+            exc_info=True
+        )
+        task.status = 'failed'
+        task.error = f'Agent initialization failed: {str(e)}'
+        task.save()
+        return Response(
+            {'error': 'Failed to initialize agent service'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # Execute workflow asynchronously
+    # Note: In production, this should be executed in a background task/thread
+    # For now, we'll execute synchronously but return immediately
+    try:
+        # Start workflow in background (simplified for now)
+        import threading
+        
+        # Capture song_path for the thread
+        song_path = song.audio_path
+        
+        def run_workflow():
+            try:
+                agent_service.create_workflow(
+                    task_id=task_id,
+                    user_request=user_request,
+                    user_id=request.user.id,
+                    song_path=song_path  # Pass the selected song path
+                )
+            except Exception as e:
+                logger.error(
+                    f"Agent workflow failed for task {task_id}: {e}",
+                    exc_info=True
+                )
+                # Update task with error
+                from apps.choreography.models import ChoreographyTask
+                task = ChoreographyTask.objects.get(task_id=task_id)
+                task.status = 'failed'
+                task.error = f'Workflow execution failed: {str(e)}'
+                task.save()
+        
+        # Start workflow thread
+        workflow_thread = threading.Thread(target=run_workflow, daemon=True)
+        workflow_thread.start()
+        
+        logger.info(f"Started agent workflow thread for task {task_id}")
+        
+    except Exception as e:
+        logger.error(
+            f"Failed to start agent workflow for task {task_id}: {e}",
+            exc_info=True
+        )
+        task.status = 'failed'
+        task.error = f'Failed to start workflow: {str(e)}'
+        task.save()
+        return Response(
+            {'error': 'Failed to start agent workflow'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # Return task info immediately
+    return Response({
+        'task_id': task_id,
+        'status': 'started',
+        'message': task.message,
+        'poll_url': f'/api/choreography/tasks/{task_id}'
+    }, status=status.HTTP_202_ACCEPTED)

@@ -31,6 +31,8 @@ dependencies = [
     "elasticsearch>=8.11",
     # Google AI (for natural language parsing)
     "google-generativeai>=0.3",
+    # OpenAI (for agent orchestration and parameter extraction)
+    "openai>=1.0.0",
     # Video Processing Dependencies (compatible versions)
     "numpy>=1.24.0,<2.0.0",
     "librosa>=0.10.0",

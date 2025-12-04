@@ -54,6 +54,8 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+.hypothesis/
+test_*/  # Property-based test artifacts
 
 # Audio files (for local development)
 *.mp3

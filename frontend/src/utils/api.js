@@ -273,6 +273,15 @@ export const api = {
       })
   },
   
+  // Agent-based choreography generation (Path 2)
+  choreography: {
+    describe: (userRequest) =>
+      apiClient('/api/choreography/describe/', {
+        method: 'POST',
+        body: { user_request: userRequest }
+      })
+  },
+  
   // Task tracking endpoints
   tasks: {
     getStatus: (taskId) =>

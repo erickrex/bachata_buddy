@@ -37,6 +37,7 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DJANGO_SECRET_KEY=local-dev-secret-key-change-in-production
       - DJANGO_SETTINGS_MODULE=api.settings
       - ENVIRONMENT=local
@@ -44,6 +45,9 @@ services:
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
       # Storage Configuration
       - STORAGE_BACKEND=local
+      # Agent Configuration
+      - AGENT_ENABLED=${AGENT_ENABLED:-True}
+      - AGENT_TIMEOUT=${AGENT_TIMEOUT:-300}
       # Vector Search Configuration
       - MOVE_EMBEDDINGS_CACHE_TTL=${MOVE_EMBEDDINGS_CACHE_TTL:-3600}
       - VECTOR_SEARCH_TOP_K=${VECTOR_SEARCH_TOP_K:-50}

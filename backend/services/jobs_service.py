@@ -123,9 +123,8 @@ class JobsService:
         """
         Create a mock job execution for local development.
         
-        In mock mode, we just log the job creation and return a fake execution ID.
-        The actual video processing would need to be triggered manually or through
-        a separate local job runner.
+        In mock mode, we simulate job completion with a placeholder result.
+        For actual video assembly, run the job container separately.
         """
         execution_id = f"mock-execution-{uuid.uuid4().hex[:8]}"
         
@@ -139,10 +138,46 @@ class JobsService:
             }
         )
         
-        # In a real implementation, you might:
-        # 1. Write the blueprint to a file
-        # 2. Trigger a local job runner
-        # 3. Use a job queue like RQ or Celery
+        # In mock mode, we simulate completion after a short delay
+        # The actual video assembly would be done by the job container
+        import threading
+        import json
+        
+        blueprint_json = parameters.get('blueprint_json', '{}')
+        
+        def simulate_job_completion():
+            try:
+                import time
+                time.sleep(2)  # Simulate some processing time
+                
+                # Parse blueprint to get output path
+                blueprint = json.loads(blueprint_json)
+                output_path = blueprint.get('output_config', {}).get('output_path', f'output/user_{user_id}/choreography_{task_id}.mp4')
+                
+                # Update task with mock result
+                from apps.choreography.models import ChoreographyTask
+                task = ChoreographyTask.objects.get(task_id=task_id)
+                task.status = 'completed'  # CRITICAL: Set status to completed
+                task.progress = 100
+                task.stage = 'completed'
+                task.message = 'Video assembly simulated (mock mode)'
+                
+                # Set video_url to the serve endpoint - the serializer will convert this to full URL
+                task.result = {
+                    'video_url': f'/api/choreography/videos/{task_id}/',
+                    'output_path': output_path,
+                    'mock': True,
+                    'message': 'Video assembly was simulated. Run the job container for actual video generation.'
+                }
+                task.save()
+                
+                logger.info(f"Mock job completed for task {task_id}")
+                
+            except Exception as e:
+                logger.error(f"Mock job simulation failed: {e}", exc_info=True)
+        
+        simulation_thread = threading.Thread(target=simulate_job_completion, daemon=True)
+        simulation_thread.start()
         
         return execution_id
     

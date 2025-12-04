@@ -16,6 +16,7 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
   const [loopEnd, setLoopEnd] = useState(10);
   const [blobUrl, setBlobUrl] = useState(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
+  const [videoError, setVideoError] = useState(null);
 
   // Fetch video with authentication and create blob URL
   useEffect(() => {
@@ -24,6 +25,7 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
     const fetchVideo = async () => {
       try {
         setIsLoadingVideo(true);
+        setVideoError(null);
         const token = localStorage.getItem('accessToken');
         
         // Build full URL if videoUrl is relative
@@ -37,6 +39,11 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
         });
         
         if (!response.ok) {
+          // Check if it's a 404 (video not found - likely mock mode)
+          if (response.status === 404) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Video file not found. This may be because the video was generated in mock mode. Run the job container to generate actual videos.');
+          }
           throw new Error('Failed to load video');
         }
         
@@ -45,6 +52,7 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
         setBlobUrl(objectUrl);
       } catch (error) {
         console.error('Error loading video:', error);
+        setVideoError(error.message);
       } finally {
         setIsLoadingVideo(false);
       }
@@ -241,14 +249,39 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
           </div>
         </div>
       )}
-      <video
-        ref={videoRef}
-        src={blobUrl || ''}
-        className={`w-full rounded-lg shadow-lg bg-black ${isLoadingVideo ? 'hidden' : ''}`}
-        onClick={togglePlay}
-      />
       
-      {/* Custom Controls */}
+      {/* Error State */}
+      {videoError && !isLoadingVideo && (
+        <div className="w-full aspect-video rounded-lg shadow-lg bg-gray-100 flex items-center justify-center p-8">
+          <div className="text-center max-w-md">
+            <div className="text-6xl mb-4">🎬</div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Video Not Available</h3>
+            <p className="text-gray-600 mb-4">{videoError}</p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left">
+              <p className="text-sm text-yellow-800 font-medium mb-2">💡 To generate actual videos:</p>
+              <code className="text-xs bg-yellow-100 px-2 py-1 rounded block">
+                docker-compose --profile job run job
+              </code>
+              <p className="text-xs text-yellow-700 mt-2">
+                Or use the run_local_job.py script with the task ID.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Video Player */}
+      {!videoError && (
+        <video
+          ref={videoRef}
+          src={blobUrl || ''}
+          className={`w-full rounded-lg shadow-lg bg-black ${isLoadingVideo ? 'hidden' : ''}`}
+          onClick={togglePlay}
+        />
+      )}
+      
+      {/* Custom Controls - Only show when video is available */}
+      {!videoError && (
       <div className="mt-4 space-y-4">
         {/* Play/Pause & Progress Bar */}
         <div className="flex items-center gap-4">
@@ -343,8 +376,10 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
           )}
         </div>
       </div>
+      )}
 
-      {/* Keyboard Shortcuts Help */}
+      {/* Keyboard Shortcuts Help - Only show when video is available */}
+      {!videoError && (
       <div className="mt-6 p-4 bg-gray-50 rounded-lg">
         <h4 className="text-sm font-semibold text-gray-900 mb-2">⌨️ Keyboard Shortcuts</h4>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-600">
@@ -356,6 +391,7 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
           <div><kbd className="px-2 py-1 bg-white border border-gray-300 rounded">↑/↓</kbd> Volume ±10%</div>
         </div>
       </div>
+      )}
     </div>
   );
 };

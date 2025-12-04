@@ -155,6 +155,7 @@ function VideoResult() {
 
   const { result, difficulty, song } = taskData;
   const videoUrl = result.video_url;
+  const isMockMode = result.mock === true;
 
   return (
     <Container>
@@ -169,13 +170,54 @@ function VideoResult() {
           </p>
         </div>
 
+        {/* Mock Mode Notice */}
+        {isMockMode && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start">
+              <div className="text-2xl mr-3">🔧</div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-900">Development Mode</h3>
+                <p className="text-blue-700 text-sm mb-3">
+                  Video assembly is running in mock mode. The choreography blueprint was generated successfully, 
+                  but the actual video file was not created. Run the job container to generate the video.
+                </p>
+                <div className="bg-blue-100 rounded-md p-3">
+                  <p className="text-xs font-medium text-blue-800 mb-1">Run this command from the backend directory:</p>
+                  <code className="text-sm bg-blue-200 text-blue-900 px-2 py-1 rounded block font-mono break-all">
+                    uv run python run_local_job.py {taskId}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`uv run python run_local_job.py ${taskId}`);
+                      addToast('Command copied to clipboard!', 'success');
+                    }}
+                    className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                  >
+                    📋 Copy Command
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Video Player */}
         <div className="mb-8">
-          <VideoPlayer 
-            videoUrl={videoUrl}
-            taskId={taskId}
-            onSave={handleSaveClick}
-          />
+          {isMockMode ? (
+            <div className="bg-gray-100 rounded-lg p-8 text-center">
+              <div className="text-6xl mb-4">🎬</div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">Video Preview Unavailable</h3>
+              <p className="text-gray-600">
+                The choreography blueprint has been generated. Run the video assembly job to create the actual video.
+              </p>
+            </div>
+          ) : (
+            <VideoPlayer 
+              videoUrl={videoUrl}
+              taskId={taskId}
+              onSave={handleSaveClick}
+            />
+          )}
         </div>
 
         {/* Choreography Details */}

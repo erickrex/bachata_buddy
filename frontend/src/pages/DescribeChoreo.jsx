@@ -1,76 +1,187 @@
 // DescribeChoreo Page
 // Natural language choreography description interface (Path 2)
-// Allows users to describe desired choreography in plain text
+// Chat-based interface with agent orchestration
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Container from '../components/layout/Container';
-import QueryInput from '../components/generation/QueryInput';
-import Modal from '../components/common/Modal';
-import Button from '../components/common/Button';
+import ChatMessages from '../components/agent/ChatMessages';
+import ChatInput from '../components/agent/ChatInput';
+import ReasoningPanel from '../components/agent/ReasoningPanel';
+import VideoPlayer from '../components/video/VideoPlayer';
+import ExamplePrompts from '../components/agent/ExamplePrompts';
 import { api } from '../utils/api';
 import { useToast } from '../hooks/useToast';
+import { usePolling } from '../hooks/usePolling';
 
 function DescribeChoreo() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   
-  const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [taskId, setTaskId] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [videoUrl, setVideoUrl] = useState(null);
+  const lastMessageRef = useRef('');
   
-  // Preview modal state
-  const [showPreview, setShowPreview] = useState(false);
-  const [parsedParameters, setParsedParameters] = useState(null);
-  const [isParsing, setIsParsing] = useState(false);
+  // Poll for task status updates every 2 seconds
+  const { data: taskStatus } = usePolling(
+    () => taskId ? api.tasks.getStatus(taskId) : null,
+    2000,
+    taskId && isGenerating
+  );
   
-  // Step 1: Parse the query and show parameters
-  const handleParseQuery = async () => {
-    setIsParsing(true);
-    setError(null);
+  // Update messages when task status changes
+  useEffect(() => {
+    if (!taskStatus) return;
     
-    try {
-      const result = await api.generation.parseQuery(query);
-      setParsedParameters(result.parameters);
-      setShowPreview(true);
-      addToast('Query parsed successfully!', 'success');
-    } catch (err) {
-      setError(err.message || 'Failed to parse query. Please try again.');
-      addToast(err.message || 'Failed to parse query', 'error');
-    } finally {
-      setIsParsing(false);
-    }
-  };
-  
-  // Step 2: Generate choreography with confirmed parameters
-  const handleConfirmAndGenerate = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const result = await api.generation.withAI(query);
+    // Update assistant message if it changed
+    if (taskStatus.message && taskStatus.message !== lastMessageRef.current) {
+      lastMessageRef.current = taskStatus.message;
       
-      // Navigate to progress page with task_id
-      if (result.task_id) {
-        addToast('Choreography generation started!', 'success');
-        navigate(`/progress/${result.task_id}`);
+      setMessages(prev => {
+        // Check if last message is from assistant
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant') {
+          // Update last assistant message
+          return [
+            ...prev.slice(0, -1),
+            {
+              role: 'assistant',
+              content: taskStatus.message,
+              timestamp: new Date().toISOString()
+            }
+          ];
+        } else {
+          // Add new assistant message
+          return [
+            ...prev,
+            {
+              role: 'assistant',
+              content: taskStatus.message,
+              timestamp: new Date().toISOString()
+            }
+          ];
+        }
+      });
+    }
+    
+    // Check if task is complete
+    if (taskStatus.status === 'completed' && isGenerating) {
+      setIsGenerating(false);
+      
+      // Check if this is mock mode
+      const isMockMode = taskStatus.result?.mock === true;
+      
+      if (isMockMode) {
+        addToast('Blueprint generated! Run job container for actual video.', 'info');
       } else {
-        throw new Error('No task ID received from server');
+        addToast('Choreography generated successfully!', 'success');
       }
+      
+      // Extract video URL from result
+      if (taskStatus.result && taskStatus.result.video_url) {
+        setVideoUrl(taskStatus.result.video_url);
+        
+        // Add completion message
+        const completionMessage = isMockMode 
+          ? '✅ Blueprint generated! The video will be available after running the job container.'
+          : '✅ Your choreography is ready!';
+        
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'system',
+            content: completionMessage,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+      } else {
+        // Fallback: navigate to video page if no URL in result
+        setTimeout(() => {
+          navigate(`/video/${taskId}`);
+        }, 1500);
+      }
+    }
+    
+    // Check if task failed
+    if (taskStatus.status === 'failed' && isGenerating) {
+      setIsGenerating(false);
+      const errorMsg = taskStatus.error || 'Generation failed';
+      addToast(errorMsg, 'error');
+      
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'system',
+          content: `❌ Error: ${errorMsg}`,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+    }
+  }, [taskStatus, navigate, addToast, isGenerating]);
+  
+  // Handle message submission
+  const handleSubmit = async () => {
+    if (!input.trim() || isGenerating) return;
+    
+    const userMessage = input.trim();
+    setInput('');
+    
+    // Add user message to chat
+    setMessages(prev => [
+      ...prev,
+      {
+        role: 'user',
+        content: userMessage,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+    
+    setIsGenerating(true);
+    
+    try {
+      // Call describe endpoint
+      const response = await api.choreography.describe(userMessage);
+      
+      setTaskId(response.task_id);
+      
+      // Log task ID for easy access in development
+      console.log('🎬 Task created! Run this command to generate video:');
+      console.log(`   cd backend && uv run python run_local_job.py ${response.task_id}`);
+      
+      // Add initial assistant message
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: response.message || 'Starting choreography generation...',
+          timestamp: new Date().toISOString()
+        }
+      ]);
+      
+      addToast('Generation started!', 'success');
+      
     } catch (err) {
-      const errorMessage = err.message || 'Failed to generate choreography';
-      setError(errorMessage);
+      setIsGenerating(false);
+      const errorMessage = err.message || 'Failed to start generation';
       addToast(errorMessage, 'error');
-      setShowPreview(false);
-    } finally {
-      setIsLoading(false);
+      
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'system',
+          content: `❌ Error: ${errorMessage}`,
+          timestamp: new Date().toISOString()
+        }
+      ]);
     }
   };
   
-  // Handle edit from preview modal
-  const handleEditQuery = () => {
-    setShowPreview(false);
-    setParsedParameters(null);
+  // Handle example prompt click
+  const handleExampleClick = (promptText) => {
+    setInput(promptText);
   };
   
   return (
@@ -79,48 +190,69 @@ function DescribeChoreo() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">
-            ✨ Describe Your Choreography
+            💬 Chat with AI Choreographer
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Tell us what kind of bachata choreography you want to create. 
-            Our AI will understand your description and generate a custom routine just for you.
+            Describe the choreography you want in natural language. 
+            Our AI agent will understand your request and create a custom routine for you.
           </p>
         </div>
         
-        {/* Main Content Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
-          <QueryInput
-            value={query}
-            onChange={setQuery}
-            onSubmit={handleParseQuery}
-            isLoading={isParsing}
-            error={error}
-            submitButtonText={isParsing ? 'Parsing...' : '🔍 Parse & Preview'}
-          />
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Chat Interface - Takes 2 columns on large screens */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden" style={{ height: '600px' }}>
+              <div className="flex flex-col h-full">
+                {/* Messages Area */}
+                {messages.length === 0 ? (
+                  <ExamplePrompts 
+                    onSelectPrompt={handleExampleClick}
+                    disabled={isGenerating}
+                  />
+                ) : (
+                  <ChatMessages messages={messages} />
+                )}
+                
+                {/* Input Area */}
+                <ChatInput
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={handleSubmit}
+                  disabled={isGenerating}
+                  placeholder="Describe the choreography you want to create..."
+                />
+              </div>
+            </div>
+          </div>
           
-          {/* Info about the two-step process */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-              <span className="flex items-center gap-1">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600 font-semibold text-xs">1</span>
-                Parse your description
-              </span>
-              <span className="text-gray-400">→</span>
-              <span className="flex items-center gap-1">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600 font-semibold text-xs">2</span>
-                Review parameters
-              </span>
-              <span className="text-gray-400">→</span>
-              <span className="flex items-center gap-1">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600 font-semibold text-xs">3</span>
-                Generate video
-              </span>
+          {/* Reasoning Panel - Takes 1 column on large screens */}
+          <div className="lg:col-span-1">
+            <div style={{ position: 'sticky', top: '1.5rem' }}>
+              <ReasoningPanel taskStatus={taskStatus} taskId={taskId} />
             </div>
           </div>
         </div>
         
+        {/* Video Player Section */}
+        {videoUrl && (
+          <div className="mt-8">
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span>🎬</span>
+                <span>Your Choreography</span>
+              </h2>
+              <VideoPlayer 
+                videoUrl={videoUrl} 
+                taskId={taskId}
+                onSave={() => navigate(`/video/${taskId}`)}
+              />
+            </div>
+          </div>
+        )}
+        
         {/* Info Section */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6">
           <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
             <span>💡</span>
             Tips for Better Results
@@ -140,143 +272,11 @@ function DescribeChoreo() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-blue-600 mt-0.5">•</span>
-              <span>Include any <strong>special moves</strong> or requirements you want</span>
+              <span>Watch the <strong>Agent Reasoning</strong> panel to see how the AI works</span>
             </li>
           </ul>
         </div>
       </Container>
-      
-      {/* Parameter Preview Modal */}
-      {showPreview && parsedParameters && (
-        <Modal
-          isOpen={showPreview}
-          onClose={handleEditQuery}
-          title="AI Extracted Parameters"
-          className="max-w-2xl"
-        >
-          <div className="space-y-6">
-            {/* Original Query */}
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">Your Query:</p>
-              <div className="bg-gray-100 rounded-lg p-4">
-                <p className="text-gray-800 italic">"{query}"</p>
-              </div>
-            </div>
-            
-            {/* Parsed Parameters Grid */}
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-3">
-                ✨ AI Extracted Parameters:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Difficulty */}
-                <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
-                  <p className="text-xs font-medium text-purple-700 mb-1">Difficulty</p>
-                  <p className="text-lg font-semibold text-purple-900 capitalize">
-                    {parsedParameters?.difficulty || 'intermediate'}
-                  </p>
-                </div>
-                
-                {/* Energy Level */}
-                <div className="bg-pink-50 border-2 border-pink-200 rounded-lg p-4">
-                  <p className="text-xs font-medium text-pink-700 mb-1">Energy Level</p>
-                  <p className="text-lg font-semibold text-pink-900 capitalize">
-                    {parsedParameters?.energy_level || 'medium'}
-                  </p>
-                </div>
-                
-                {/* Style */}
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                  <p className="text-xs font-medium text-blue-700 mb-1">Style</p>
-                  <p className="text-lg font-semibold text-blue-900 capitalize">
-                    {parsedParameters?.style || 'modern'}
-                  </p>
-                </div>
-                
-                {/* Tempo */}
-                {parsedParameters?.tempo && (
-                  <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
-                    <p className="text-xs font-medium text-orange-700 mb-1">Tempo</p>
-                    <p className="text-lg font-semibold text-orange-900 capitalize">
-                      {parsedParameters.tempo}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Confidence Score */}
-            {parsedParameters?.confidence !== undefined && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-gray-700">AI Confidence</p>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {Math.round(parsedParameters.confidence * 100)}%
-                  </p>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
-                    style={{ width: `${parsedParameters.confidence * 100}%` }}
-                  />
-                </div>
-                {parsedParameters.confidence < 0.7 && (
-                  <p className="text-xs text-gray-600 mt-2">
-                    💡 Low confidence - consider being more specific in your description
-                  </p>
-                )}
-              </div>
-            )}
-            
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-              <Button
-                onClick={handleEditQuery}
-                variant="secondary"
-                className="flex-1"
-                disabled={isLoading}
-              >
-                ✏️ Edit Description
-              </Button>
-              <Button
-                onClick={handleConfirmAndGenerate}
-                variant="primary"
-                className="flex-1"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle 
-                        className="opacity-25" 
-                        cx="12" 
-                        cy="12" 
-                        r="10" 
-                        stroke="currentColor" 
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path 
-                        className="opacity-75" 
-                        fill="currentColor" 
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Generating Video...
-                  </span>
-                ) : (
-                  '🎬 Generate Video'
-                )}
-              </Button>
-            </div>
-            
-            {/* Help Text */}
-            <p className="text-xs text-center text-gray-500 mt-2">
-              Review the parameters above. If they look good, click "Generate Video" to start creating your choreography!
-            </p>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

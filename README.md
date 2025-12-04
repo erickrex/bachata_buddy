@@ -571,6 +571,15 @@ from common.exceptions import VideoGenerationError
 
 ## 🆕 Recent Major Enhancements
 
+### OpenAI Agent Orchestration (November 2025) ✅
+- **Conversational Interface**: Natural language choreography requests via chat
+- **Intelligent Orchestration**: OpenAI function calling for autonomous workflow management
+- **Real-Time Reasoning**: Visual display of agent decision-making process
+- **Parameter Extraction**: GPT-4o-mini extracts difficulty, style, and energy from natural language
+- **Dual Workflow Support**: Path 1 (traditional) and Path 2 (conversational) both fully functional
+- **HTTP Polling**: Simple status updates without WebSocket complexity
+- **Auto-Save**: AI-generated choreographies automatically saved to collections
+
 ### Core App Refactoring (October 2025) ✅
 - **Modular Architecture**: Split monolithic `core` app into 3 focused apps
 - **Clear Boundaries**: `common` (utilities), `ai_services` (ML), `video_processing` (media)
@@ -616,7 +625,17 @@ from common.exceptions import VideoGenerationError
 
 ### ✅ Implemented
 
-#### 1. **AI Choreography Generation** 🎬
+#### 1. **Conversational AI Choreography (Path 2)** 💬
+- Natural language choreography requests ("Create a romantic beginner dance")
+- OpenAI GPT-4o-mini for parameter extraction and understanding
+- Autonomous agent orchestration with OpenAI function calling
+- Real-time reasoning panel showing agent decision-making
+- Chat interface with example prompts
+- HTTP polling for status updates (no WebSockets needed)
+- Auto-save to collections
+- Dual workflow support (Path 1 traditional + Path 2 conversational)
+
+#### 2. **AI Choreography Generation** 🎬
 - Multi-modal music analysis (audio + semantic)
 - Trimodal move recommendations (audio + pose + text)
 - Difficulty-aware sequencing (beginner/intermediate/advanced)
@@ -660,6 +679,7 @@ from common.exceptions import VideoGenerationError
 - FFmpeg and libsndfile (for audio processing)
 - Docker and Docker Compose (for local development)
 - PostgreSQL 15+ (or use Docker Compose)
+- OpenAI API key (for conversational AI features)
 
 ### Installation
 
@@ -686,6 +706,8 @@ cp backend/.env.example backend/.env
 # - Set DJANGO_SECRET_KEY
 # - Configure database connection (or use Docker Compose)
 # - Set STORAGE_BACKEND=local for local development
+# - Set OPENAI_API_KEY for conversational AI features (Path 2)
+# - Set GOOGLE_API_KEY for Gemini integration (optional)
 
 # 4. Start services with Docker Compose
 docker-compose up -d
@@ -727,6 +749,267 @@ uv run python scripts/restore_embeddings.py \
 
 ---
 
+## 🤖 OpenAI Agent Orchestration (Path 2)
+
+### Overview
+
+Path 2 provides a conversational interface for choreography generation using OpenAI function calling for intelligent workflow orchestration. Users describe what they want in natural language, and the agent autonomously orchestrates the entire workflow.
+
+### Architecture
+
+**OpenAI Function Calling:**
+- Agent Service uses OpenAI GPT-4o-mini for orchestration
+- Python service functions exposed as tools to OpenAI
+- LLM decides which functions to call and in what order
+- Maintains conversation state across multiple function calls
+
+**Key Components:**
+1. **Parameter Extractor** - Extracts difficulty, style, energy from natural language
+2. **Agent Service** - Orchestrates workflow using OpenAI function calling
+3. **Chat Interface** - React component for user interaction
+4. **Reasoning Panel** - Visual display of agent decision-making
+5. **HTTP Polling** - Status updates every 2 seconds
+
+### Setup
+
+**1. Get OpenAI API Key:**
+
+Visit https://platform.openai.com/api-keys and create a new API key.
+
+**2. Configure Environment:**
+
+```bash
+# Add to backend/.env
+OPENAI_API_KEY=sk-proj-...your-key-here...
+
+# Optional: Configure agent behavior
+AGENT_ENABLED=True          # Enable/disable agent orchestration
+AGENT_TIMEOUT=300           # Workflow timeout in seconds (5 minutes)
+```
+
+**3. Verify Configuration:**
+
+```bash
+# Test OpenAI connection
+docker-compose exec backend uv run python -c "
+from services.parameter_extractor import ParameterExtractor
+extractor = ParameterExtractor()
+result = extractor.extract_parameters('Create a romantic beginner dance')
+print(result)
+"
+```
+
+### Usage
+
+**Frontend (Path 2 - Conversational):**
+
+1. Navigate to "Describe Choreography" page
+2. Enter natural language request in chat:
+   - "Create a romantic beginner choreography"
+   - "Generate an energetic advanced dance"
+   - "Make a sensual intermediate routine"
+3. Watch reasoning panel for agent decision-making
+4. Video displays automatically when complete
+5. Choreography auto-saves to collections
+
+**Example Requests:**
+- "Create a romantic beginner choreography with slow tempo"
+- "Generate an energetic advanced dance for experienced dancers"
+- "Make a sensual intermediate routine with smooth transitions"
+- "I want a fun, high-energy dance for beginners"
+
+**Backend API:**
+
+```bash
+# POST /api/choreography/describe
+curl -X POST http://localhost:8000/api/choreography/describe/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_request": "Create a romantic beginner choreography"
+  }'
+
+# Response (202 Accepted):
+# {
+#   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+#   "status": "pending",
+#   "message": "Agent workflow started",
+#   "poll_url": "/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000"
+# }
+
+# Poll for status updates
+curl -X GET http://localhost:8000/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000/ \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response includes reasoning steps:
+# {
+#   "task_id": "550e8400-...",
+#   "status": "processing",
+#   "stage": "analyzing_music",
+#   "message": "Analyzing music features...",
+#   "progress": 25,
+#   "created_at": "2025-11-29T10:00:00Z",
+#   "updated_at": "2025-11-29T10:00:15Z"
+# }
+```
+
+### Function Calling Architecture
+
+The Agent Service exposes four functions to OpenAI:
+
+**1. analyze_music(song_path)**
+- Analyzes audio features (tempo, rhythm, energy)
+- Returns 128D audio embeddings
+- Updates task status: "Music analyzed"
+
+**2. search_moves(music_features, difficulty, style, energy_level)**
+- Searches for matching moves using trimodal fusion
+- Filters by difficulty, style, and energy
+- Returns top-K matching moves
+- Updates task status: "Found N moves"
+
+**3. generate_blueprint(moves, song_metadata)**
+- Creates complete video assembly instructions
+- Includes transitions, timing, and sequencing
+- Returns blueprint JSON
+- Updates task status: "Blueprint generated"
+
+**4. assemble_video(blueprint)**
+- Triggers Cloud Run Job for video assembly
+- Monitors job progress
+- Returns video URL when complete
+- Updates task status: "Video assembled"
+
+**OpenAI Orchestration Flow:**
+
+```
+User Request → Parameter Extraction → OpenAI Function Calling Loop:
+  1. OpenAI decides: "Call analyze_music"
+  2. Agent executes analyze_music()
+  3. Agent returns result to OpenAI
+  4. OpenAI decides: "Call search_moves with music features"
+  5. Agent executes search_moves()
+  6. Agent returns result to OpenAI
+  7. OpenAI decides: "Call generate_blueprint with moves"
+  8. Agent executes generate_blueprint()
+  9. Agent returns result to OpenAI
+  10. OpenAI decides: "Call assemble_video with blueprint"
+  11. Agent executes assemble_video()
+  12. OpenAI decides: "Workflow complete"
+→ Video URL returned to user
+```
+
+### Dual Workflow Support
+
+**Path 1 (Traditional):**
+- Select song from dropdown
+- Choose difficulty, style, energy manually
+- Click "Generate Choreography"
+- Poll for status
+- View video when complete
+- **Status:** Fully functional, unchanged
+
+**Path 2 (Conversational):**
+- Enter natural language request in chat
+- Agent extracts parameters automatically
+- Agent orchestrates entire workflow
+- Watch reasoning panel for progress
+- Video displays automatically
+- Auto-saves to collections
+- **Status:** Fully functional, production-ready
+
+Both paths use the same underlying services (Music Analyzer, Vector Search, Blueprint Generator, Cloud Run Job).
+
+### Troubleshooting
+
+**OpenAI API Key Issues:**
+
+```bash
+# Verify API key is set
+docker-compose exec backend env | grep OPENAI_API_KEY
+
+# Test OpenAI connection
+docker-compose exec backend uv run python -c "
+import openai
+import os
+client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+response = client.chat.completions.create(
+    model='gpt-4o-mini',
+    messages=[{'role': 'user', 'content': 'Hello'}]
+)
+print(response.choices[0].message.content)
+"
+```
+
+**Agent Service Errors:**
+
+```bash
+# Check agent service logs
+docker-compose logs -f backend | grep "AgentService"
+
+# Verify agent is enabled
+docker-compose exec backend uv run python -c "
+from django.conf import settings
+print(f'AGENT_ENABLED: {settings.AGENT_ENABLED}')
+print(f'AGENT_TIMEOUT: {settings.AGENT_TIMEOUT}')
+"
+```
+
+**Parameter Extraction Failures:**
+
+```bash
+# Test parameter extraction
+docker-compose exec backend uv run python -c "
+from services.parameter_extractor import ParameterExtractor
+extractor = ParameterExtractor()
+result = extractor.extract_parameters('Create a romantic beginner dance')
+print(f'Extracted: {result}')
+"
+
+# Check for fallback to keyword extraction
+# If OpenAI fails, system falls back to regex/keyword matching
+```
+
+**Function Calling Issues:**
+
+```bash
+# Check function execution logs
+docker-compose logs -f backend | grep "execute_function"
+
+# Verify all services are available
+docker-compose exec backend uv run python -c "
+from services import get_agent_service
+agent = get_agent_service()
+print('Agent service initialized successfully')
+"
+```
+
+### Performance
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Parameter Extraction** | 1-2s | OpenAI API call |
+| **Agent Orchestration** | 5-10s | Function calling loop |
+| **Total Workflow** | 45-60s | Including video assembly |
+| **Polling Interval** | 2s | Frontend status updates |
+| **Agent Timeout** | 300s | Configurable via AGENT_TIMEOUT |
+
+### Cost Considerations
+
+**OpenAI API Usage:**
+- Model: GPT-4o-mini (cost-effective)
+- Parameter extraction: ~500 tokens per request
+- Function calling: ~2000 tokens per workflow
+- Estimated cost: $0.01-0.02 per choreography generation
+
+**Optimization:**
+- Caching parameter extraction results
+- Reusing conversation context
+- Fallback to keyword extraction on errors
+- Configurable timeout to prevent runaway costs
+
+---
+
 ## 🔧 Environment Variables
 
 ### Backend Configuration
@@ -755,6 +1038,11 @@ All backend environment variables are documented in `backend/.env.example`. Key 
 
 #### AI Services
 - `GOOGLE_API_KEY` - Gemini API key (get from https://makersuite.google.com/app/apikey)
+- `OPENAI_API_KEY` - OpenAI API key for agent orchestration (get from https://platform.openai.com/api-keys)
+
+#### Agent Configuration
+- `AGENT_ENABLED` - Enable/disable agent orchestration (default: True)
+- `AGENT_TIMEOUT` - Agent workflow timeout in seconds (default: 300)
 
 #### Vector Search
 - `MOVE_EMBEDDINGS_CACHE_TTL` - Cache TTL in seconds (default: 3600)

@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import timedelta
 import os
 import sys
+import logging
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -378,6 +379,42 @@ else:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
+
+# OpenAI Configuration
+# =============================================================================
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+
+# Agent Service Configuration
+# =============================================================================
+# Feature flag to enable/disable agent orchestration
+AGENT_ENABLED = os.environ.get('AGENT_ENABLED', 'True').lower() in ('true', '1', 'yes')
+
+# Timeout for agent workflow execution (in seconds)
+AGENT_TIMEOUT = int(os.environ.get('AGENT_TIMEOUT', '300'))  # 5 minutes default
+
+# Validate OpenAI API key at startup (only if not in test mode and agent is enabled)
+if not ('test' in sys.argv or os.environ.get('PYTEST_CURRENT_TEST')):
+    if AGENT_ENABLED:
+        if not OPENAI_API_KEY or OPENAI_API_KEY == 'your-openai-api-key-here':
+            import warnings
+            warnings.warn(
+                "OPENAI_API_KEY is not configured but AGENT_ENABLED is True. "
+                "Agent orchestration features will not work. "
+                "Please set OPENAI_API_KEY in your environment variables or set AGENT_ENABLED=False.",
+                RuntimeWarning
+            )
+            # Log the warning
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Agent service is enabled but OpenAI API key is not configured. "
+                "Set OPENAI_API_KEY environment variable or disable with AGENT_ENABLED=False"
+            )
+        else:
+            # Log successful configuration
+            logger = logging.getLogger(__name__)
+            logger.info(
+                f"Agent service enabled with timeout={AGENT_TIMEOUT}s"
+            )
 
 
 

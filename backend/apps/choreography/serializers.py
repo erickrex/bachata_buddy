@@ -184,3 +184,44 @@ class AIGenerationSerializer(serializers.Serializer):
         if not value or not value.strip():
             raise serializers.ValidationError("Query cannot be empty")
         return value.strip()
+
+
+class DescribeChoreographySerializer(serializers.Serializer):
+    """
+    Serializer for Path 2 natural language choreography description.
+    
+    Validates user's natural language request for agent-based choreography generation.
+    This endpoint uses OpenAI function calling for intelligent workflow orchestration.
+    """
+    user_request = serializers.CharField(
+        required=True,
+        min_length=10,
+        max_length=2000,
+        help_text="Natural language description of desired choreography"
+    )
+    
+    def validate_user_request(self, value):
+        """
+        Validate and sanitize user request.
+        
+        - Ensures request is not empty or only whitespace
+        - Strips leading/trailing whitespace
+        - Validates minimum meaningful length
+        """
+        if not value or not value.strip():
+            raise serializers.ValidationError("Request cannot be empty")
+        
+        # Strip whitespace
+        value = value.strip()
+        
+        # Check minimum length after stripping
+        if len(value) < 10:
+            raise serializers.ValidationError(
+                "Request must be at least 10 characters long"
+            )
+        
+        # Basic sanitization - remove excessive whitespace
+        import re
+        value = re.sub(r'\s+', ' ', value)
+        
+        return value

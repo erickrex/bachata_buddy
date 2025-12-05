@@ -1,0 +1,144 @@
+# Implementation Plan
+
+- [x] 1. Set up pyproject.toml and UV for dependency management
+  - [x] 1.1 Create pyproject.toml with all existing dependencies from requirements.txt
+    - Include Django, DRF, psycopg2, boto3, hypothesis, pytest
+    - Configure pytest and hypothesis settings
+    - _Requirements: 9.1, 9.2_
+  - [x] 1.2 Remove requirements.txt files
+    - Delete backend/requirements.txt if it exists
+    - _Requirements: 9.3_
+  - [x] 1.3 Update Dockerfile to use UV for package installation
+    - Install UV in container
+    - Use `uv pip install` instead of `pip install`
+    - _Requirements: 9.2_
+
+- [x] 2. Create FFmpegCommandBuilder service
+  - [x] 2.1 Create ffmpeg_builder.py in backend/services/
+    - Implement build_normalize_command for frame rate normalization
+    - Implement build_concat_command for video concatenation
+    - Implement build_add_audio_command for adding audio track
+    - _Requirements: 2.2_
+  - [x] 2.2 Write property test for FFmpeg command builder
+    - **Property 1: Blueprint round-trip consistency**
+    - Test that commands are valid lists of strings
+    - **Validates: Requirements 3.4**
+
+- [x] 3. Create VideoAssemblyService
+  - [x] 3.1 Create video_assembly_service.py in backend/services/
+    - Implement __init__ with storage service injection
+    - Implement check_ffmpeg_available method
+    - Implement validate_blueprint method with security checks
+    - _Requirements: 2.1, 2.3_
+  - [x] 3.2 Write property test for blueprint validation - missing fields
+    - **Property 2: Blueprint validation rejects missing fields**
+    - **Validates: Requirements 3.2**
+  - [x] 3.3 Write property test for blueprint validation - invalid paths
+    - **Property 3: Blueprint validation rejects invalid paths**
+    - **Validates: Requirements 3.3**
+  - [x] 3.4 Implement media file fetching
+    - Download audio file from storage
+    - Download video clips from storage
+    - Handle download errors with descriptive messages
+    - _Requirements: 6.2, 8.1, 8.2_
+  - [x] 3.5 Implement video concatenation pipeline
+    - Normalize clips to 30fps using FFmpegCommandBuilder
+    - Create concat file for FFmpeg
+    - Execute concatenation command
+    - _Requirements: 2.1_
+  - [x] 3.6 Implement audio track addition
+    - Use FFmpegCommandBuilder for audio command
+    - Execute FFmpeg with timeout protection
+    - _Requirements: 2.1_
+  - [x] 3.7 Implement result upload and cleanup
+    - Upload final video to storage
+    - Clean up temporary files on success
+    - Clean up temporary files on error
+    - _Requirements: 8.3, 8.4, 6.5_
+  - [x] 3.8 Write property test for successful assembly returns URL
+    - **Property 4: Successful assembly returns valid URL**
+    - **Validates: Requirements 1.2**
+  - [x] 3.9 Write property test for error details
+    - **Property 5: Failed assembly includes error details**
+    - **Validates: Requirements 1.3, 6.2**
+  - [x] 3.10 Write property test for cleanup on success
+    - **Property 6: Temporary files cleaned up on success**
+    - **Validates: Requirements 8.4**
+  - [x] 3.11 Write property test for cleanup on error
+    - **Property 7: Temporary files cleaned up on error**
+    - **Validates: Requirements 6.5**
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Update ChoreographyTask model
+  - [x] 5.1 Remove job_execution_name field from model
+    - Update models.py to remove the field
+    - Create migration for field removal
+    - _Requirements: 5.2, 7.4_
+  - [x] 5.2 Write property test for task error recording
+    - **Property 8: Task error recording**
+    - **Validates: Requirements 4.3**
+
+- [x] 6. Create new generate endpoint
+  - [x] 6.1 Implement /api/choreography/generate/ endpoint
+    - Accept song_id, difficulty, energy_level, style parameters
+    - Generate blueprint using BlueprintGenerator
+    - Call VideoAssemblyService.assemble_video synchronously
+    - Return video_url directly in response
+    - _Requirements: 1.1, 7.1, 7.2_
+  - [x] 6.2 Implement progress callback for task updates
+    - Update task record with stage and progress percentage
+    - Report stages: fetching (20%), concatenating (50%), adding_audio (70%), uploading (85%), completed (100%)
+    - _Requirements: 4.1, 4.2_
+  - [x] 6.3 Implement error handling in endpoint
+    - Handle validation errors (400)
+    - Handle resource errors (404)
+    - Handle processing errors (500)
+    - Handle timeout errors (504)
+    - _Requirements: 1.3, 1.4, 6.1, 6.3, 6.4_
+
+- [x] 7. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 8. Remove job container and related code
+  - [x] 8.1 Delete the job/ directory
+    - Remove job/src/main.py
+    - Remove job/src/services/
+    - Remove job/Dockerfile
+    - Remove all job container files
+    - _Requirements: 10.1_
+  - [x] 8.2 Delete jobs_service.py
+    - Remove backend/services/jobs_service.py
+    - _Requirements: 10.2_
+  - [x] 8.3 Remove job-related imports and references
+    - Remove imports of JobsService/CloudRunJobsService from views.py
+    - Remove any Cloud Run Jobs, ECS, Celery references
+    - _Requirements: 10.3_
+  - [x] 8.4 Update docker-compose.yml
+    - Remove job container service definition
+    - Update any job-related environment variables
+    - _Requirements: 10.4_
+
+- [x] 9. Remove deprecated endpoints
+  - [x] 9.1 Remove task polling endpoints
+    - Remove or simplify /api/choreography/tasks/{task_id} endpoint
+    - Remove generate-from-song endpoint (replaced by /generate/)
+    - _Requirements: 7.3_
+  - [x] 9.2 Update URL routing
+    - Add route for new /api/choreography/generate/ endpoint
+    - Remove routes for deprecated endpoints
+    - _Requirements: 7.1_
+
+- [x] 10. Update documentation
+  - [x] 10.1 Update ARCHITECTURE.md
+    - Document new synchronous video generation flow
+    - Remove references to job container
+    - _Requirements: 10.3_
+  - [x] 10.2 Update README.md
+    - Update setup instructions for UV
+    - Update API documentation
+    - _Requirements: 9.2_
+
+- [x] 11. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.

@@ -11,7 +11,7 @@ The blueprint-based architecture from the spec is now fully implemented and test
 - ✅ Progressive fallback strategy handles missing metadata
 - ✅ Videos generating successfully (21 MB each)
 
-**Next Step:** Deploy to Google Cloud Production
+**Next Step:** Deploy to AWS Production
 
 ## Two User Paths
 
@@ -35,7 +35,7 @@ User describes what they want in natural language (e.g., "Create a romantic bach
 ┌─────────────────────────────────────────────────────────┐
 │                    API/Backend                          │
 │                                                         │
-│  1. Parse request (Gemini for Path 2)                  │
+│  1. Parse request (OpenAI for Path 2)                  │
 │  2. Create ChoreographyTask in database                │
 │  3. Call jobs_service.create_job_execution()           │
 │     with parameters:                                    │
@@ -55,12 +55,12 @@ User describes what they want in natural language (e.g., "Create a romantic bach
 │  1. ✅ Connect to database                             │
 │  2. ✅ Analyze audio (Librosa)                         │
 │  3. ✅ Query Elasticsearch for moves                   │
-│  4. ✅ Generate choreography (Gemini AI)               │
+│  4. ✅ Generate choreography (OpenAI)                  │
 │  5. ⚠️  Assemble video (needs training videos)         │
 │  6. ✅ Update database                                 │
 │                                                         │
 │  Dependencies: Django, DRF, Elasticsearch,              │
-│                Librosa, NumPy, SciPy, Gemini           │
+│                Librosa, NumPy, SciPy, OpenAI           │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -81,11 +81,11 @@ User describes what they want in natural language (e.g., "Create a romantic bach
 ┌─────────────────────────────────────────────────────────┐
 │                    API/Backend                          │
 │                                                         │
-│  1. Parse request (Gemini for Path 2)                  │
+│  1. Parse request (OpenAI for Path 2)                  │
 │  2. ✨ Analyze audio (Librosa)                         │
 │  3. ✨ Load move embeddings from database              │
 │  4. ✨ Perform vector search (NumPy cosine similarity) │
-│  5. ✨ Generate choreography sequence (Gemini AI)      │
+│  5. ✨ Generate choreography sequence (OpenAI)         │
 │  6. ✨ CREATE BLUEPRINT JSON:                          │
 │     {                                                   │
 │       "task_id": "abc-123",                            │

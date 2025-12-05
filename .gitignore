@@ -3,7 +3,7 @@ data/output
 data/user_collections
 data/choreographies
 data/temp
-.kiro/
+
 frontend/node_modules/
 # Generated content directories
 data/temp/
@@ -62,11 +62,16 @@ Thumbs.db
 *.log
 logs/
 
-# Environment variables
+# Environment variables - ALL variations
+.env*
+!.env.example
+*.env
 .env.local
 .env.development
 .env.test
 .env.production
+.env.compute_engine
+.env.deployment
 
 # AWS
 .aws/

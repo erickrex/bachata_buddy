@@ -2,7 +2,7 @@
 
 **AI Bachata Choreography Generator and Library**
 
-Bachata Buddy generates personalized Bachata choreographies using multi-modal machine learning. It combines computer vision (YOLOv8-Pose) to create couples pose embeddings, audio signal processing (Librosa) to create song embeddings, natural language understanding (Sentence-Transformers + Gemini AI), and vector similarity search (FAISS) to create text embeddings and generate contextually appropriate dance sequences from music.
+Bachata Buddy generates personalized Bachata choreographies using multi-modal machine learning. It combines computer vision (YOLOv8-Pose) to create couples pose embeddings, audio signal processing (Librosa) to create song embeddings, natural language understanding (Sentence-Transformers + OpenAI), and vector similarity search (FAISS) to create text embeddings and generate contextually appropriate dance sequences from music.
 
 > **🌟 Unique Innovation:** First open-source system to use multi-person pose detection for partner dance choreography generation with trimodal embeddings (audio + visual + semantic).
 
@@ -101,7 +101,7 @@ The system includes **11 core ML/AI services** organized across two specialized 
 - Choreography pipeline
 
 **`ai_services` App** (ML/AI Services)
-- Gemini AI integration
+- OpenAI integration for conversational AI
 - FAISS vector search
 - Text embeddings (Sentence-Transformers)
 - Recommendation engine
@@ -150,18 +150,18 @@ The system includes **11 core ML/AI services** organized across two specialized 
     - 384D semantic embeddings from move metadata
     - Natural language descriptions from structured data
     - Difficulty-aware and role-specific matching
-    - Gemini 1.5 Flash for natural language understanding
+    - OpenAI GPT-4 for natural language understanding
     - Parses user queries into choreography parameters
     - Generates move explanations and teaching notes
     - Provides intelligent fallback suggestions
 
 **Key Innovations:**
-- **Dual NLP Approach**: Sentence-transformers for embeddings + Gemini for natural language
+- **Dual NLP Approach**: Sentence-transformers for embeddings + OpenAI for natural language
 - **Semantic Grouping**: Clusters similar moves (e.g., all "cross_body_lead" variations)
 - **Difficulty Matching**: Ensures consistent progression (beginner → intermediate → advanced)
 - **Role-Specific**: Filters by lead-focus vs follow-focus moves
-- **Conversational AI**: Natural language choreography requests via Gemini
-- **Performance**: <5 seconds for embeddings, <2 seconds for Gemini parsing
+- **Conversational AI**: Natural language choreography requests via OpenAI
+- **Performance**: <5 seconds for embeddings, <2 seconds for AI parsing
 
 #### 5. **Trimodal Feature Fusion** 🔗 (Novel Architecture) - `ai_services`
 
@@ -197,7 +197,7 @@ overall_similarity =
 2. **Runtime Choreography Generation**:
    ```
    User Song → Librosa Analysis → Audio Features (128D)
-   User Query → Gemini AI → Semantic Understanding
+   User Query → OpenAI → Semantic Understanding
    ↓
    PostgreSQL: Fetch all 149 move embeddings
    ↓
@@ -277,7 +277,7 @@ The project follows a **layered architecture** with clear separation of concerns
 │  ┌──────────────────┐         ┌──────────────────┐      │
 │  │ video_processing │────────▶│   ai_services    │      │
 │  │                  │         │                  │      │
-│  │ • Video gen      │         │ • Gemini AI      │      │
+│  │ • Video gen      │         │ • OpenAI         │      │
 │  │ • Pose detection │         │ • FAISS GPU      │      │
 │  │ • Audio analysis │         │ • Embeddings     │      │
 │  └────────┬─────────┘         └────────┬─────────┘      │
@@ -321,7 +321,7 @@ bachata_buddy/
 │
 ├── ai_services/                # AI/ML services
 │   ├── services/
-│   │   ├── gemini_service.py              # Google Gemini API
+│   │   ├── agent_service.py               # OpenAI agent orchestration
 │   │   ├── vector_search_service.py       # FAISS GPU vector similarity search
 │   │   ├── text_embedding_service.py      # 384D semantic embeddings
 │   │   ├── recommendation_engine.py       # Trimodal recommendations
@@ -411,7 +411,7 @@ The monolithic `core` app has been refactored into three focused apps for better
 ```python
 # Old import paths (DEPRECATED)
 from core.services.video_generator import VideoGenerator
-from core.services.gemini_service import GeminiService
+from core.services.agent_service import AgentService
 from core.services.elasticsearch_service import ElasticsearchService
 from core.config.environment_config import EnvironmentConfig
 from core.exceptions import VideoGenerationError
@@ -421,7 +421,7 @@ from core.exceptions import VideoGenerationError
 ```python
 # New import paths (CURRENT)
 from video_processing.services.video_generator import VideoGenerator
-from ai_services.services.gemini_service import GeminiService
+from ai_services.services.agent_service import AgentService
 from ai_services.services.elasticsearch_service import ElasticsearchService
 from common.config.environment_config import EnvironmentConfig
 from common.exceptions import VideoGenerationError
@@ -441,7 +441,7 @@ from common.exceptions import VideoGenerationError
 | `core.services.music_analyzer` | `video_processing.services.music_analyzer` | Video Processing |
 | `core.services.youtube_service` | `video_processing.services.youtube_service` | Video Processing |
 | `core.services.choreography_pipeline` | `video_processing.services.choreography_pipeline` | Video Processing |
-| `core.services.gemini_service` | `ai_services.services.gemini_service` | AI Services |
+| `core.services.agent_service` | `ai_services.services.agent_service` | AI Services |
 | `core.services.vector_search_service` | `ai_services.services.vector_search_service` | AI Services |
 | `core.services.text_embedding_service` | `ai_services.services.text_embedding_service` | AI Services |
 | `core.services.recommendation_engine` | `ai_services.services.recommendation_engine` | AI Services |
@@ -510,7 +510,7 @@ from common.exceptions import VideoGenerationError
 - **No dependencies on other apps**
 
 **`ai_services` - AI/ML Services**
-- Google Gemini API integration
+- OpenAI agent orchestration
 - FAISS vector search
 - Text embeddings (Sentence-Transformers)
 - Move recommendations
@@ -719,7 +719,6 @@ cp backend/.env.example backend/.env
 # - Configure database connection (or use Docker Compose)
 # - Set STORAGE_BACKEND=local for local development
 # - Set OPENAI_API_KEY for conversational AI features (Path 2)
-# - Set GOOGLE_API_KEY for Gemini integration (optional)
 
 # 4. Start services with Docker Compose
 docker-compose up -d
@@ -1206,7 +1205,6 @@ All backend environment variables are documented in `backend/.env.example`. Key 
 - `AWS_CLOUDFRONT_DOMAIN` - CloudFront domain (optional)
 
 #### AI Services
-- `GOOGLE_API_KEY` - Gemini API key (get from https://makersuite.google.com/app/apikey)
 - `OPENAI_API_KEY` - OpenAI API key for agent orchestration (get from https://platform.openai.com/api-keys)
 
 #### Agent Configuration
@@ -1458,17 +1456,6 @@ uv run python scripts/generate_embeddings.py \
   --environment local
 ```
 
-#### "Gemini API key not found"
-
-**Cause:** Missing or invalid GOOGLE_API_KEY
-
-**Solution:**
-```bash
-# Get API key from https://makersuite.google.com/app/apikey
-# Add to backend/.env
-echo "GOOGLE_API_KEY=your-key-here" >> backend/.env
-```
-
 #### "Storage backend not configured"
 
 **Cause:** STORAGE_BACKEND not set or invalid
@@ -1546,7 +1533,7 @@ graph TB
         end
         
         subgraph "AI/ML Layer"
-            GEMINI[Gemini 1.5 Flash<br/>Natural Language<br/>Query Parsing]
+            OPENAI[OpenAI GPT-4<br/>Natural Language<br/>Query Parsing]
             YOLO[YOLOv8-Pose<br/>Pose Detection<br/>512D Embeddings]
             ST[Sentence-Transformers<br/>Text Embeddings<br/>384D Semantic]
             LIB[Librosa<br/>Audio Analysis<br/>128D Features]
@@ -1560,7 +1547,7 @@ graph TB
     U -->|HTTP Request| FE
     FE -->|API Calls| API
     API -->|Query| SQL
-    API -->|NLP| GEMINI
+    API -->|NLP| OPENAI
     BG -->|Pose Analysis| YOLO
     BG -->|Text Embeddings| ST
     BG -->|Audio Features| LIB
@@ -1574,7 +1561,7 @@ graph TB
     style BP fill:#fbbc04,color:#000
     style SQL fill:#34a853,color:#fff
     style GCS fill:#ea4335,color:#fff
-    style GEMINI fill:#9334e6,color:#fff
+    style OPENAI fill:#10a37f,color:#fff
     style YOLO fill:#ff6d00,color:#fff
     style ST fill:#00bfa5,color:#fff
     style LIB fill:#d500f9,color:#fff
@@ -1611,7 +1598,7 @@ graph LR
         UQ[User Query<br/>Difficulty/Style]
         
         US -->|Librosa| SA[Song Audio<br/>128D]
-        UQ -->|Gemini AI| SQ[Query Semantic<br/>384D]
+        UQ -->|OpenAI| SQ[Query Semantic<br/>384D]
         
         SA -->|Cosine| CS[Audio Similarity<br/>35% weight]
         SQ -->|Cosine| TS[Text Similarity<br/>35% weight]
@@ -1680,7 +1667,7 @@ graph LR
 
 1. **User Request** → API receives song + preferences
 2. **Audio Analysis** → Librosa extracts 128D features
-3. **Query Parsing** → Gemini AI interprets natural language
+3. **Query Parsing** → OpenAI interprets natural language
 4. **Embedding Fetch** → PostgreSQL returns 149 move embeddings
 5. **Trimodal Fusion** → Weighted similarity (35% audio + 35% text + 30% pose)
 6. **Move Selection** → Top-K moves filtered by difficulty/energy

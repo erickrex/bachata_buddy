@@ -120,7 +120,7 @@ graph TB
         end
         
         subgraph "External Services"
-            GEMINI[Google Gemini API<br/>Natural Language]
+            OPENAI[OpenAI API<br/>Natural Language]
         end
     end
     
@@ -132,7 +132,7 @@ graph TB
     AR1 -->|Pull Image| ECR
     AR1 -->|Get Secrets| SM
     RDS -.->|Inside| VPC
-    AR1 -->|NLP| GEMINI
+    AR1 -->|NLP| OPENAI
     AR1 -->|Logs| CW
     RDS -->|Metrics| CW
     
@@ -145,7 +145,7 @@ graph TB
     style SM fill:#dd344c,color:#fff
     style VPC fill:#ff9900,color:#000
     style CW fill:#ff9900,color:#000
-    style GEMINI fill:#4285f4,color:#fff
+    style OPENAI fill:#10a37f,color:#fff
 ```
 
 ### Network Architecture
@@ -268,7 +268,7 @@ graph LR
 - Audio analysis (Librosa)
 - Text embeddings (Sentence-Transformers)
 - Vector search (FAISS)
-- Gemini AI integration
+- OpenAI integration
 
 **Resource Configuration:**
 - CPU: 2 vCPU
@@ -448,7 +448,7 @@ sequenceDiagram
     participant FE as Frontend
     participant BE as Backend API
     participant DB as PostgreSQL
-    participant GEMINI as Gemini AI
+    participant OPENAI as OpenAI
     participant FAISS as FAISS Search
     participant VA as Video Assembly
     participant FFmpeg as FFmpeg
@@ -457,8 +457,8 @@ sequenceDiagram
     U->>FE: Enter query + select song
     FE->>BE: POST /api/choreography/generate
     BE->>DB: Create task (pending)
-    BE->>GEMINI: Parse natural language query
-    GEMINI-->>BE: Structured parameters
+    BE->>OPENAI: Parse natural language query
+    OPENAI-->>BE: Structured parameters
     BE->>BE: Analyze audio (Librosa)
     BE->>DB: Fetch move embeddings
     DB-->>BE: 149 move vectors

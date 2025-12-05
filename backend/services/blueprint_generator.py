@@ -4,7 +4,7 @@ Blueprint Generator Service
 This service orchestrates the full blueprint generation flow:
 1. Analyze audio features using MusicAnalyzer
 2. Search for matching moves using VectorSearchService
-3. Generate choreography sequence using GeminiService
+3. Generate choreography sequence using rule-based approach
 4. Create blueprint JSON matching the schema
 
 This is the core intelligence that was previously in the job container,
@@ -53,8 +53,7 @@ class BlueprintGenerator:
     def __init__(
         self,
         vector_search_service,
-        music_analyzer,
-        gemini_service=None
+        music_analyzer
     ):
         """
         Initialize blueprint generator.
@@ -62,11 +61,9 @@ class BlueprintGenerator:
         Args:
             vector_search_service: VectorSearchService instance
             music_analyzer: MusicAnalyzer instance
-            gemini_service: Optional GeminiService for AI sequencing
         """
         self.vector_search = vector_search_service
         self.music_analyzer = music_analyzer
-        self.gemini = gemini_service
         
         logger.info("BlueprintGenerator initialized")
     
@@ -313,7 +310,7 @@ class BlueprintGenerator:
         style: str
     ) -> List[Dict[str, Any]]:
         """
-        Generate choreography sequence using AI or rule-based approach.
+        Generate choreography sequence using rule-based approach.
         
         Args:
             music_features: MusicFeatures from audio analysis
@@ -325,181 +322,10 @@ class BlueprintGenerator:
         Returns:
             List of selected moves with timing
         """
-        try:
-            # If Gemini is available, use AI sequencing
-            if self.gemini:
-                return self._generate_ai_sequence(
-                    music_features,
-                    matching_moves,
-                    difficulty,
-                    energy_level,
-                    style
-                )
-            else:
-                # Fallback to rule-based sequencing
-                return self._generate_rule_based_sequence(
-                    music_features,
-                    matching_moves
-                )
-                
-        except Exception as e:
-            logger.warning(f"AI sequencing failed: {e}. Using rule-based fallback.")
-            return self._generate_rule_based_sequence(
-                music_features,
-                matching_moves
-            )
-    
-    def _generate_ai_sequence(
-        self,
-        music_features: Any,
-        matching_moves: List[Dict[str, Any]],
-        difficulty: str,
-        energy_level: str,
-        style: str
-    ) -> List[Dict[str, Any]]:
-        """
-        Generate choreography sequence using Gemini AI.
-        
-        Args:
-            music_features: MusicFeatures from audio analysis
-            matching_moves: List of matching moves
-            difficulty: Difficulty level
-            energy_level: Energy level
-            style: Style preference
-        
-        Returns:
-            List of selected moves with timing
-        """
-        # Create prompt for Gemini
-        prompt = self._create_gemini_prompt(
+        return self._generate_rule_based_sequence(
             music_features,
-            matching_moves,
-            difficulty,
-            energy_level,
-            style
+            matching_moves
         )
-        
-        # Call Gemini API
-        response = self.gemini.model.generate_content(prompt)
-        response_text = response.text.strip()
-        
-        # Parse response
-        sequence = self._parse_gemini_response(response_text, matching_moves)
-        
-        logger.info(f"AI generated sequence with {len(sequence)} moves")
-        
-        return sequence
-    
-    def _create_gemini_prompt(
-        self,
-        music_features: Any,
-        matching_moves: List[Dict[str, Any]],
-        difficulty: str,
-        energy_level: str,
-        style: str
-    ) -> str:
-        """Create prompt for Gemini AI."""
-        # Format music analysis
-        sections_info = "\n".join([
-            f"  - {s.section_type}: {s.start_time:.1f}s-{s.end_time:.1f}s, "
-            f"energy={s.energy_level:.2f}, moves={s.recommended_move_types}"
-            for s in music_features.sections
-        ])
-        
-        # Format available moves
-        moves_info = "\n".join([
-            f"  - {m['move_name']}: {m['video_path']}, "
-            f"duration={m['duration']:.1f}s, similarity={m['similarity_score']:.2f}"
-            for m in matching_moves[:15]  # Limit to top 15 for prompt
-        ])
-        
-        prompt = f"""
-You are a professional bachata choreographer. Create a choreography sequence for a song.
-
-Song Analysis:
-- Duration: {music_features.duration:.1f} seconds
-- Tempo: {music_features.tempo:.1f} BPM
-- Rhythm strength: {music_features.rhythm_pattern_strength:.2f}
-- Syncopation: {music_features.syncopation_level:.2f}
-
-Musical Sections:
-{sections_info}
-
-Available Moves (top matches):
-{moves_info}
-
-Requirements:
-- Difficulty: {difficulty}
-- Energy level: {energy_level}
-- Style: {style}
-
-Create a choreography sequence that:
-1. Matches the musical structure (intro, verse, chorus, etc.)
-2. Uses moves appropriate for each section's energy level
-3. Ensures smooth transitions between moves
-4. Maintains variety and flow
-5. Fits the total duration (~{music_features.duration:.0f} seconds)
-
-Return ONLY a JSON array of move selections. Each move should have:
-- move_name: name of the move
-- start_time: when to start (seconds)
-- duration: how long to show (seconds)
-
-Example format:
-[
-  {{"move_name": "basic_step", "start_time": 0.0, "duration": 8.0}},
-  {{"move_name": "cross_body_lead", "start_time": 8.0, "duration": 8.0}}
-]
-
-Generate the sequence now:
-"""
-        
-        return prompt
-    
-    def _parse_gemini_response(
-        self,
-        response_text: str,
-        matching_moves: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Parse Gemini response into move sequence."""
-        import re
-        
-        # Extract JSON from response
-        json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
-        if not json_match:
-            raise ValueError("No JSON array found in Gemini response")
-        
-        json_str = json_match.group(0)
-        sequence_data = json.loads(json_str)
-        
-        # Create move lookup
-        move_lookup = {m['move_name']: m for m in matching_moves}
-        
-        # Build sequence with full move data
-        sequence = []
-        for item in sequence_data:
-            move_name = item['move_name']
-            
-            # Find matching move
-            move_data = move_lookup.get(move_name)
-            if not move_data:
-                # Try fuzzy matching
-                for name, data in move_lookup.items():
-                    if move_name.lower() in name.lower() or name.lower() in move_name.lower():
-                        move_data = data
-                        break
-            
-            if move_data:
-                sequence.append({
-                    'move_id': move_data['move_id'],
-                    'move_name': move_data['move_name'],
-                    'video_path': move_data['video_path'],
-                    'start_time': float(item['start_time']),
-                    'duration': float(item['duration']),
-                    'similarity_score': move_data['similarity_score']
-                })
-        
-        return sequence
     
     def _generate_rule_based_sequence(
         self,

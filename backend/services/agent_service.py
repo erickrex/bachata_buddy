@@ -36,7 +36,7 @@ class AgentService:
         music_analyzer,
         vector_search,
         blueprint_generator,
-        jobs_service
+        storage_service=None
     ):
         """
         Initialize Agent Service with OpenAI client and service dependencies.
@@ -47,14 +47,14 @@ class AgentService:
             music_analyzer: MusicAnalyzer instance
             vector_search: VectorSearchService instance
             blueprint_generator: BlueprintGenerator instance
-            jobs_service: JobsService instance
+            storage_service: StorageService instance (optional, will be created if not provided)
         """
         self.client = OpenAI(api_key=openai_api_key)
         self.parameter_extractor = parameter_extractor
         self.music_analyzer = music_analyzer
         self.vector_search = vector_search
         self.blueprint_generator = blueprint_generator
-        self.jobs_service = jobs_service
+        self.storage_service = storage_service
         
         # Task tracking attributes
         self.task_id = None
@@ -847,13 +847,13 @@ class AgentService:
     
     def _assemble_video(self, blueprint: Dict = None) -> Dict:
         """
-        Tool: Trigger video assembly job.
+        Tool: Assemble video using VideoAssemblyService.
         
         Args:
             blueprint: Choreography blueprint (optional - uses stored blueprint if not provided)
         
         Returns:
-            Dictionary with job execution info
+            Dictionary with video assembly result
         """
         # Use stored blueprint if not provided
         if blueprint is None:
@@ -863,30 +863,53 @@ class AgentService:
             else:
                 return {'error': 'No blueprint available. Please call generate_blueprint first.', 'status': 'failed'}
         
-        logger.info(f"Triggering video assembly for task {self.task_id}")
+        logger.info(f"Assembling video for task {self.task_id}")
         
         try:
-            # Submit job with blueprint
-            execution_name = self.jobs_service.create_job_execution(
-                task_id=self.task_id,
-                user_id=self.user_id,
-                parameters={'blueprint_json': json.dumps(blueprint)}
-            )
+            from services.video_assembly_service import VideoAssemblyService, VideoAssemblyError
+            from services.storage_service import get_storage_service
+            
+            # Get storage service
+            storage_service = self.storage_service
+            if storage_service is None:
+                storage_service = get_storage_service()
+            
+            # Create video assembly service
+            video_assembly = VideoAssemblyService(storage_service=storage_service)
+            
+            # Check FFmpeg availability
+            if not video_assembly.check_ffmpeg_available():
+                raise VideoAssemblyError("FFmpeg is not available in the system PATH")
             
             # Update task status
             stage = "assemble_video"
             self._update_task_status(
                 task_id=self.task_id,
-                message=f"Video assembly started: {execution_name}",
+                message="Video assembly started...",
                 stage=stage,
                 progress=self._calculate_progress(stage)
             )
             
-            logger.info(f"Video assembly job submitted: {execution_name}")
+            # Progress callback for video assembly
+            def progress_callback(stage: str, progress: int, message: str):
+                self._update_task_status(
+                    task_id=self.task_id,
+                    message=message,
+                    stage=stage,
+                    progress=progress
+                )
+            
+            # Assemble video
+            video_url = video_assembly.assemble_video(
+                blueprint=blueprint,
+                progress_callback=progress_callback
+            )
+            
+            logger.info(f"Video assembly completed: {video_url}")
             return {
-                'execution_name': execution_name,
+                'video_url': video_url,
                 'status': 'success',
-                'message': 'Video assembly job submitted'
+                'message': 'Video assembly completed'
             }
             
         except Exception as e:

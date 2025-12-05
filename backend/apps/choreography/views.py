@@ -16,14 +16,19 @@ from .serializers import (
     SongSerializer,
     SongDetailSerializer,
     SongGenerationSerializer,
-    DescribeChoreographySerializer
+    DescribeChoreographySerializer,
+    GenerateChoreographySerializer
 )
-from services.jobs_service import JobsService as CloudRunJobsService
-from services.gemini_service import GeminiService
 from django.conf import settings
 import logging
+import uuid
+import time
 
 logger = logging.getLogger(__name__)
+
+
+# Video generation timeout in seconds (10 minutes)
+VIDEO_GENERATION_TIMEOUT = 600
 
 
 @extend_schema(
@@ -297,59 +302,65 @@ def song_detail(request, song_id):
 
 
 @extend_schema(
-    summary="Generate choreography from song template",
+    summary="Generate choreography video synchronously",
     description="""
-    Generate choreography from a pre-existing song template.
+    Generate choreography video synchronously from a song.
     
-    This endpoint creates a choreography generation task using a song from the system's
-    song library. The song's audio file is automatically retrieved and passed to the
-    Cloud Run Job for processing.
+    This endpoint generates a choreography video immediately within the HTTP request.
+    The video is assembled using FFmpeg directly in the backend, eliminating the need
+    for a separate job container.
     
     **Workflow:**
-    1. Validate that the song_id exists
-    2. Create ChoreographyTask with song reference
-    3. Retrieve song's audio_path (local or GCS)
-    4. Trigger Cloud Run Job with audio_path and parameters
-    5. Return task_id for status polling
+    1. Validate song_id and parameters
+    2. Generate blueprint using BlueprintGenerator
+    3. Assemble video using VideoAssemblyService (FFmpeg)
+    4. Return video_url directly in response
     
     **Parameters:**
     - song_id: ID of the song from the song library (required)
     - difficulty: beginner, intermediate, or advanced (default: intermediate)
-    - energy_level: low, medium, or high (optional)
-    - style: traditional, modern, romantic, or sensual (optional)
+    - energy_level: low, medium, or high (default: medium)
+    - style: traditional, modern, romantic, or sensual (default: modern)
     
     **Response:**
-    - Returns immediately with task_id (202 Accepted)
-    - Poll /api/choreography/tasks/{task_id} for status
-    - When complete, result includes video URL
+    - Returns video_url directly when complete (200 OK)
+    - Task record is updated with progress during generation
     
-    **Example:**
+    **Timeout:**
+    - Request will timeout after 10 minutes if video assembly takes too long
+    
+    **Example Request:**
     ```json
     {
         "song_id": 1,
         "difficulty": "intermediate",
         "energy_level": "medium",
-        "style": "romantic"
+        "style": "modern"
+    }
+    ```
+    
+    **Example Response:**
+    ```json
+    {
+        "task_id": "550e8400-e29b-41d4-a716-446655440000",
+        "status": "completed",
+        "video_url": "https://storage.example.com/output/video.mp4",
+        "duration_seconds": 45.2
     }
     ```
     """,
-    request=SongGenerationSerializer,
+    request=GenerateChoreographySerializer,
     responses={
-        202: OpenApiResponse(
-            description="Task created successfully",
+        200: OpenApiResponse(
+            description="Video generated successfully",
             examples=[
                 OpenApiExample(
-                    'Task Created',
+                    'Success',
                     value={
                         'task_id': '550e8400-e29b-41d4-a716-446655440000',
-                        'song': {
-                            'id': 1,
-                            'title': 'Bachata Rosa',
-                            'artist': 'Juan Luis Guerra'
-                        },
-                        'status': 'pending',
-                        'message': 'Choreography generation started',
-                        'poll_url': '/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000'
+                        'status': 'completed',
+                        'video_url': 'https://storage.example.com/output/video.mp4',
+                        'duration_seconds': 45.2
                     }
                 )
             ]
@@ -368,12 +379,37 @@ def song_detail(request, song_id):
             ]
         ),
         401: OpenApiResponse(description="Authentication required"),
-        500: OpenApiResponse(
-            description="Failed to create job execution",
+        404: OpenApiResponse(
+            description="Resource not found",
             examples=[
                 OpenApiExample(
-                    'Job Creation Failed',
-                    value={'error': 'Failed to create job execution'}
+                    'Song Not Found',
+                    value={'error': 'Song not found', 'details': 'Song with ID 999 does not exist'}
+                )
+            ]
+        ),
+        500: OpenApiResponse(
+            description="Video assembly failed",
+            examples=[
+                OpenApiExample(
+                    'Assembly Failed',
+                    value={
+                        'error': 'Video assembly failed',
+                        'details': 'FFmpeg error: ...',
+                        'stage': 'concatenating'
+                    }
+                )
+            ]
+        ),
+        504: OpenApiResponse(
+            description="Request timeout",
+            examples=[
+                OpenApiExample(
+                    'Timeout',
+                    value={
+                        'error': 'Video generation timed out',
+                        'details': 'Video assembly exceeded 10 minute limit'
+                    }
                 )
             ]
         )
@@ -382,64 +418,90 @@ def song_detail(request, song_id):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def generate_from_song(request):
+def generate_choreography(request):
     """
-    Generate choreography from a song template.
+    Generate choreography video synchronously.
     
-    Creates a new task and triggers asynchronous video processing using a pre-existing song.
-    Uses blueprint-based architecture: generates complete blueprint in API, passes to job container.
+    Creates a choreography video immediately within the HTTP request using
+    VideoAssemblyService for FFmpeg-based video assembly.
+    
+    **Feature: job-integration**
+    **Validates: Requirements 1.1, 7.1, 7.2**
     """
-    # Import services at the top to avoid variable shadowing issues
     from services.blueprint_generator import BlueprintGenerator
-    from services.vector_search_service import VectorSearchService
+    from services.video_assembly_service import VideoAssemblyService, VideoAssemblyError
+    from services.storage.factory import get_storage_backend
+    from services.vector_search_service import get_vector_search_service
+    from music_analyzer import MusicAnalyzer
     
-    serializer = SongGenerationSerializer(data=request.data)
+    # Validate request
+    serializer = GenerateChoreographySerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    # Get the song (validation already confirmed it exists)
+    # Get the song
     song_id = serializer.validated_data['song_id']
-    song = Song.objects.get(id=song_id)
+    try:
+        song = Song.objects.get(id=song_id)
+    except Song.DoesNotExist:
+        return Response(
+            {'error': 'Song not found', 'details': f'Song with ID {song_id} does not exist'},
+            status=status.HTTP_404_NOT_FOUND
+        )
     
-    # Create task with song reference
-    import uuid
+    # Extract parameters
+    difficulty = serializer.validated_data['difficulty']
+    energy_level = serializer.validated_data.get('energy_level') or 'medium'
+    style = serializer.validated_data.get('style') or 'modern'
+    
+    # Create task record
     task_id = str(uuid.uuid4())
     task = ChoreographyTask.objects.create(
         task_id=task_id,
         user=request.user,
-        status='pending',
+        status='started',
         progress=0,
         stage='generating_blueprint',
         message='Generating choreography blueprint...',
         song=song
     )
     
-    # Extract parameters
-    difficulty = serializer.validated_data['difficulty']
-    energy_level = serializer.validated_data.get('energy_level', 'medium')
-    style = serializer.validated_data.get('style', 'modern')
+    logger.info(
+        f"Starting synchronous video generation for task {task_id}",
+        extra={
+            'task_id': task_id,
+            'song_id': song_id,
+            'user_id': request.user.id,
+            'difficulty': difficulty,
+            'energy_level': energy_level,
+            'style': style
+        }
+    )
+    
+    start_time = time.time()
+    
+    # Progress callback to update task record
+    def progress_callback(stage: str, progress: int, message: str):
+        """Update task record with progress."""
+        task.stage = stage
+        task.progress = progress
+        task.message = message
+        task.save()
+        logger.debug(f"Task {task_id} progress: {stage} ({progress}%) - {message}")
     
     try:
-        # Generate blueprint using BlueprintGenerator
+        # Step 1: Generate blueprint (10% progress)
+        progress_callback('generating_blueprint', 10, 'Analyzing music and generating blueprint...')
+        
         # Initialize services
-        from services.vector_search_service import get_vector_search_service
         vector_search = get_vector_search_service()
-        gemini_service = GeminiService()
-        
-        # Import MusicAnalyzer from backend
-        from music_analyzer import MusicAnalyzer
-        
         music_analyzer = MusicAnalyzer()
         
-        # Create blueprint generator
         blueprint_gen = BlueprintGenerator(
             vector_search_service=vector_search,
-            music_analyzer=music_analyzer,
-            gemini_service=gemini_service
+            music_analyzer=music_analyzer
         )
         
-        # Generate blueprint
-        logger.info(f"Generating blueprint for task {task_id} with song {song_id}")
         blueprint = blueprint_gen.generate_blueprint(
             task_id=task_id,
             song_path=song.audio_path,
@@ -456,381 +518,166 @@ def generate_from_song(request):
             blueprint_json=blueprint
         )
         
-        logger.info(f"Blueprint generated and stored for task {task_id}")
+        logger.info(f"Blueprint generated for task {task_id}: {len(blueprint.get('moves', []))} moves")
         
-        # Update task status
-        task.stage = 'submitting_job'
-        task.message = 'Blueprint generated, submitting job...'
-        task.save()
+        # Step 2: Assemble video using VideoAssemblyService
+        progress_callback('video_assembly', 15, 'Starting video assembly...')
         
-    except Exception as e:
-        logger.error(
-            f"Failed to generate blueprint for task {task_id}: {e}",
-            extra={
-                'task_id': task_id,
-                'song_id': song_id,
-                'user_id': request.user.id,
-                'error': str(e)
-            },
-            exc_info=True
-        )
-        task.status = 'failed'
-        task.error = f'Blueprint generation failed: {str(e)}'
-        task.save()
-        return Response(
-            {'error': 'Failed to generate blueprint'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
-    # Create Cloud Run Job execution with blueprint
-    jobs_service = CloudRunJobsService()
-    try:
-        import json
-        execution_name = jobs_service.create_job_execution(
-            task_id=task_id,
-            user_id=request.user.id,
-            parameters={'blueprint_json': json.dumps(blueprint)}
+        storage_backend = get_storage_backend()
+        video_assembly = VideoAssemblyService(storage_service=storage_backend)
+        
+        # Check FFmpeg availability
+        if not video_assembly.check_ffmpeg_available():
+            raise VideoAssemblyError("FFmpeg is not available in the system PATH")
+        
+        # Assemble video with progress updates
+        video_url = video_assembly.assemble_video(
+            blueprint=blueprint,
+            progress_callback=progress_callback
         )
         
-        # Store execution name for monitoring
-        task.job_execution_name = execution_name
-        task.status = 'started'
-        task.stage = 'video_assembly'
-        task.message = 'Job submitted, assembling video...'
+        # Calculate duration
+        elapsed_time = time.time() - start_time
+        
+        # Update task as completed
+        task.status = 'completed'
+        task.progress = 100
+        task.stage = 'completed'
+        task.message = 'Choreography video generated successfully'
+        task.result = {
+            'video_url': video_url,
+            'output_path': blueprint.get('output_config', {}).get('output_path'),
+            'duration_seconds': elapsed_time,
+            'move_count': len(blueprint.get('moves', []))
+        }
         task.save()
         
         logger.info(
-            f"Created job execution for task {task_id} with song {song_id}: {execution_name}",
+            f"Video generation completed for task {task_id} in {elapsed_time:.1f}s",
             extra={
                 'task_id': task_id,
-                'song_id': song_id,
-                'song_title': song.title,
-                'user_id': request.user.id,
-                'execution_name': execution_name
+                'video_url': video_url,
+                'duration_seconds': elapsed_time
             }
         )
-        
-    except Exception as e:
-        logger.error(
-            f"Failed to create job execution for task {task_id} with song {song_id}: {e}",
-            extra={
-                'task_id': task_id,
-                'song_id': song_id,
-                'user_id': request.user.id,
-                'error': str(e)
-            }
-        )
-        task.status = 'failed'
-        task.error = f'Job submission failed: {str(e)}'
-        task.save()
-        return Response(
-            {'error': 'Failed to create job execution'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
-    # Return task info with song details
-    return Response({
-        'task_id': task_id,
-        'song': {
-            'id': song.id,
-            'title': song.title,
-            'artist': song.artist
-        },
-        'status': 'started',
-        'message': 'Choreography generation started',
-        'poll_url': f'/api/choreography/tasks/{task_id}'
-    }, status=status.HTTP_202_ACCEPTED)
-
-
-@extend_schema(
-    summary="Get task status",
-    description="""
-    Retrieve the current status and progress of a choreography generation task.
-    
-    Use this endpoint to poll for task updates. The task progresses through several stages:
-    - **pending**: Task queued, waiting to start
-    - **started**: Job execution created
-    - **running**: Processing in progress (check progress field for percentage)
-    - **completed**: Video generation finished (result contains video URL)
-    - **failed**: Error occurred (error field contains details)
-    
-    Poll this endpoint every 2-5 seconds while status is 'pending', 'started', or 'running'.
-    """,
-    responses={
-        200: OpenApiResponse(
-            response=ChoreographyTaskSerializer,
-            description="Task status retrieved",
-            examples=[
-                OpenApiExample(
-                    'Task Running',
-                    value={
-                        'task_id': '550e8400-e29b-41d4-a716-446655440000',
-                        'status': 'running',
-                        'progress': 45,
-                        'stage': 'video_processing',
-                        'message': 'Processing video frames',
-                        'result': None,
-                        'error': None,
-                        'created_at': '2025-11-02T10:30:00Z',
-                        'updated_at': '2025-11-02T10:32:15Z'
-                    }
-                ),
-                OpenApiExample(
-                    'Task Completed',
-                    value={
-                        'task_id': '550e8400-e29b-41d4-a716-446655440000',
-                        'status': 'completed',
-                        'progress': 100,
-                        'stage': 'completed',
-                        'message': 'Choreography generated successfully',
-                        'result': {
-                            'video_url': 'https://storage.googleapis.com/bucket/video.mp4',
-                            'duration': 180,
-                            'move_count': 12
-                        },
-                        'error': None,
-                        'created_at': '2025-11-02T10:30:00Z',
-                        'updated_at': '2025-11-02T10:35:00Z'
-                    }
-                )
-            ]
-        ),
-        401: OpenApiResponse(description="Authentication required"),
-        404: OpenApiResponse(
-            description="Task not found or does not belong to user",
-            examples=[
-                OpenApiExample(
-                    'Not Found',
-                    value={'detail': 'Not found.'}
-                )
-            ]
-        )
-    },
-    tags=['Choreography'],
-    methods=['GET']
-)
-@extend_schema(
-    summary="Cancel task",
-    description="""
-    Cancel a pending or running choreography generation task.
-    
-    This endpoint attempts to cancel the Cloud Run Job execution and marks the task as failed.
-    Only tasks with status 'started' or 'running' can be cancelled.
-    
-    **Note:** If the job has already completed processing, cancellation may not be possible.
-    """,
-    responses={
-        200: OpenApiResponse(
-            description="Task cancelled successfully",
-            examples=[
-                OpenApiExample(
-                    'Cancelled',
-                    value={
-                        'message': 'Task cancelled successfully',
-                        'task_id': '550e8400-e29b-41d4-a716-446655440000',
-                        'status': 'failed'
-                    }
-                )
-            ]
-        ),
-        400: OpenApiResponse(
-            description="Task cannot be cancelled",
-            examples=[
-                OpenApiExample(
-                    'Already Completed',
-                    value={'error': 'Cannot cancel task with status "completed". Only started or running tasks can be cancelled.'}
-                )
-            ]
-        ),
-        401: OpenApiResponse(description="Authentication required"),
-        404: OpenApiResponse(description="Task not found or does not belong to user")
-    },
-    tags=['Choreography'],
-    methods=['DELETE']
-)
-@api_view(['GET', 'DELETE'])
-@permission_classes([IsAuthenticated])
-def task_detail(request, task_id):
-    """
-    Get task status or cancel task.
-    
-    GET: Retrieve current task status and progress.
-    DELETE: Cancel a pending or running task.
-    """
-    task = get_object_or_404(ChoreographyTask, task_id=task_id, user=request.user)
-    
-    if request.method == 'GET':
-        # Get task status (polls database)
-        serializer = ChoreographyTaskSerializer(task, context={'request': request})
-        return Response(serializer.data)
-    
-    elif request.method == 'DELETE':
-        # Cancel a pending or processing task
-        # Check if task can be cancelled
-        if task.status not in ['started', 'running']:
-            return Response(
-                {'error': f'Cannot cancel task with status "{task.status}". Only started or running tasks can be cancelled.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Attempt to cancel Cloud Run Job execution if it exists
-        if task.job_execution_name:
-            jobs_service = CloudRunJobsService()
-            try:
-                cancelled = jobs_service.cancel_job_execution(task.job_execution_name)
-                if cancelled:
-                    logger.info(f"Successfully cancelled job execution for task {task_id}")
-                else:
-                    logger.warning(f"Could not cancel job execution for task {task_id} - may have already completed")
-            except Exception as e:
-                logger.error(f"Error cancelling job execution for task {task_id}: {e}")
-                # Continue with task cancellation even if job cancellation fails
-        
-        # Update task status to cancelled
-        task.status = 'failed'
-        task.error = 'Cancelled by user'
-        task.message = 'Task cancelled by user'
-        task.save()
-        
-        logger.info(f"Task {task_id} cancelled by user {request.user.id}")
         
         return Response({
-            'message': 'Task cancelled successfully',
-            'task_id': str(task.task_id),
-            'status': 'failed'
+            'task_id': task_id,
+            'status': 'completed',
+            'video_url': video_url,
+            'duration_seconds': round(elapsed_time, 2)
         }, status=status.HTTP_200_OK)
-
-
-@extend_schema(
-    summary="List user tasks",
-    description="""
-    Retrieve a paginated list of the authenticated user's choreography generation tasks.
-    
-    Tasks are ordered by creation date (most recent first). Use query parameters to filter
-    by status and control pagination.
-    
-    **Status Values:**
-    - `pending`: Task queued, waiting to start
-    - `started`: Job execution created
-    - `running`: Processing in progress
-    - `completed`: Video generation finished
-    - `failed`: Error occurred or cancelled by user
-    """,
-    parameters=[
-        OpenApiParameter(
-            name='status',
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-            description='Filter by task status',
-            enum=['pending', 'started', 'running', 'completed', 'failed'],
-            required=False
-        ),
-        OpenApiParameter(
-            name='page',
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-            description='Page number',
-            required=False
-        ),
-        OpenApiParameter(
-            name='page_size',
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-            description='Number of items per page (max: 100)',
-            required=False
+        
+    except VideoAssemblyError as e:
+        elapsed_time = time.time() - start_time
+        error_msg = str(e)
+        current_stage = task.stage
+        
+        # Update task with error
+        task.status = 'failed'
+        task.message = 'Video assembly failed'
+        task.error = error_msg
+        task.save()
+        
+        logger.error(
+            f"Video assembly failed for task {task_id}: {error_msg}",
+            extra={
+                'task_id': task_id,
+                'error': error_msg,
+                'elapsed_time': elapsed_time,
+                'stage': current_stage
+            }
         )
-    ],
-    responses={
-        200: OpenApiResponse(
-            response=ChoreographyTaskListSerializer,
-            description="Paginated list of tasks",
-            examples=[
-                OpenApiExample(
-                    'Task List',
-                    value={
-                        'count': 25,
-                        'next': 'http://localhost:8000/api/choreography/tasks?page=2',
-                        'previous': None,
-                        'results': [
-                            {
-                                'task_id': '550e8400-e29b-41d4-a716-446655440000',
-                                'status': 'completed',
-                                'progress': 100,
-                                'stage': 'completed',
-                                'message': 'Choreography generated successfully',
-                                'created_at': '2025-11-02T10:30:00Z',
-                                'updated_at': '2025-11-02T10:35:00Z'
-                            },
-                            {
-                                'task_id': '660e8400-e29b-41d4-a716-446655440001',
-                                'status': 'running',
-                                'progress': 60,
-                                'stage': 'video_processing',
-                                'message': 'Processing video frames',
-                                'created_at': '2025-11-02T09:15:00Z',
-                                'updated_at': '2025-11-02T09:20:00Z'
-                            }
-                        ]
-                    }
-                )
-            ]
-        ),
-        400: OpenApiResponse(
-            description="Invalid query parameters",
-            examples=[
-                OpenApiExample(
-                    'Invalid Status',
-                    value={'error': 'Invalid status. Must be one of: pending, started, running, completed, failed'}
-                )
-            ]
-        ),
-        401: OpenApiResponse(description="Authentication required")
-    },
-    tags=['Choreography']
-)
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def list_tasks(request):
-    """
-    List user's tasks with pagination and filtering.
+        
+        # Check if it was a timeout (Requirements 1.4, 6.4)
+        if elapsed_time >= VIDEO_GENERATION_TIMEOUT:
+            return Response({
+                'error': 'Video generation timed out',
+                'details': f'Video assembly exceeded {VIDEO_GENERATION_TIMEOUT // 60} minute limit',
+                'task_id': task_id,
+                'stage': current_stage
+            }, status=status.HTTP_504_GATEWAY_TIMEOUT)
+        
+        # Check for specific error types (Requirements 6.1, 6.2, 6.3)
+        if 'FFmpeg is not available' in error_msg:
+            return Response({
+                'error': 'FFmpeg not available',
+                'details': error_msg,
+                'task_id': task_id,
+                'stage': current_stage
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        if 'Failed to fetch' in error_msg or 'not found after download' in error_msg:
+            return Response({
+                'error': 'Resource not found',
+                'details': error_msg,
+                'task_id': task_id,
+                'stage': current_stage
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # General processing error (Requirements 1.3, 6.3)
+        return Response({
+            'error': 'Video assembly failed',
+            'details': error_msg,
+            'stage': current_stage,
+            'task_id': task_id
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    Returns a paginated list of choreography generation tasks for the authenticated user.
-    Supports filtering by status and custom page sizes.
-    """
-    queryset = ChoreographyTask.objects.filter(user=request.user)
-    
-    # Filter by status if provided
-    status_filter = request.query_params.get('status')
-    if status_filter:
-        # Validate status is a valid choice
-        valid_statuses = [choice[0] for choice in ChoreographyTask.STATUS_CHOICES]
-        if status_filter not in valid_statuses:
-            return Response(
-                {'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        queryset = queryset.filter(status=status_filter)
-    
-    # Order by created_at descending (most recent first)
-    queryset = queryset.order_by('-created_at')
-    
-    # Paginate
-    paginator = PageNumberPagination()
-    # Allow custom page size via query param (max 100)
-    page_size = request.query_params.get('page_size')
-    if page_size:
-        try:
-            page_size = int(page_size)
-            if 1 <= page_size <= 100:
-                paginator.page_size = page_size
-        except (ValueError, TypeError):
-            pass  # Use default page size
-    
-    page = paginator.paginate_queryset(queryset, request)
-    
-    # Use lightweight serializer for list view
-    serializer = ChoreographyTaskListSerializer(page, many=True)
-    return paginator.get_paginated_response(serializer.data)
+    except FileNotFoundError as e:
+        # Handle missing files (Requirements 6.2)
+        elapsed_time = time.time() - start_time
+        error_msg = str(e)
+        current_stage = task.stage
+        
+        task.status = 'failed'
+        task.message = 'Required file not found'
+        task.error = error_msg
+        task.save()
+        
+        logger.error(
+            f"File not found for task {task_id}: {error_msg}",
+            extra={
+                'task_id': task_id,
+                'error': error_msg,
+                'stage': current_stage
+            }
+        )
+        
+        return Response({
+            'error': 'Resource not found',
+            'details': error_msg,
+            'task_id': task_id,
+            'stage': current_stage
+        }, status=status.HTTP_404_NOT_FOUND)
+        
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        error_msg = str(e)
+        current_stage = task.stage
+        
+        # Update task with error
+        task.status = 'failed'
+        task.message = 'Video generation failed'
+        task.error = error_msg
+        task.save()
+        
+        logger.error(
+            f"Video generation failed for task {task_id}: {error_msg}",
+            extra={
+                'task_id': task_id,
+                'error': error_msg,
+                'elapsed_time': elapsed_time
+            },
+            exc_info=True
+        )
+        
+        return Response({
+            'error': 'Video generation failed',
+            'details': error_msg,
+            'task_id': task_id,
+            'stage': current_stage
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
@@ -932,23 +779,23 @@ def parse_natural_language_query(request):
     query = serializer.validated_data['query']
     
     try:
-        # Initialize Gemini service
-        gemini_service = GeminiService()
+        # Use ParameterExtractor instead of GeminiService
+        from services.parameter_extractor import ParameterExtractor
         
-        # Parse query
-        parameters = gemini_service.parse_choreography_request(query)
+        extractor = ParameterExtractor()
+        parameters = extractor.extract(query)
         
-        logger.info(f"User {request.user.id} parsed query: '{query[:50]}...' -> {parameters.difficulty}/{parameters.style}")
+        logger.info(f"User {request.user.id} parsed query: '{query[:50]}...' -> {parameters.get('difficulty')}/{parameters.get('style')}")
         
         return Response({
-            'parameters': parameters.to_dict(),
-            'confidence': parameters.confidence,
+            'parameters': parameters,
+            'confidence': 0.8,  # Default confidence since ParameterExtractor doesn't provide this
             'query': query
         }, status=status.HTTP_200_OK)
         
     except ValueError as e:
-        # Gemini service not configured (missing API key)
-        logger.error(f"Gemini service error: {e}")
+        # Parameter extraction failed
+        logger.error(f"Parameter extraction error: {e}")
         return Response(
             {'error': 'AI service temporarily unavailable'},
             status=status.HTTP_503_SERVICE_UNAVAILABLE
@@ -958,19 +805,11 @@ def parse_natural_language_query(request):
         # Query parsing failed
         logger.warning(f"Failed to parse query '{query[:50]}...': {e}")
         
-        # Try to generate suggestions
-        try:
-            gemini_service = GeminiService()
-            suggestions = gemini_service.suggest_alternatives(query, {
-                'difficulties': ['beginner', 'intermediate', 'advanced'],
-                'styles': ['romantic', 'energetic', 'sensual', 'playful']
-            })
-        except:
-            suggestions = [
-                'Try specifying a difficulty level (beginner, intermediate, or advanced)',
-                'Try describing the style (romantic, energetic, sensual, or playful)',
-                'Include tempo preference (slow, medium, or fast)'
-            ]
+        suggestions = [
+            'Try specifying a difficulty level (beginner, intermediate, or advanced)',
+            'Try describing the style (romantic, energetic, sensual, or playful)',
+            'Include tempo preference (slow, medium, or fast)'
+        ]
         
         return Response({
             'error': 'Could not understand your query. Please try rephrasing.',
@@ -1067,7 +906,7 @@ def generate_with_ai(request):
     # Import services at the top to avoid variable shadowing issues
     from services.blueprint_generator import BlueprintGenerator
     from services.vector_search_service import VectorSearchService
-    from services.gemini_service import GeminiService
+    from services.parameter_extractor import ParameterExtractor
     
     serializer = AIGenerationSerializer(data=request.data)
     if not serializer.is_valid():
@@ -1079,9 +918,8 @@ def generate_with_ai(request):
     # Parse query if parameters not provided
     if not parameters:
         try:
-            gemini_svc = GeminiService()
-            parsed = gemini_svc.parse_choreography_request(query)
-            parameters = parsed.to_dict()
+            extractor = ParameterExtractor()
+            parameters = extractor.extract(query)
             logger.info(f"User {request.user.id} AI generation - parsed query: {parameters}")
         except Exception as e:
             logger.error(f"Failed to parse query for AI generation: {e}")
@@ -1154,7 +992,6 @@ def generate_with_ai(request):
         
         # Initialize services
         vector_search = get_vector_search_service()
-        gemini_svc = GeminiService()
         
         # Import MusicAnalyzer from backend
         from music_analyzer import MusicAnalyzer
@@ -1164,8 +1001,7 @@ def generate_with_ai(request):
         # Create blueprint generator
         blueprint_gen = BlueprintGenerator(
             vector_search_service=vector_search,
-            music_analyzer=music_analyzer,
-            gemini_service=gemini_svc
+            music_analyzer=music_analyzer
         )
         
         # Generate blueprint
@@ -1216,40 +1052,77 @@ def generate_with_ai(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
-    # Trigger Cloud Run Job with blueprint
-    jobs_service = CloudRunJobsService()
+    # Assemble video using VideoAssemblyService (synchronous)
+    from services.video_assembly_service import VideoAssemblyService, VideoAssemblyError
+    from services.storage_service import get_storage_service
+    
+    # Progress callback to update task record
+    def progress_callback(stage: str, progress: int, message: str):
+        """Update task record with progress."""
+        task.stage = stage
+        task.progress = progress
+        task.message = message
+        task.save()
+        logger.debug(f"Task {task_id} progress: {stage} ({progress}%) - {message}")
+    
     try:
-        import json
-        execution_name = jobs_service.create_job_execution(
-            task_id=task_id,
-            user_id=request.user.id,
-            parameters={'blueprint_json': json.dumps(blueprint)}
-        )
+        storage_service = get_storage_service()
+        video_assembly = VideoAssemblyService(storage_service=storage_service)
         
-        task.job_execution_name = execution_name
+        # Check FFmpeg availability
+        if not video_assembly.check_ffmpeg_available():
+            raise VideoAssemblyError("FFmpeg is not available in the system PATH")
+        
         task.status = 'started'
         task.stage = 'video_assembly'
-        task.message = 'Job submitted, assembling video...'
+        task.message = 'Assembling video...'
         task.save()
         
-        logger.info(f"Created AI generation job for task {task_id}: {execution_name}")
+        # Assemble video with progress updates
+        video_url = video_assembly.assemble_video(
+            blueprint=blueprint,
+            progress_callback=progress_callback
+        )
         
-    except Exception as e:
-        logger.error(f"Failed to create AI generation job for task {task_id}: {e}")
+        # Update task as completed
+        task.status = 'completed'
+        task.progress = 100
+        task.stage = 'completed'
+        task.message = 'AI choreography video generated successfully'
+        task.result = {
+            'video_url': video_url,
+            'output_path': blueprint.get('output_config', {}).get('output_path'),
+            'move_count': len(blueprint.get('moves', []))
+        }
+        task.save()
+        
+        logger.info(f"AI video generation completed for task {task_id}")
+        
+    except VideoAssemblyError as e:
+        logger.error(f"Video assembly failed for AI task {task_id}: {e}")
         task.status = 'failed'
-        task.error = f'Job submission failed: {str(e)}'
+        task.error = f'Video assembly failed: {str(e)}'
         task.save()
         return Response(
-            {'error': 'Failed to create job execution'},
+            {'error': 'Video assembly failed', 'details': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Failed to assemble AI video for task {task_id}: {e}")
+        task.status = 'failed'
+        task.error = f'Video assembly failed: {str(e)}'
+        task.save()
+        return Response(
+            {'error': 'Failed to assemble video'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return Response({
         'task_id': task_id,
-        'status': 'started',
-        'message': 'AI choreography generation started',
-        'poll_url': f'/api/choreography/tasks/{task_id}'
-    }, status=status.HTTP_202_ACCEPTED)
+        'status': 'completed',
+        'video_url': video_url,
+        'message': 'AI choreography generation completed'
+    }, status=status.HTTP_200_OK)
 
 
 @extend_schema(

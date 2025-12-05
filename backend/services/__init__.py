@@ -22,7 +22,7 @@ def get_agent_service():
     
     This factory function initializes the AgentService with all required
     dependencies (parameter_extractor, music_analyzer, vector_search,
-    blueprint_generator, jobs_service).
+    blueprint_generator, storage_service).
     
     Returns:
         AgentService instance
@@ -51,8 +51,7 @@ def get_agent_service():
         from services.parameter_extractor import ParameterExtractor
         from services.vector_search_service import get_vector_search_service
         from services.blueprint_generator import BlueprintGenerator
-        from services.jobs_service import JobsService
-        from services.gemini_service import GeminiService
+        from services.storage_service import get_storage_service
         
         # Import MusicAnalyzer from backend
         from music_analyzer import MusicAnalyzer
@@ -61,15 +60,13 @@ def get_agent_service():
         parameter_extractor = ParameterExtractor(openai_api_key=openai_api_key)
         music_analyzer = MusicAnalyzer()
         vector_search = get_vector_search_service()
-        gemini_service = GeminiService()
         
         blueprint_generator = BlueprintGenerator(
             vector_search_service=vector_search,
-            music_analyzer=music_analyzer,
-            gemini_service=gemini_service
+            music_analyzer=music_analyzer
         )
         
-        jobs_service = JobsService()
+        storage_service = get_storage_service()
         
         # Create agent service
         _agent_service = AgentService(
@@ -78,7 +75,7 @@ def get_agent_service():
             music_analyzer=music_analyzer,
             vector_search=vector_search,
             blueprint_generator=blueprint_generator,
-            jobs_service=jobs_service
+            storage_service=storage_service
         )
         
         logger.info("AgentService initialized successfully")

@@ -127,9 +127,8 @@ class Song(models.Model):
 class ChoreographyTask(models.Model):
     """Model for tracking choreography generation tasks
     
-    NOTE: This model mirrors the original choreography.models.ChoreographyTask
-    from the monolithic app to work with the same database during migration.
-    The main difference is we added 'job_execution_name' for Cloud Run Jobs tracking.
+    Tracks the status, progress, and results of choreography video generation.
+    Video assembly is now performed synchronously within the backend.
     """
     
     STATUS_CHOICES = [
@@ -151,7 +150,6 @@ class ChoreographyTask(models.Model):
     message = models.TextField(default='Starting choreography generation...')
     result = models.JSONField(null=True, blank=True)
     error = models.TextField(null=True, blank=True)
-    job_execution_name = models.CharField(max_length=500, null=True, blank=True)  # New field for Cloud Run Jobs
     song = models.ForeignKey(
         'Song',
         on_delete=models.SET_NULL,

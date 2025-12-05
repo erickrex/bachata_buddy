@@ -10,9 +10,7 @@ Features:
 - Comprehensive logging
 """
 
-import os
 import logging
-import subprocess
 from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -42,8 +40,6 @@ class FFmpegCommandBuilder:
         """
         logger.info("FFmpegCommandBuilder initialized (CPU-only)")
     
-
-    
     def build_normalize_command(
         self,
         input_file: str,
@@ -51,7 +47,9 @@ class FFmpegCommandBuilder:
         frame_rate: int = DEFAULT_FRAME_RATE
     ) -> List[str]:
         """
-        Build FFmpeg command for normalizing video frame rate (CPU-only).
+        Build FFmpeg command for normalizing video frame rate.
+        
+        Uses libx264 with ultrafast preset for speed.
         
         Args:
             input_file: Input video file path
@@ -60,27 +58,6 @@ class FFmpegCommandBuilder:
         
         Returns:
             List of command arguments for subprocess
-        """
-        return self._build_cpu_normalize_command(input_file, output_file, frame_rate)
-    
-    def _build_cpu_normalize_command(
-        self,
-        input_file: str,
-        output_file: str,
-        frame_rate: int
-    ) -> List[str]:
-        """
-        Build CPU normalization command.
-        
-        Uses libx264 with ultrafast preset for speed.
-        
-        Args:
-            input_file: Input video file path
-            output_file: Output video file path
-            frame_rate: Target frame rate
-        
-        Returns:
-            FFmpeg command as list
         """
         cmd = [
             'ffmpeg',
@@ -95,7 +72,7 @@ class FFmpegCommandBuilder:
             output_file
         ]
         
-        logger.debug(f"Built CPU normalize command: {' '.join(cmd)}")
+        logger.debug(f"Built normalize command: {' '.join(cmd)}")
         return cmd
     
     def build_concat_command(
@@ -115,8 +92,6 @@ class FFmpegCommandBuilder:
         Returns:
             List of command arguments for subprocess
         """
-        # For concatenation, we use copy codec regardless of GPU
-        # since the clips are already encoded
         cmd = [
             'ffmpeg',
             '-f', 'concat',
@@ -135,13 +110,13 @@ class FFmpegCommandBuilder:
         video_file: str,
         audio_file: str,
         output_file: str,
-        video_codec: Optional[str] = None,
+        video_codec: str = 'libx264',
         audio_codec: str = 'aac',
         video_bitrate: str = DEFAULT_VIDEO_BITRATE,
         audio_bitrate: str = DEFAULT_AUDIO_BITRATE
     ) -> List[str]:
         """
-        Build FFmpeg command for adding audio to video (CPU-only).
+        Build FFmpeg command for adding audio to video.
         
         Args:
             video_file: Input video file path
@@ -154,37 +129,6 @@ class FFmpegCommandBuilder:
         
         Returns:
             List of command arguments for subprocess
-        """
-        return self._build_cpu_add_audio_command(
-            video_file, audio_file, output_file,
-            video_codec or 'libx264',
-            audio_codec, video_bitrate, audio_bitrate
-        )
-    
-    def _build_cpu_add_audio_command(
-        self,
-        video_file: str,
-        audio_file: str,
-        output_file: str,
-        video_codec: str,
-        audio_codec: str,
-        video_bitrate: str,
-        audio_bitrate: str
-    ) -> List[str]:
-        """
-        Build CPU audio addition command.
-        
-        Args:
-            video_file: Input video file path
-            audio_file: Input audio file path
-            output_file: Output video file path
-            video_codec: Video codec
-            audio_codec: Audio codec
-            video_bitrate: Video bitrate
-            audio_bitrate: Audio bitrate
-        
-        Returns:
-            FFmpeg command as list
         """
         cmd = [
             'ffmpeg',
@@ -199,7 +143,7 @@ class FFmpegCommandBuilder:
             output_file
         ]
         
-        logger.debug(f"Built CPU add audio command: {' '.join(cmd)}")
+        logger.debug(f"Built add audio command: {' '.join(cmd)}")
         return cmd
     
     def get_info(self) -> Dict[str, Any]:

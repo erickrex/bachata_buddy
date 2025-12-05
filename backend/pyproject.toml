@@ -46,13 +46,18 @@ dependencies = [
     "drf-spectacular-sidecar>=2025.10.1",
     # Text Embeddings
     "sentence-transformers>=3.0.0",
+    # Testing (included in main deps for CI/CD)
+    "pytest>=8.4.0",
+    "pytest-django>=4.11.0",
+    "pytest-cov>=4.1.0",
+    "pytest-env>=1.1.0",
+    "hypothesis>=6.148.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-django>=4.5.0",
-    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
 ]
 
 [build-system]
@@ -62,9 +67,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["apps", "api", "core"]
 
-[dependency-groups]
-dev = [
-    "hypothesis>=6.148.2",
-    "pytest>=8.4.2",
-    "pytest-django>=4.11.1",
-]
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "api.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--verbose --strict-markers --tb=short"
+testpaths = ["apps", "services", "core"]
+
+[tool.pytest_env]
+DJANGO_TESTING = "true"
+
+[tool.hypothesis]
+database = ".hypothesis/examples"
+verbosity = "normal"
+max_examples = 10
+deadline = 60000

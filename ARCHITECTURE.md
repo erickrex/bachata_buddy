@@ -16,11 +16,10 @@ This document describes the complete system architecture for Bachata Buddy, incl
 ## Overview
 
 Bachata Buddy is a multi-tier application that generates AI-powered dance choreographies using:
-- **Backend**: Django REST API (Python 3.12)
+- **Backend**: Django REST API (Python 3.12) with integrated video assembly
 - **Frontend**: React SPA (Vite)
 - **Database**: PostgreSQL 15
 - **Storage**: Local filesystem (dev) or S3 (production)
-- **Jobs**: Background video processing service
 
 ## Local Development Architecture
 
@@ -31,9 +30,8 @@ graph TB
     subgraph "Developer Machine"
         subgraph "Docker Compose Environment"
             FE[Frontend Container<br/>React + Vite<br/>Port 3000]
-            BE[Backend Container<br/>Django REST API<br/>Port 8000]
+            BE[Backend Container<br/>Django REST API<br/>Video Assembly<br/>FFmpeg<br/>Port 8000]
             DB[(PostgreSQL<br/>Port 5432)]
-            JOB[Job Container<br/>Video Assembly<br/>FFmpeg]
             FS[Local Filesystem<br/>./data/<br/>./media/]
         end
         
@@ -43,15 +41,11 @@ graph TB
     DEV -->|HTTP :3000| FE
     FE -->|API Calls :8000| BE
     BE -->|SQL| DB
-    BE -->|Trigger| JOB
     BE -->|Read/Write| FS
-    JOB -->|Read/Write| FS
-    JOB -->|Update Status| DB
     
     style FE fill:#61dafb,color:#000
     style BE fill:#092e20,color:#fff
     style DB fill:#336791,color:#fff
-    style JOB fill:#ff6d00,color:#fff
     style FS fill:#ffa000,color:#000
 ```
 
@@ -60,9 +54,8 @@ graph TB
 | Service | Image | Ports | Purpose |
 |---------|-------|-------|---------|
 | **frontend** | node:18 | 3000 | React development server |
-| **backend** | python:3.12 | 8000 | Django API server |
+| **backend** | python:3.12 | 8000 | Django API server with video assembly |
 | **postgres** | postgres:15 | 5432 | Database |
-| **job** | python:3.12 | - | Video processing (triggered) |
 
 ### Local Storage Structure
 
@@ -98,8 +91,7 @@ graph TB
         
         subgraph "Backend - us-east-1"
             subgraph "Compute"
-                AR1[App Runner<br/>Backend API<br/>Auto-scaling]
-                AR2[App Runner<br/>Job Service<br/>Scale to Zero]
+                AR1[App Runner<br/>Backend API<br/>Video Assembly<br/>Auto-scaling]
             end
             
             subgraph "Storage"
@@ -136,25 +128,18 @@ graph TB
     CF -->|Origin| S3F
     U -->|API Calls| AR1
     AR1 -->|Query| RDS
-    AR1 -->|Trigger| AR2
     AR1 -->|Store/Retrieve| S3M
-    AR2 -->|Store/Retrieve| S3M
-    AR2 -->|Update Status| RDS
     AR1 -->|Pull Image| ECR
-    AR2 -->|Pull Image| ECR
     AR1 -->|Get Secrets| SM
-    AR2 -->|Get Secrets| SM
     RDS -.->|Inside| VPC
     AR1 -->|NLP| GEMINI
     AR1 -->|Logs| CW
-    AR2 -->|Logs| CW
     RDS -->|Metrics| CW
     
     style CF fill:#ff9900,color:#000
     style S3F fill:#569a31,color:#fff
     style S3M fill:#569a31,color:#fff
     style AR1 fill:#ff9900,color:#000
-    style AR2 fill:#ff9900,color:#000
     style RDS fill:#527fff,color:#fff
     style ECR fill:#ff9900,color:#000
     style SM fill:#dd344c,color:#fff
@@ -263,6 +248,8 @@ graph LR
 - Django 5.2
 - Django REST Framework
 - Python 3.12
+- UV (package manager)
+- FFmpeg (video processing)
 - Gunicorn (production server)
 
 **Deployment:**
@@ -275,8 +262,9 @@ graph LR
 
 **Key Services:**
 - User authentication (JWT)
-- Choreography generation
+- Choreography generation (synchronous)
 - Blueprint creation
+- Video assembly (FFmpeg-based)
 - Audio analysis (Librosa)
 - Text embeddings (Sentence-Transformers)
 - Vector search (FAISS)
@@ -285,38 +273,40 @@ graph LR
 **Resource Configuration:**
 - CPU: 2 vCPU
 - Memory: 2 GB
-- Timeout: 300 seconds
+- Timeout: 600 seconds (increased for video processing)
 - Concurrency: 100 requests/instance
 
-### Job Service (Video Assembly)
+### Video Assembly (Integrated in Backend)
 
 **Technology Stack:**
-- Python 3.12
 - FFmpeg
+- Python subprocess management
 - Blueprint-based architecture
 
-**Deployment:**
-- **Local**: Docker container (triggered by API)
-- **Production**: App Runner
-  - Containerized with Docker
-  - Scale to zero when idle
-  - Triggered by API via HTTP
-  - Processes blueprints from database
+**Architecture:**
+- Integrated directly into the Django backend
+- Executes synchronously within HTTP requests
+- No separate container or service required
 
 **Key Functions:**
 - Parse blueprint JSON
 - Fetch video clips from storage
-- Assemble video with FFmpeg
+- Normalize clips to 30fps
+- Concatenate clips with FFmpeg
+- Add audio track
 - Upload output to storage
-- Update task status in database
+- Clean up temporary files
 
-**Resource Configuration:**
-- CPU: 1 vCPU
-- Memory: 512 MB
-- Timeout: 300 seconds
-- Concurrency: 1 job/instance
-- Min instances: 0 (scale to zero)
-- Max instances: 5
+**Process Flow:**
+1. Validate blueprint structure and security
+2. Download audio and video files from storage
+3. Normalize all clips to consistent frame rate (30fps)
+4. Create FFmpeg concat file
+5. Concatenate clips into single video
+6. Add audio track to video
+7. Upload final video to storage
+8. Clean up temporary files
+9. Return video URL
 
 ### Database (PostgreSQL)
 
@@ -376,9 +366,81 @@ s3://bachata-buddy-frontend/
 └── favicon.ico
 ```
 
+## Video Assembly Architecture
+
+### Overview
+
+Video assembly is now integrated directly into the Django backend, executing synchronously within HTTP requests. This eliminates the need for a separate job container, job queues, and asynchronous polling.
+
+### Components
+
+**VideoAssemblyService:**
+- Core service for video assembly
+- Validates blueprint structure and security
+- Downloads media files from storage
+- Orchestrates FFmpeg operations
+- Uploads results and cleans up temporary files
+
+**FFmpegCommandBuilder:**
+- Constructs FFmpeg commands for video operations
+- Supports frame rate normalization (30fps)
+- Handles video concatenation
+- Manages audio track addition
+- Uses CPU-based encoding (libx264, aac)
+
+**Blueprint Format:**
+```json
+{
+    "task_id": "uuid",
+    "audio_path": "songs/song.mp3",
+    "moves": [
+        {
+            "video_path": "clips/move.mp4",
+            "start_time": 0.0,
+            "duration": 4.0
+        }
+    ],
+    "output_config": {
+        "output_path": "output/user_1/video.mp4",
+        "video_codec": "libx264",
+        "audio_codec": "aac",
+        "video_bitrate": "2M",
+        "audio_bitrate": "128k"
+    }
+}
+```
+
+### Processing Pipeline
+
+1. **Validation**: Check blueprint structure, required fields, and path security
+2. **Fetching (20%)**: Download audio and video files from storage
+3. **Normalization**: Convert all clips to 30fps for consistency
+4. **Concatenation (50%)**: Merge clips using FFmpeg concat demuxer
+5. **Audio Addition (70%)**: Add audio track to video
+6. **Upload (85%)**: Upload final video to storage
+7. **Cleanup (95%)**: Remove temporary files
+8. **Complete (100%)**: Return video URL
+
+### Error Handling
+
+- **Validation errors**: Invalid blueprint structure or paths
+- **Resource errors**: Missing audio or video files
+- **FFmpeg errors**: Processing failures with detailed output
+- **Storage errors**: Upload/download failures
+- **Timeout**: 10-minute limit per request
+- All errors trigger automatic cleanup of temporary files
+
+### Dependencies
+
+- **Python**: 3.12+
+- **UV**: Package manager for dependency management
+- **FFmpeg**: System binary for video processing
+- **Storage Service**: Abstraction for local/S3 storage
+- **Hypothesis**: Property-based testing framework
+
 ## Data Flow
 
-### Choreography Generation Flow
+### Choreography Generation Flow (Synchronous)
 
 ```mermaid
 sequenceDiagram
@@ -388,11 +450,13 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant GEMINI as Gemini AI
     participant FAISS as FAISS Search
-    participant JOB as Job Service
+    participant VA as Video Assembly
+    participant FFmpeg as FFmpeg
     participant S3 as S3 Storage
     
     U->>FE: Enter query + select song
     FE->>BE: POST /api/choreography/generate
+    BE->>DB: Create task (pending)
     BE->>GEMINI: Parse natural language query
     GEMINI-->>BE: Structured parameters
     BE->>BE: Analyze audio (Librosa)
@@ -401,24 +465,24 @@ sequenceDiagram
     BE->>FAISS: Compute similarities
     FAISS-->>BE: Ranked moves
     BE->>BE: Generate blueprint JSON
-    BE->>DB: Save task + blueprint
-    DB-->>BE: Task ID
-    BE-->>FE: Task ID + status
-    FE->>FE: Poll for status
-    BE->>JOB: Trigger video assembly
-    JOB->>DB: Fetch blueprint
-    DB-->>JOB: Blueprint JSON
-    JOB->>S3: Fetch video clips
-    S3-->>JOB: Video files
-    JOB->>JOB: Assemble with FFmpeg
-    JOB->>S3: Upload output video
-    S3-->>JOB: Video URL
-    JOB->>DB: Update task status
-    DB-->>JOB: Success
-    FE->>BE: Poll status
-    BE->>DB: Check status
-    DB-->>BE: Complete + URL
-    BE-->>FE: Video URL
+    BE->>DB: Update task (assembling)
+    BE->>VA: Assemble video (synchronous)
+    VA->>S3: Download audio file
+    S3-->>VA: Audio file
+    VA->>S3: Download video clips
+    S3-->>VA: Video files
+    VA->>FFmpeg: Normalize clips (30fps)
+    FFmpeg-->>VA: Normalized clips
+    VA->>FFmpeg: Concatenate clips
+    FFmpeg-->>VA: Concatenated video
+    VA->>FFmpeg: Add audio track
+    FFmpeg-->>VA: Final video
+    VA->>S3: Upload output video
+    S3-->>VA: Video URL
+    VA->>VA: Clean up temp files
+    VA-->>BE: Video URL
+    BE->>DB: Update task (completed)
+    BE-->>FE: Video URL + task details
     FE->>U: Display video
 ```
 
@@ -520,10 +584,10 @@ X_FRAME_OPTIONS = 'DENY'
 
 **App Runner Auto-Scaling:**
 - Backend: 1-10 instances
-- Job: 0-5 instances (scale to zero)
 - Metrics: CPU, Memory, Request count
 - Scale-up: 70% CPU or 80% memory
 - Scale-down: 30% CPU and 50% memory
+- Note: Video assembly is CPU-intensive and may trigger scaling
 
 **RDS Aurora Scaling:**
 - Serverless v2: 0.5-2 ACU
@@ -533,9 +597,9 @@ X_FRAME_OPTIONS = 'DENY'
 ### Vertical Scaling
 
 **Resource Limits:**
-- Backend: 2 vCPU, 2 GB RAM
-- Job: 1 vCPU, 512 MB RAM
+- Backend: 2 vCPU, 2 GB RAM (includes video assembly)
 - Can be increased via CDK configuration
+- Video assembly may benefit from additional CPU resources
 
 ### Caching Strategy
 
@@ -555,9 +619,9 @@ X_FRAME_OPTIONS = 'DENY'
 
 **App Runner Metrics:**
 - Request count
-- Response time (p50, p90, p99)
+- Response time (p50, p90, p99) - may be higher due to synchronous video assembly
 - Error rate (4xx, 5xx)
-- CPU utilization
+- CPU utilization - spikes during video processing
 - Memory utilization
 - Active instances
 
@@ -576,8 +640,7 @@ X_FRAME_OPTIONS = 'DENY'
 ### CloudWatch Logs
 
 **Log Groups:**
-- `/aws/apprunner/backend` - Backend API logs
-- `/aws/apprunner/job` - Job service logs
+- `/aws/apprunner/backend` - Backend API logs (includes video assembly logs)
 - `/aws/rds/cluster/<cluster-id>` - Database logs
 
 **Log Retention:**
@@ -590,12 +653,12 @@ X_FRAME_OPTIONS = 'DENY'
 - App Runner error rate > 5%
 - RDS CPU > 80%
 - RDS storage > 85%
-- App Runner response time > 5s
+- App Runner response time > 10 minutes (timeout threshold)
 
 **Warning Alarms:**
 - App Runner error rate > 1%
 - RDS CPU > 60%
-- Job processing time > 10 minutes
+- Video assembly time > 5 minutes
 
 ### Distributed Tracing
 
@@ -611,7 +674,9 @@ X_FRAME_OPTIONS = 'DENY'
 - Database connection pooling
 - Query optimization (indexes, select_related)
 - Lazy loading of embeddings
-- Async task processing
+- FFmpeg command optimization (CPU-based encoding)
+- Temporary file cleanup
+- Efficient video normalization (30fps standard)
 
 ### Frontend Optimization
 
@@ -673,20 +738,57 @@ X_FRAME_OPTIONS = 'DENY'
 
 | Service | Monthly Cost | Optimization |
 |---------|-------------|--------------|
-| App Runner (Backend) | $50-100 | Right-size instances |
-| App Runner (Job) | $20-50 | Scale to zero |
+| App Runner (Backend) | $75-150 | Right-size instances, increased for video processing |
 | RDS Aurora | $50-150 | Serverless v2, low min ACU |
 | S3 | $10-30 | Lifecycle policies |
 | CloudFront | $20-50 | Cache optimization |
-| **Total** | **$150-380** | |
+| **Total** | **$155-380** | |
+
+**Note:** Consolidating video assembly into the backend reduces infrastructure complexity and eliminates the separate job service cost, but may increase backend resource usage.
+
+## Migration from Job Container
+
+### Previous Architecture
+
+The system previously used a separate job container for video assembly:
+- Backend generated blueprints and triggered jobs
+- Job container processed videos asynchronously
+- Frontend polled for task status
+- Required job orchestration (mock/AWS/Celery modes)
+
+### Current Architecture
+
+Video assembly is now integrated into the backend:
+- Single container deployment
+- Synchronous video generation
+- Immediate response with video URL
+- Simplified infrastructure and deployment
+- No job queues or polling required
+
+### Benefits
+
+1. **Simplified Architecture**: One container instead of two
+2. **Reduced Latency**: No job queue overhead
+3. **Better Error Handling**: Immediate error feedback
+4. **Easier Development**: Single service to run and debug
+5. **Lower Costs**: Fewer resources to manage
+6. **Simpler Deployment**: Single Docker image
+
+### Trade-offs
+
+1. **Request Duration**: Longer HTTP requests (30s-5min typical)
+2. **Resource Usage**: Backend needs more CPU/memory
+3. **Concurrency**: Limited by backend instance capacity
+4. **Timeout Risk**: Must complete within 10-minute limit
 
 ## Future Enhancements
 
 - Multi-region deployment for global users
 - ElastiCache for application caching
-- SQS for job queue management
+- Async job queue for very long videos (optional)
 - Lambda for serverless functions
 - API Gateway for advanced routing
 - WAF for DDoS protection
 - Route 53 for DNS management
 - Certificate Manager for SSL/TLS
+- GPU-accelerated FFmpeg encoding

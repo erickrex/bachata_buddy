@@ -6,8 +6,12 @@ Property-based tests for Path 1 agent bypass.
 
 These tests verify that Path 1 (song selection workflow) does NOT invoke
 the AgentService and continues to work exactly as before the agent implementation.
+
+NOTE: These tests require external API keys (GOOGLE_API_KEY) for the
+generate-from-song endpoint and will be skipped if not available.
 """
 
+import os
 import pytest
 from hypothesis import given, strategies as st, settings
 from hypothesis.extra.django import TestCase
@@ -18,6 +22,12 @@ from apps.choreography.models import Song, ChoreographyTask
 import uuid
 
 User = get_user_model()
+
+# Skip all tests in this module if API keys are not set
+pytestmark = pytest.mark.skipif(
+    not os.environ.get('GOOGLE_API_KEY'),
+    reason="Skipping Path 1 tests - GOOGLE_API_KEY not set (required for generate-from-song endpoint)"
+)
 
 
 # Hypothesis strategies for generating test data
@@ -100,21 +110,23 @@ class TestPath1AgentBypass(TestCase):
             # Mock the services that SHOULD be used in Path 1
             with patch('services.blueprint_generator.BlueprintGenerator') as mock_blueprint_gen, \
                  patch('services.vector_search_service.get_vector_search_service') as mock_vector_search, \
-                 patch('services.gemini_service.GeminiService') as mock_gemini, \
-                 patch('services.jobs_service.JobsService') as mock_jobs_service:
+                 patch('services.video_assembly_service.VideoAssemblyService') as mock_video_assembly, \
+                 patch('services.storage_service.get_storage_service') as mock_storage:
                 
                 # Configure mocks for successful execution
                 mock_blueprint_instance = MagicMock()
                 mock_blueprint_instance.generate_blueprint.return_value = {
                     'moves': [],
                     'song_path': self.song.audio_path,
+                    'output_config': {'output_path': 'output/test.mp4'},
                     'generation_parameters': request_data
                 }
                 mock_blueprint_gen.return_value = mock_blueprint_instance
                 
-                mock_jobs_instance = MagicMock()
-                mock_jobs_instance.create_job_execution.return_value = 'test-execution-123'
-                mock_jobs_service.return_value = mock_jobs_instance
+                mock_video_instance = MagicMock()
+                mock_video_instance.check_ffmpeg_available.return_value = True
+                mock_video_instance.assemble_video.return_value = 'https://storage.example.com/output/test.mp4'
+                mock_video_assembly.return_value = mock_video_instance
                 
                 # Make request to Path 1 endpoint
                 response = self.client.post(
@@ -123,9 +135,9 @@ class TestPath1AgentBypass(TestCase):
                     format='json'
                 )
                 
-                # Verify response is successful
-                assert response.status_code == 202, \
-                    f"Path 1 endpoint should return 202, got {response.status_code}"
+                # Verify response is successful (now returns 200 since it's synchronous)
+                assert response.status_code == 200, \
+                    f"Path 1 endpoint should return 200, got {response.status_code}"
                 
                 # CRITICAL: Verify AgentService was NOT instantiated
                 mock_agent_service.assert_not_called(), \
@@ -173,14 +185,15 @@ class TestPath1AgentBypass(TestCase):
         
         with patch('services.blueprint_generator.BlueprintGenerator') as mock_blueprint_gen, \
              patch('services.vector_search_service.get_vector_search_service') as mock_vector_search, \
-             patch('services.gemini_service.GeminiService') as mock_gemini, \
-             patch('apps.choreography.views.CloudRunJobsService') as mock_jobs_service:
+             patch('services.video_assembly_service.VideoAssemblyService') as mock_video_assembly, \
+             patch('services.storage_service.get_storage_service') as mock_storage:
             
             # Configure mocks
             mock_blueprint_instance = MagicMock()
             expected_blueprint = {
                 'moves': [{'name': 'basic', 'duration': 4.0}],
                 'song_path': self.song.audio_path,
+                'output_config': {'output_path': 'output/test.mp4'},
                 'generation_parameters': {
                     'difficulty': request_data['difficulty'],
                     'energy_level': request_data['energy_level'],
@@ -190,10 +203,11 @@ class TestPath1AgentBypass(TestCase):
             mock_blueprint_instance.generate_blueprint.return_value = expected_blueprint
             mock_blueprint_gen.return_value = mock_blueprint_instance
             
-            # Configure jobs service mock - the view instantiates it
-            mock_jobs_instance = MagicMock()
-            mock_jobs_instance.create_job_execution.return_value = 'test-execution-456'
-            mock_jobs_service.return_value = mock_jobs_instance
+            # Configure video assembly mock
+            mock_video_instance = MagicMock()
+            mock_video_instance.check_ffmpeg_available.return_value = True
+            mock_video_instance.assemble_video.return_value = 'https://storage.example.com/output/test.mp4'
+            mock_video_assembly.return_value = mock_video_instance
             
             # Make request
             response = self.client.post(
@@ -202,9 +216,9 @@ class TestPath1AgentBypass(TestCase):
                 format='json'
             )
             
-            # Verify response
-            assert response.status_code == 202, \
-                f"Expected 202, got {response.status_code}: {response.data if hasattr(response, 'data') else response.content}"
+            # Verify response (now returns 200 since it's synchronous)
+            assert response.status_code == 200, \
+                f"Expected 200, got {response.status_code}: {response.data if hasattr(response, 'data') else response.content}"
             task_id = response.data['task_id']
             
             # Verify BlueprintGenerator was called with correct parameters
@@ -221,14 +235,14 @@ class TestPath1AgentBypass(TestCase):
             assert call_kwargs['style'] == request_data['style'], \
                 "BlueprintGenerator should receive correct style"
             
-            # Verify CloudRunJobsService was instantiated and called
-            mock_jobs_service.assert_called_once()
-            mock_jobs_instance.create_job_execution.assert_called_once()
+            # Verify VideoAssemblyService was instantiated and called
+            mock_video_assembly.assert_called_once()
+            mock_video_instance.assemble_video.assert_called_once()
             
             # Verify task exists and has correct status
             task = ChoreographyTask.objects.get(task_id=task_id)
-            assert task.status == 'started', \
-                "Task should be in 'started' status after job submission"
+            assert task.status == 'completed', \
+                "Task should be in 'completed' status after video assembly"
             assert task.song_id == self.song.id, \
                 "Task should reference the selected song"
     
@@ -249,22 +263,24 @@ class TestPath1AgentBypass(TestCase):
         # Configure mocks properly
         with patch('services.blueprint_generator.BlueprintGenerator') as mock_blueprint_gen, \
              patch('services.vector_search_service.get_vector_search_service') as mock_vector_search, \
-             patch('services.gemini_service.GeminiService') as mock_gemini, \
-             patch('services.jobs_service.JobsService') as mock_jobs_service:
+             patch('services.video_assembly_service.VideoAssemblyService') as mock_video_assembly, \
+             patch('services.storage_service.get_storage_service') as mock_storage:
             
             # Configure blueprint generator mock to return a proper dict
             mock_blueprint_instance = MagicMock()
             mock_blueprint_instance.generate_blueprint.return_value = {
                 'moves': [],
                 'song_path': self.song.audio_path,
+                'output_config': {'output_path': 'output/test.mp4'},
                 'generation_parameters': request_data
             }
             mock_blueprint_gen.return_value = mock_blueprint_instance
             
-            # Configure jobs service mock
-            mock_jobs_instance = MagicMock()
-            mock_jobs_instance.create_job_execution.return_value = 'test-execution-123'
-            mock_jobs_service.return_value = mock_jobs_instance
+            # Configure video assembly mock
+            mock_video_instance = MagicMock()
+            mock_video_instance.check_ffmpeg_available.return_value = True
+            mock_video_instance.assemble_video.return_value = 'https://storage.example.com/output/test.mp4'
+            mock_video_assembly.return_value = mock_video_instance
             
             response = self.client.post(
                 '/api/choreography/generate-from-song/',
@@ -276,6 +292,6 @@ class TestPath1AgentBypass(TestCase):
             assert response.status_code != 404, \
                 "Path 1 endpoint should still exist"
             
-            # Should return 202 (successful) or 500 (error, but endpoint exists)
-            assert response.status_code in [202, 500], \
+            # Should return 200 (successful) or 500 (error, but endpoint exists)
+            assert response.status_code in [200, 500], \
                 f"Path 1 endpoint should be accessible, got {response.status_code}"

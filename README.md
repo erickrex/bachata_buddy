@@ -571,6 +571,16 @@ from common.exceptions import VideoGenerationError
 
 ## 🆕 Recent Major Enhancements
 
+### Synchronous Video Generation (December 2025) ✅
+- **Integrated Video Assembly**: Video generation now runs directly in the Django backend
+- **Simplified Architecture**: Eliminated separate job container and job queues
+- **Immediate Response**: Videos generated synchronously within HTTP requests (30s-5min)
+- **UV Package Manager**: Modern Python dependency management with pyproject.toml
+- **Faster Development**: Single container to run and debug
+- **Better Error Handling**: Immediate error feedback without polling
+- **Progress Updates**: Real-time stage and progress reporting (fetching, concatenating, uploading)
+- **Automatic Cleanup**: Temporary files cleaned up on success or error
+
 ### OpenAI Agent Orchestration (November 2025) ✅
 - **Conversational Interface**: Natural language choreography requests via chat
 - **Intelligent Orchestration**: OpenAI function calling for autonomous workflow management
@@ -675,8 +685,8 @@ from common.exceptions import VideoGenerationError
 
 ### Prerequisites
 - Python 3.12+
-- UV package manager
-- FFmpeg and libsndfile (for audio processing)
+- UV package manager (fast Python package installer)
+- FFmpeg and libsndfile (for audio/video processing)
 - Docker and Docker Compose (for local development)
 - PostgreSQL 15+ (or use Docker Compose)
 - OpenAI API key (for conversational AI features)
@@ -696,9 +706,11 @@ brew install ffmpeg libsndfile
 sudo apt-get update
 sudo apt-get install ffmpeg libsndfile1
 
-# 2. Install Python dependencies
+# 2. Install Python dependencies with UV
+cd backend
 uv sync
-# That's it! YOLOv8 models download automatically on first use
+# That's it! UV handles all dependencies from pyproject.toml
+# YOLOv8 models download automatically on first use
 
 # 3. Configure environment
 cp backend/.env.example backend/.env
@@ -745,6 +757,163 @@ uv run python scripts/restore_embeddings.py \
 - FAISS index is built in-memory from database embeddings
 - Ensure PostgreSQL is running (via Docker Compose or local installation)
 - Check logs with `docker-compose logs -f backend`
+```
+
+---
+
+## 📦 UV Package Manager
+
+### Overview
+
+The project uses **UV** for Python dependency management, replacing traditional requirements.txt files with modern pyproject.toml configuration.
+
+### Why UV?
+
+- **Fast**: 10-100x faster than pip for dependency resolution
+- **Modern**: Uses pyproject.toml (PEP 621 standard)
+- **Reliable**: Deterministic dependency resolution with lockfiles
+- **Simple**: Single command to install all dependencies
+
+### Setup
+
+```bash
+# Install UV (macOS/Linux)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install UV (Windows)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Install project dependencies
+cd backend
+uv sync
+
+# That's it! All dependencies from pyproject.toml are installed
+```
+
+### Common Commands
+
+```bash
+# Install dependencies
+uv sync
+
+# Add a new dependency
+uv add django-cors-headers
+
+# Add a development dependency
+uv add --dev pytest
+
+# Update dependencies
+uv sync --upgrade
+
+# Run Python with UV environment
+uv run python manage.py runserver
+
+# Run tests
+uv run pytest
+```
+
+### Migration from requirements.txt
+
+The project has migrated from requirements.txt to pyproject.toml:
+
+**Before:**
+```bash
+pip install -r requirements.txt
+```
+
+**After:**
+```bash
+uv sync
+```
+
+All dependencies are now defined in `backend/pyproject.toml` with proper version constraints and metadata.
+
+---
+
+## 🎬 Video Generation API
+
+### Synchronous Generation
+
+Video generation now happens synchronously within HTTP requests, eliminating the need for polling.
+
+### API Endpoint
+
+**POST /api/choreography/generate/**
+
+Generate a choreography video immediately.
+
+**Request:**
+```json
+{
+  "song_id": 1,
+  "difficulty": "intermediate",
+  "energy_level": "medium",
+  "style": "modern"
+}
+```
+
+**Response (Success - 200 OK):**
+```json
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "video_url": "https://storage.example.com/output/video.mp4",
+  "duration_seconds": 45.2,
+  "progress": 100,
+  "stage": "completed"
+}
+```
+
+**Response (Error - 400/404/500):**
+```json
+{
+  "error": "Video assembly failed",
+  "details": "FFmpeg error: Invalid codec",
+  "stage": "concatenating"
+}
+```
+
+### Progress Stages
+
+During video generation, the task progresses through these stages:
+
+1. **pending** (0%) - Task created
+2. **fetching** (20%) - Downloading audio and video files
+3. **concatenating** (50%) - Merging video clips with FFmpeg
+4. **adding_audio** (70%) - Adding audio track to video
+5. **uploading** (85%) - Uploading final video to storage
+6. **cleanup** (95%) - Removing temporary files
+7. **completed** (100%) - Video ready
+
+### Error Handling
+
+The API returns appropriate HTTP status codes:
+
+- **400 Bad Request**: Invalid parameters or blueprint validation failed
+- **404 Not Found**: Song or video files not found
+- **500 Internal Server Error**: FFmpeg or storage errors
+- **504 Gateway Timeout**: Video generation exceeded 10-minute limit
+
+All errors include:
+- `error`: Human-readable error message
+- `details`: Technical details for debugging
+- `stage`: Stage where error occurred
+
+### Example Usage
+
+```bash
+# Generate choreography
+curl -X POST http://localhost:8000/api/choreography/generate/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "song_id": 1,
+    "difficulty": "intermediate",
+    "energy_level": "medium",
+    "style": "modern"
+  }'
+
+# Response includes video_url immediately (no polling needed)
 ```
 
 ---
@@ -1365,10 +1534,10 @@ graph TB
         end
         
         subgraph "Processing Layer - Video Assembly"
-            JOB[Job Container<br/>FFmpeg Assembly]
+            VA[Video Assembly Service<br/>Integrated in Backend<br/>FFmpeg Processing]
             BP[Blueprint JSON<br/>Complete Instructions]
             BG --> BP
-            BP --> JOB
+            BP --> VA
         end
         
         subgraph "Storage Layer"
@@ -1395,12 +1564,12 @@ graph TB
     BG -->|Pose Analysis| YOLO
     BG -->|Text Embeddings| ST
     BG -->|Audio Features| LIB
-    JOB -->|Fetch Media| FS
-    JOB -->|Update Status| SQL
-    JOB -->|Save Video| FS
+    VA -->|Fetch Media| FS
+    VA -->|Update Status| SQL
+    VA -->|Save Video| FS
     
     style API fill:#4285f4,color:#fff
-    style JOB fill:#4285f4,color:#fff
+    style VA fill:#4285f4,color:#fff
     style BG fill:#34a853,color:#fff
     style BP fill:#fbbc04,color:#000
     style SQL fill:#34a853,color:#fff
@@ -1477,7 +1646,10 @@ graph LR
 
 | Feature | Benefit | Impact |
 |---------|---------|--------|
-| **Blueprint-Based** | API generates complete instructions | 75% memory reduction in job |
+| **Synchronous Video Generation** | Immediate response, no polling | Simpler frontend, better UX |
+| **Integrated Video Assembly** | Single container deployment | Easier development and deployment |
+| **UV Package Manager** | Fast dependency resolution | 10-100x faster than pip |
+| **Blueprint-Based** | API generates complete instructions | Clear separation of concerns |
 | **Trimodal Fusion** | Multi-dimensional move matching | Higher quality choreographies |
 | **Docker Compose** | Easy local development | Simple setup and testing |
 | **FAISS** | Vector similarity search | Fast recommendations (<50ms) |
@@ -1489,20 +1661,20 @@ graph LR
 
 | Component | Container | Port | Purpose |
 |-----------|-----------|------|---------|
-| **Backend API** | backend | 8000 | Django REST API |
+| **Backend API** | backend | 8000 | Django REST API with integrated video assembly |
 | **Frontend** | frontend | 3000 | React development server |
 | **Database** | postgres | 5432 | PostgreSQL database |
-| **Job Service** | job | - | Video assembly (triggered by API) |
 
 ### Performance Metrics
 
 | Metric | Value | Optimization |
 |--------|-------|--------------|
 | **Blueprint Generation** | 2-5s | Trimodal fusion, cached embeddings |
-| **Video Assembly** | 40-50s | FFmpeg optimization, local storage |
+| **Video Assembly** | 30s-5min | FFmpeg optimization, synchronous processing |
 | **Vector Search (FAISS)** | <50ms | Vector similarity search |
-| **Total Pipeline** | 45-55s | End-to-end optimized |
-| **Video Quality** | 1280x720, 24fps | ~51MB per video |
+| **Total Pipeline** | 35s-5min | End-to-end synchronous |
+| **Video Quality** | 1280x720, 30fps | ~51MB per video |
+| **Request Timeout** | 10 minutes | Configurable timeout limit |
 
 ### Data Flow
 
@@ -1513,9 +1685,9 @@ graph LR
 5. **Trimodal Fusion** → Weighted similarity (35% audio + 35% text + 30% pose)
 6. **Move Selection** → Top-K moves filtered by difficulty/energy
 7. **Blueprint Generation** → Complete video assembly instructions
-8. **Job Trigger** → Job service receives blueprint
-9. **Video Assembly** → FFmpeg concatenates clips with transitions
-10. **Save & Complete** → Video saved to storage, task updated
+8. **Video Assembly** → VideoAssemblyService processes blueprint synchronously
+9. **FFmpeg Processing** → Normalize clips, concatenate, add audio
+10. **Upload & Cleanup** → Video saved to storage, temp files cleaned, task updated
 
 **Architecture Documentation:**
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture
@@ -1530,11 +1702,10 @@ graph LR
 The application is designed to deploy to AWS using Infrastructure as Code (AWS CDK in TypeScript).
 
 **Target Architecture:**
-- **Backend**: AWS App Runner (containerized Django API)
+- **Backend**: AWS App Runner (containerized Django API with integrated video assembly)
 - **Frontend**: S3 + CloudFront (static hosting with CDN)
 - **Database**: RDS Aurora PostgreSQL Serverless v2
 - **Storage**: S3 (media files and video outputs)
-- **Jobs**: AWS App Runner (video processing service)
 
 **Deployment Guides:**
 
@@ -1556,14 +1727,10 @@ npm install
 cdk bootstrap  # First time only
 cdk deploy --all
 
-# 2. Build and push Docker images
+# 2. Build and push Docker image
 cd ../bachata_buddy/backend
 docker build -t <ecr-repo-url>:latest .
 docker push <ecr-repo-url>:latest
-
-cd ../job
-docker build -t <ecr-job-repo-url>:latest .
-docker push <ecr-job-repo-url>:latest
 
 # 3. Build and deploy frontend
 cd ../frontend

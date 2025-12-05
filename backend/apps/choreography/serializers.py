@@ -186,6 +186,41 @@ class AIGenerationSerializer(serializers.Serializer):
         return value.strip()
 
 
+class GenerateChoreographySerializer(serializers.Serializer):
+    """
+    Serializer for synchronous choreography generation endpoint.
+    
+    Validates song_id exists and parameters are valid.
+    This is the new simplified endpoint that generates video synchronously.
+    """
+    song_id = serializers.IntegerField(required=True)
+    difficulty = serializers.ChoiceField(
+        choices=['beginner', 'intermediate', 'advanced'],
+        default='intermediate',
+        help_text="Difficulty level of the choreography"
+    )
+    energy_level = serializers.ChoiceField(
+        choices=['low', 'medium', 'high'],
+        default='medium',
+        required=False,
+        allow_blank=True,
+        help_text="Energy level of the choreography"
+    )
+    style = serializers.ChoiceField(
+        choices=['traditional', 'modern', 'romantic', 'sensual'],
+        default='modern',
+        required=False,
+        allow_blank=True,
+        help_text="Style of the choreography"
+    )
+    
+    def validate_song_id(self, value):
+        """Validate that the song exists in the database."""
+        if not Song.objects.filter(id=value).exists():
+            raise serializers.ValidationError(f"Song with ID {value} does not exist")
+        return value
+
+
 class DescribeChoreographySerializer(serializers.Serializer):
     """
     Serializer for Path 2 natural language choreography description.

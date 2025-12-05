@@ -9,11 +9,16 @@ to video generation, including:
 - Function calls execute in order
 - Reasoning panel updates
 - Video displays on completion
+
+NOTE: These tests require external API keys (OPENAI_API_KEY, GOOGLE_API_KEY)
+and will be skipped if not available.
 """
 
+import os
 import pytest
 import time
 import json
+import unittest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -21,6 +26,12 @@ from unittest.mock import Mock, patch, MagicMock
 from apps.choreography.models import ChoreographyTask, Song
 
 User = get_user_model()
+
+# Skip all tests in this module if API keys are not set
+pytestmark = pytest.mark.skipif(
+    not os.environ.get('OPENAI_API_KEY') or not os.environ.get('GOOGLE_API_KEY'),
+    reason="Skipping e2e integration tests - OPENAI_API_KEY or GOOGLE_API_KEY not set"
+)
 
 
 class TestHappyPathWorkflow(TestCase):

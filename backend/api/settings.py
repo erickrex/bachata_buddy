@@ -111,7 +111,10 @@ WSGI_APPLICATION = 'api.wsgi.application'
 import sys
 
 # Use SQLite for testing
-if 'test' in sys.argv:
+# Check both sys.argv and environment variable for test mode
+is_testing = 'test' in sys.argv or os.environ.get('DJANGO_TESTING', '').lower() == 'true'
+
+if is_testing:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',

@@ -5,7 +5,10 @@ from .views import (
     list_songs,
     song_detail,
     describe_choreography,
-    generate_choreography
+    generate_choreography,
+    get_task_status,
+    list_tasks,
+    serve_video
 )
 from .mock_views import (
     complete_mock_job,
@@ -24,6 +27,13 @@ urlpatterns = [
     
     # Path 2: Agent-based natural language choreography generation
     path('describe/', describe_choreography, name='describe-choreography'),
+    
+    # Task status endpoints
+    path('tasks/', list_tasks, name='list-tasks'),
+    path('tasks/<uuid:task_id>/', get_task_status, name='task-status'),
+    
+    # Video serving endpoint
+    path('videos/<uuid:task_id>/', serve_video, name='serve-video'),
     
     # AI workflow endpoints (legacy)
     path('generate-with-ai/', generate_with_ai, name='generate-with-ai'),

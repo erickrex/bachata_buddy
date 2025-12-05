@@ -136,13 +136,13 @@ class AgentService:
                     "role": "system",
                     "content": (
                         "You are a choreography generation assistant. Use the available tools to create "
-                        "a bachata choreography based on the user's request. Follow these steps:\n"
-                        "1. Extract parameters from the user request (difficulty, energy_level, style)\n"
-                        "2. Analyze the music using analyze_music\n"
-                        "3. Search for matching moves using search_moves\n"
-                        "4. Generate a blueprint using generate_blueprint\n"
-                        "5. Assemble the video using assemble_video\n\n"
-                        "Always call functions in this order and pass data between them appropriately."
+                        "a bachata choreography based on the user's request. You MUST complete ALL steps:\n"
+                        "1. Analyze the music using analyze_music\n"
+                        "2. Search for matching moves using search_moves\n"
+                        "3. Generate a blueprint using generate_blueprint\n"
+                        "4. ALWAYS call assemble_video as the FINAL step to create the video\n\n"
+                        "CRITICAL: You MUST call assemble_video at the end. The workflow is NOT complete "
+                        "until assemble_video has been called and returns success. Do not stop early."
                         f"{song_info}"
                     )
                 },
@@ -263,10 +263,33 @@ class AgentService:
                             "content": json.dumps(function_result)
                         })
                 else:
-                    # No more function calls - workflow complete
-                    logger.info("Workflow complete - no more function calls requested")
+                    # No more function calls requested by OpenAI
+                    logger.info("No more function calls requested by OpenAI")
                     
-                    # Update final status - this will also set status to 'completed'
+                    # Safety check: ensure video assembly was called
+                    # If we have a blueprint but no video was assembled, do it now
+                    if self.last_blueprint is not None:
+                        # Check if task result already has video_url
+                        task.refresh_from_db()
+                        has_video = task.result and task.result.get('video_url')
+                        
+                        if not has_video:
+                            logger.info("Video assembly not completed - calling assemble_video automatically")
+                            video_result = self._assemble_video()
+                            
+                            if video_result.get('status') == 'success':
+                                # Update task with video result
+                                task.result = {
+                                    'video_url': video_result.get('video_url'),
+                                    'blueprint': self.last_blueprint,
+                                    'move_count': len(self.last_blueprint.get('moves', []))
+                                }
+                                task.save()
+                                logger.info(f"Video assembled successfully: {video_result.get('video_url')}")
+                            else:
+                                logger.error(f"Auto video assembly failed: {video_result.get('error')}")
+                    
+                    # Update final status
                     stage = "completed"
                     self._update_task_status(
                         task_id=task_id,
@@ -359,7 +382,7 @@ class AgentService:
                             },
                             "style": {
                                 "type": "string",
-                                "enum": ["traditional", "modern", "romantic", "sensual"],
+                                "enum": ["romantic", "playful", "energetic", "sensual"],
                                 "description": "Style preference for the choreography"
                             }
                         },

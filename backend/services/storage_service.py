@@ -12,6 +12,24 @@ from .storage.factory import get_storage_backend
 
 logger = logging.getLogger(__name__)
 
+# Global instance for reuse
+_storage_service = None
+
+
+def get_storage_service():
+    """
+    Get or create the global storage service instance.
+    
+    Returns:
+        StorageService instance
+    """
+    global _storage_service
+    
+    if _storage_service is None:
+        _storage_service = StorageService()
+    
+    return _storage_service
+
 
 class StorageService:
     """

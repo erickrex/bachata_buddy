@@ -176,26 +176,11 @@ function VideoResult() {
             <div className="flex items-start">
               <div className="text-2xl mr-3">🔧</div>
               <div className="flex-1">
-                <h3 className="font-semibold text-blue-900">Development Mode</h3>
+                <h3 className="font-semibold text-blue-900">Blueprint Generated</h3>
                 <p className="text-blue-700 text-sm mb-3">
-                  Video assembly is running in mock mode. The choreography blueprint was generated successfully, 
-                  but the actual video file was not created. Run the job container to generate the video.
+                  The choreography blueprint was generated successfully, but the video file could not be created.
+                  Check the backend logs for any errors during video assembly.
                 </p>
-                <div className="bg-blue-100 rounded-md p-3">
-                  <p className="text-xs font-medium text-blue-800 mb-1">Run this command from the backend directory:</p>
-                  <code className="text-sm bg-blue-200 text-blue-900 px-2 py-1 rounded block font-mono break-all">
-                    uv run python run_local_job.py {taskId}
-                  </code>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`uv run python run_local_job.py ${taskId}`);
-                      addToast('Command copied to clipboard!', 'success');
-                    }}
-                    className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                  >
-                    📋 Copy Command
-                  </button>
-                </div>
               </div>
             </div>
           </div>

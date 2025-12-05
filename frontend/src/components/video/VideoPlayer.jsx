@@ -17,12 +17,19 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
   const [blobUrl, setBlobUrl] = useState(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
   const [videoError, setVideoError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 5;
+  const retryDelay = 2000; // 2 seconds between retries
 
   // Fetch video with authentication and create blob URL
   useEffect(() => {
     let objectUrl = null;
+    let retryTimeout = null;
+    let isCancelled = false;
     
-    const fetchVideo = async () => {
+    const fetchVideo = async (attempt = 0) => {
+      if (isCancelled) return;
+      
       try {
         setIsLoadingVideo(true);
         setVideoError(null);
@@ -39,31 +46,47 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
         });
         
         if (!response.ok) {
-          // Check if it's a 404 (video not found - likely mock mode)
+          // Check if it's a 404 (video not found) - might still be processing
           if (response.status === 404) {
+            if (attempt < maxRetries) {
+              console.log(`Video not ready yet, retrying in ${retryDelay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
+              setRetryCount(attempt + 1);
+              retryTimeout = setTimeout(() => fetchVideo(attempt + 1), retryDelay);
+              return;
+            }
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Video file not found. This may be because the video was generated in mock mode. Run the job container to generate actual videos.');
+            throw new Error(errorData.error || 'Video file not found. The video may still be processing or there was an error during generation.');
           }
           throw new Error('Failed to load video');
         }
         
+        if (isCancelled) return;
+        
         const blob = await response.blob();
         objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
+        setRetryCount(0);
       } catch (error) {
+        if (isCancelled) return;
         console.error('Error loading video:', error);
         setVideoError(error.message);
       } finally {
-        setIsLoadingVideo(false);
+        if (!isCancelled) {
+          setIsLoadingVideo(false);
+        }
       }
     };
     
     if (videoUrl) {
-      fetchVideo();
+      fetchVideo(0);
     }
     
     // Cleanup blob URL on unmount
     return () => {
+      isCancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
@@ -246,6 +269,11 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
           <div className="text-white text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p>Loading video...</p>
+            {retryCount > 0 && (
+              <p className="text-sm text-gray-400 mt-2">
+                Video still processing... (attempt {retryCount}/{maxRetries})
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -258,13 +286,12 @@ const VideoPlayer = ({ videoUrl, taskId, onSave }) => {
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Video Not Available</h3>
             <p className="text-gray-600 mb-4">{videoError}</p>
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left">
-              <p className="text-sm text-yellow-800 font-medium mb-2">💡 To generate actual videos:</p>
-              <code className="text-xs bg-yellow-100 px-2 py-1 rounded block">
-                docker-compose --profile job run job
-              </code>
-              <p className="text-xs text-yellow-700 mt-2">
-                Or use the run_local_job.py script with the task ID.
-              </p>
+              <p className="text-sm text-yellow-800 font-medium mb-2">💡 Troubleshooting:</p>
+              <ul className="text-xs text-yellow-700 list-disc list-inside space-y-1">
+                <li>Check the backend logs for any errors during video assembly</li>
+                <li>Ensure the video clips and audio files exist in the data directory</li>
+                <li>Try generating a new choreography</li>
+              </ul>
             </div>
           </div>
         </div>

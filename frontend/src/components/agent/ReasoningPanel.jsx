@@ -91,12 +91,9 @@ function ReasoningPanel({ taskStatus, taskId }) {
           </div>
           {isComplete && (
             <div className="mt-2 pt-2 border-t border-purple-200">
-              <p className="text-xs text-purple-700 font-medium mb-1">
-                🎬 Generate Video:
+              <p className="text-xs text-purple-700 font-medium">
+                🎬 Video generation complete! Check the result below.
               </p>
-              <code className="text-xs bg-purple-100 text-purple-900 px-2 py-1 rounded block font-mono">
-                uv run python run_local_job.py {taskId}
-              </code>
             </div>
           )}
         </div>

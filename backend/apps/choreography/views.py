@@ -1177,16 +1177,23 @@ def serve_video(request, task_id):
             status=status.HTTP_404_NOT_FOUND
         )
     
-    # Get video path from task result
-    if not task.result or 'output_path' not in task.result:
-        logger.error(f'No output_path in task result for task {task_id}')
+    # Get video path from task result (check both output_path and video_url)
+    output_path = None
+    if task.result:
+        output_path = task.result.get('output_path') or task.result.get('video_url')
+    
+    if not output_path:
+        logger.error(f'No output_path or video_url in task result for task {task_id}')
         return Response(
             {'error': 'Video path not found in task result'},
             status=status.HTTP_404_NOT_FOUND
         )
     
+    # Clean up the path - remove /media/ prefix if present
+    if output_path.startswith('/media/'):
+        output_path = output_path[7:]
+    
     # Construct full path - result contains relative path like "output/user_123/video.mp4"
-    output_path = task.result.get('output_path', '')
     local_path = os.path.join('/app/data', output_path)
     
     # Verify file exists
@@ -1459,3 +1466,80 @@ def describe_choreography(request):
         'message': task.message,
         'poll_url': f'/api/choreography/tasks/{task_id}'
     }, status=status.HTTP_202_ACCEPTED)
+
+
+@extend_schema(
+    summary="Get task status",
+    description="""
+    Get the current status of a choreography generation task.
+    
+    Poll this endpoint to track the progress of a choreography generation task.
+    The task progresses through several stages:
+    - pending: Task created, waiting to start
+    - started: Task has started processing
+    - completed: Task finished successfully
+    - failed: Task encountered an error
+    
+    **Response Fields:**
+    - task_id: Unique identifier for the task
+    - status: Current status (pending, started, completed, failed)
+    - progress: Progress percentage (0-100)
+    - stage: Current processing stage
+    - message: Human-readable status message
+    - result: Final result when completed (includes video_url)
+    - error: Error message if failed
+    """,
+    responses={
+        200: OpenApiResponse(
+            response=ChoreographyTaskSerializer,
+            description="Task status retrieved successfully"
+        ),
+        401: OpenApiResponse(description="Authentication required"),
+        404: OpenApiResponse(description="Task not found")
+    },
+    tags=['Choreography']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_task_status(request, task_id):
+    """
+    Get the current status of a choreography generation task.
+    
+    Returns the task status, progress, and result if completed.
+    """
+    task = get_object_or_404(ChoreographyTask, task_id=task_id, user=request.user)
+    serializer = ChoreographyTaskSerializer(task, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="List user's tasks",
+    description="""
+    List all choreography generation tasks for the authenticated user.
+    
+    Returns a paginated list of tasks ordered by creation date (newest first).
+    """,
+    responses={
+        200: OpenApiResponse(
+            response=ChoreographyTaskListSerializer,
+            description="List of tasks"
+        ),
+        401: OpenApiResponse(description="Authentication required")
+    },
+    tags=['Choreography']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_tasks(request):
+    """
+    List all choreography generation tasks for the current user.
+    """
+    tasks = ChoreographyTask.objects.filter(user=request.user).order_by('-created_at')
+    
+    # Paginate
+    paginator = PageNumberPagination()
+    paginator.page_size = 20
+    page = paginator.paginate_queryset(tasks, request)
+    
+    serializer = ChoreographyTaskListSerializer(page, many=True)
+    return paginator.get_paginated_response(serializer.data)

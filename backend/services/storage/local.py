@@ -37,10 +37,12 @@ class LocalStorageBackend(StorageBackend):
     
     def _get_full_path(self, remote_path: str) -> Path:
         """Get full filesystem path for a remote path"""
-        # Remove leading slashes and 'media/' prefix if present
+        # Remove leading slashes and known prefixes if present
         clean_path = remote_path.lstrip('/')
         if clean_path.startswith('media/'):
             clean_path = clean_path[6:]
+        elif clean_path.startswith('data/'):
+            clean_path = clean_path[5:]
         
         return self.base_path / clean_path
     
@@ -49,6 +51,8 @@ class LocalStorageBackend(StorageBackend):
         clean_path = remote_path.lstrip('/')
         if clean_path.startswith('media/'):
             clean_path = clean_path[6:]
+        elif clean_path.startswith('data/'):
+            clean_path = clean_path[5:]
         return clean_path
     
     def upload_file(self, local_path: str, remote_path: str) -> str:

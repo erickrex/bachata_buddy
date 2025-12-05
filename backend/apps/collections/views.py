@@ -484,13 +484,19 @@ def save_choreography(request):
     if not difficulty:
         difficulty = result.get('difficulty') or result.get('generation_parameters', {}).get('difficulty', 'intermediate')
     
+    # Get video path from result (check both video_path and video_url)
+    video_path = result.get('video_path') or result.get('video_url', '')
+    # Clean up the path - remove /media/ prefix if present
+    if video_path.startswith('/media/'):
+        video_path = video_path[7:]
+    
     # Create SavedChoreography
     choreography = SavedChoreography.objects.create(
         user=request.user,
         title=title,
-        video_path=result.get('video_path', ''),
+        video_path=video_path,
         difficulty=difficulty,
-        duration=result.get('sequence_duration', 0),
+        duration=result.get('sequence_duration') or result.get('total_duration', 0),
         music_info=result.get('music_info', {}),
         generation_parameters={
             'task_id': str(task_id),

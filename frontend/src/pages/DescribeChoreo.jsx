@@ -147,9 +147,8 @@ function DescribeChoreo() {
       
       setTaskId(response.task_id);
       
-      // Log task ID for easy access in development
-      console.log('🎬 Task created! Run this command to generate video:');
-      console.log(`   cd backend && uv run python run_local_job.py ${response.task_id}`);
+      // Log task ID for debugging
+      console.log('🎬 Task created:', response.task_id);
       
       // Add initial assistant message
       setMessages(prev => [

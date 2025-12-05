@@ -45,6 +45,8 @@ services:
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
       # Storage Configuration
       - STORAGE_BACKEND=local
+      - MEDIA_ROOT=data
+      - MEDIA_URL=/media/
       # Agent Configuration
       - AGENT_ENABLED=${AGENT_ENABLED:-True}
       - AGENT_TIMEOUT=${AGENT_TIMEOUT:-300}

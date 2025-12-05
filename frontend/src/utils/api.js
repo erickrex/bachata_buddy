@@ -164,6 +164,11 @@ const apiClient = async (endpoint, options = {}) => {
       throw new Error(errorData.detail || errorData.error || `Request failed with status ${response.status}`);
     }
     
+    // Handle 204 No Content - return null instead of trying to parse JSON
+    if (response.status === 204) {
+      return null;
+    }
+    
     // Return JSON data
     return await response.json();
     
@@ -250,7 +255,7 @@ export const api = {
   // Choreography generation endpoints
   generation: {
     fromSong: (songId, difficulty, energyLevel, style) =>
-      apiClient('/api/choreography/generate-from-song/', {
+      apiClient('/api/choreography/generate/', {
         method: 'POST',
         body: { 
           song_id: songId, 

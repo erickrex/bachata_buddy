@@ -1,1342 +1,473 @@
-# Django REST API Backend
+# Bachata Buddy Backend
 
-This directory contains the Django REST Framework API for the Bachata Buddy microservices architecture.
+Django REST API for AI-powered Bachata choreography generation.
 
-## Overview
+## Technology Stack
 
-The API service handles:
-- JWT authentication
-- User management
-- Choreography task management
-- Cloud Run Jobs creation
-- Collections CRUD operations
-- Elasticsearch integration for move search
+- **Django 5.2** + Django REST Framework
+- **PostgreSQL 15+** - Database
+- **OpenAI GPT-4** - AI orchestration
+- **Librosa** - Audio analysis
+- **FFmpeg** - Video processing
+- **UV** - Python package manager
+- **Gunicorn** - Production server
 
-## Development Setup
+## Quick Start
 
-### ⚠️ IMPORTANT: Always Use UV for Python Operations
-
-This backend project uses **UV** as the package manager for all Python operations. UV is a fast Python package installer and resolver that replaces pip.
-
-**Key Commands:**
-- `uv sync` - Install all dependencies from pyproject.toml
-- `uv add <package>` - Add a new dependency
-- `uv run python <script>` - Run Python scripts
-- `uv run python manage.py <command>` - Run Django management commands
-
-**DO NOT USE:**
-- ❌ `pip install` - Use `uv add` or `uv sync` instead
-- ❌ `python manage.py` - Use `uv run python manage.py` instead
-- ❌ Direct `python` commands - Use `uv run python` instead
-
-### Using Docker Compose (Recommended)
-
-**Quick Start:**
+### Docker Compose (Recommended)
 
 ```bash
-# From the bachata_buddy directory
+# Start all services
+docker-compose up -d
 
-# 1. Start the API (includes database and Elasticsearch)
-docker-compose --profile microservices up -d
+# Run migrations
+docker-compose exec backend uv run python manage.py migrate
 
-# 2. Run migrations
-docker-compose exec api uv run python manage.py migrate
+# Create superuser
+docker-compose exec backend uv run python manage.py createsuperuser
 
-# 3. Create superuser (optional)
-docker-compose exec api uv run python manage.py createsuperuser
-
-# 4. Access the API
-# API: http://localhost:8001
-# Swagger UI: http://localhost:8001/api/docs/
-# OpenAPI Schema: http://localhost:8001/api/schema/
-```
-
-**Common Commands:**
-
-```bash
 # View logs
-docker-compose logs -f api
+docker-compose logs -f backend
 
-# Stop services
-docker-compose --profile microservices down
-
-# Restart API
-docker-compose restart api
-
-# Run tests
-docker-compose exec api uv run pytest
+# Access API
+# http://localhost:8000
+# http://localhost:8000/api/schema/swagger-ui/
 ```
-
-**Note:** The API runs on port **8001** (not 8000) to avoid conflicts with the legacy monolithic app.
 
 ### Native Development
 
 ```bash
-# Install UV (if not already installed)
-# macOS/Linux:
+# Install UV
 curl -LsSf https://astral.sh/uv/install.sh | sh
-# Or with Homebrew:
-brew install uv
 
-# Navigate to backend directory
+# Install dependencies
 cd backend
-
-# Install dependencies using UV
 uv sync
 
-# Set environment variables
-export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/bachata_vibes
-export ELASTICSEARCH_URL=http://localhost:9200
-export DJANGO_SECRET_KEY=local-dev-secret-key
-export DEBUG=True
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
 
-# Run migrations using UV
+# Run migrations
 uv run python manage.py migrate
 
-# Start development server using UV
+# Start server
 uv run python manage.py runserver
 ```
 
-### Adding New Dependencies
+## ⚠️ Important: Always Use UV
 
-**ALWAYS use UV to add dependencies:**
+This project uses **UV** for all Python operations:
 
 ```bash
-# Add a new dependency
-cd backend
-uv add django-cors-headers
+# ✅ Correct
+uv sync                              # Install dependencies
+uv add django-cors-headers           # Add package
+uv run python manage.py migrate      # Run Django commands
+uv run pytest                        # Run tests
 
-# Add a development dependency
-uv add --dev pytest-django
-
-# Install all dependencies after pulling changes
-uv sync
+# ❌ Wrong
+pip install                          # Don't use pip
+python manage.py migrate             # Don't use python directly
+pytest                               # Don't run pytest directly
 ```
 
-This will automatically update `backend/pyproject.toml` and install the package.
+## Project Structure
 
-## Docker Images
-
-### Dockerfile (Production - CPU)
-
-The standard `Dockerfile` is optimized for Cloud Run deployment:
-
-- **Multi-stage build**: Separate build and runtime stages for smaller image size
-- **Python 3.12**: Latest stable Python version
-- **Gunicorn**: Production WSGI server with 1 worker, 8 threads
-- **Health checks**: Built-in health check endpoint
-- **Size**: ~500MB
-
-### Dockerfile.gpu (Production - GPU)
-
-The `Dockerfile.gpu` is optimized for GPU-accelerated Cloud Run deployment:
-
-- **NVIDIA CUDA 12.2**: Base image with CUDA runtime
-- **FAISS GPU**: GPU-accelerated vector similarity search
-- **PyTorch with CUDA**: GPU-accelerated audio processing
-- **Multi-stage build**: Optimized for smaller image size
-- **Size**: ~3GB (includes CUDA libraries)
-
-**Build GPU image:**
-```bash
-# Set your project ID
-export GCP_PROJECT_ID=your-project-id
-
-# Build and push
-./build_gpu_image.sh
 ```
-
-**Deploy to Cloud Run with GPU:**
-```bash
-gcloud run deploy bachata-api \
-  --image gcr.io/PROJECT_ID/bachata-api-gpu:latest \
-  --region europe-west1 \
-  --platform managed \
-  --memory 16Gi \
-  --cpu 4 \
-  --gpu 1 \
-  --gpu-type nvidia-l4 \
-  --set-env-vars USE_GPU=true,FAISS_USE_GPU=true,AUDIO_USE_GPU=true
+backend/
+├── api/                    # Django settings & URLs
+├── apps/                   # Django apps
+│   ├── authentication/     # User auth
+│   ├── choreography/       # Choreography generation
+│   ├── collections/        # User collections
+│   └── instructors/        # Instructor features
+├── services/               # Business logic
+│   ├── agent_service.py              # OpenAI orchestration
+│   ├── blueprint_generator.py        # Choreography planning
+│   ├── parameter_extractor.py        # NLP extraction
+│   ├── vector_search_service.py      # Move search
+│   ├── video_assembly_service.py     # Video processing
+│   ├── ffmpeg_builder.py             # FFmpeg commands
+│   └── storage_service.py            # File storage
+├── data/                   # Media files
+│   ├── Bachata_steps/      # Video clips
+│   └── songs/              # Audio files
+├── pyproject.toml          # Dependencies
+└── manage.py               # Django management
 ```
-
-### Dockerfile.dev (Development)
-
-The `Dockerfile.dev` is optimized for local development:
-
-- **Lightweight**: Only includes dependencies needed for the API (no FFmpeg, YOLOv8, etc.)
-- **Hot-reload**: Code changes are reflected immediately via volume mounts
-- **Fast builds**: Uses UV for dependency management
-- **Port 8000**: Standard Django development port
-
-### Image Comparison
-
-| Feature | Dockerfile | Dockerfile.gpu | Dockerfile.dev |
-|---------|-----------|---------------|----------------|
-| Base Image | python:3.12-slim | nvidia/cuda:12.2.0 | python:3.12-slim |
-| GPU Support | ❌ | ✅ CUDA 12.2 | ❌ |
-| FAISS | CPU | GPU | CPU |
-| PyTorch | ❌ | ✅ with CUDA | ❌ |
-| Size | ~500MB | ~3GB | ~500MB |
-| Purpose | Production (CPU) | Production (GPU) | Development |
-
-## Database Connection
-
-The API automatically detects the environment and configures the database connection:
-
-### Local Development (TCP/IP)
-```bash
-DB_NAME=bachata_buddy
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_HOST=db              # For Docker Compose
-# DB_HOST=localhost     # For native development
-DB_PORT=5432
-```
-
-### Cloud Run Production (Unix Socket)
-```bash
-CLOUD_SQL_CONNECTION_NAME=PROJECT_ID:REGION:INSTANCE_NAME
-DB_NAME=bachata_buddy
-DB_USER=postgres
-DB_PASSWORD=your-secure-password  # From Secret Manager
-```
-
-The connection automatically switches based on the `K_SERVICE` environment variable (set by Cloud Run).
-
-**Verify Connection:**
-```bash
-# Local development
-uv run --directory backend python verify_cloud_sql_connection.py
-
-# Cloud Run (via logs)
-gcloud run logs read bachata-api --limit=50
-```
-
-See [CLOUD_SQL_SETUP.md](./CLOUD_SQL_SETUP.md) for detailed configuration instructions.
 
 ## Environment Variables
 
-### Quick Setup
-
-1. **Copy the example file:**
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Update the Google API key:**
-   ```bash
-   # Edit .env and replace:
-   GOOGLE_API_KEY=your-actual-gemini-api-key-here
-   ```
-
-3. **Verify configuration:**
-   ```bash
-   uv run python test_env.py
-   ```
-
 ### Required Variables
 
-The following environment variables are required for local development:
-
 ```bash
-# Django Configuration
-DJANGO_SECRET_KEY=local-dev-secret-key-change-in-production
+# Django
+DJANGO_SECRET_KEY=your-secret-key
 DEBUG=True
-DJANGO_SETTINGS_MODULE=api.settings
 ENVIRONMENT=local
 
-# Database (PostgreSQL)
-DB_NAME=bachata_vibes
+# Database
+DB_NAME=bachata_buddy
 DB_USER=postgres
 DB_PASSWORD=postgres
-DB_HOST=db              # For Docker Compose
+DB_HOST=db
 DB_PORT=5432
 
-# Vector Search Configuration
-MOVE_EMBEDDINGS_CACHE_TTL=3600    # Cache TTL in seconds (1 hour)
-VECTOR_SEARCH_TOP_K=50            # Number of similar moves to return
-FAISS_USE_GPU=false               # Enable GPU acceleration (requires FAISS-GPU)
-FAISS_NPROBE=10                   # Search accuracy for IVF indices
+# OpenAI
+OPENAI_API_KEY=sk-proj-your-key-here
 
-# GPU Acceleration Configuration (Optional)
-USE_GPU=false                     # Global GPU enable/disable flag
-FFMPEG_USE_NVENC=false           # FFmpeg NVENC for video encoding (job container)
-AUDIO_USE_GPU=false              # Audio GPU processing with torchaudio
-GPU_MEMORY_FRACTION=0.8          # GPU memory allocation (0.0-1.0)
-GPU_FALLBACK_ENABLED=true        # Enable CPU fallback on GPU errors
-GPU_TIMEOUT_SECONDS=30           # GPU operation timeout
-GPU_RETRY_COUNT=3                # Retry count for transient GPU errors
+# Agent Configuration
+AGENT_ENABLED=True
+AGENT_TIMEOUT=300
 
-# Google Cloud
-GCP_PROJECT_ID=local-dev
-GCP_REGION=us-central1
-CLOUD_RUN_JOB_NAME=video-processor
-GOOGLE_API_KEY=your-gemini-api-key-here
+# Storage
+STORAGE_BACKEND=local  # or 's3' for production
 
-# CORS Configuration
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
-
-# JWT Configuration
-JWT_ACCESS_TOKEN_LIFETIME=60
-JWT_REFRESH_TOKEN_LIFETIME=7
-
-# Logging
-LOG_LEVEL=DEBUG
-DJANGO_LOG_LEVEL=INFO
+# CORS
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
-### Environment Files
-
-- **`.env.example`** - Template with all available variables and documentation
-- **`.env`** - Your local configuration (not committed to git)
-- **`.env.local`** - Alternative template with working defaults
-
-### Detailed Documentation
-
-For comprehensive environment variable documentation, including:
-- Complete variable reference
-- Production setup (Cloud Run)
-- Security best practices
-- Troubleshooting
-
-See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md)
-
-### CORS Configuration
-
-The API is configured to accept requests from the React frontend. CORS settings are automatically configured based on the environment:
-
-**Local Development:**
-- Allows requests from `http://localhost:5173` (Vite default)
-- Allows requests from `http://localhost:3000` (Create React App default)
-- Allows credentials (cookies, authorization headers)
-
-**Production (Cloud Run):**
-- Set `CORS_ALLOWED_ORIGINS` environment variable with your frontend URL
-- Example: `CORS_ALLOWED_ORIGINS=https://your-frontend.run.app`
-- Multiple origins can be comma-separated
-
-**Allowed Headers:**
-- `Authorization` (for JWT tokens)
-- `Content-Type`
-- `Accept`
-- `X-CSRFToken`
-- Standard CORS headers
-
-**Configuration Location:** `backend/api/settings.py`
-
-## GPU Acceleration (Optional)
-
-The backend supports GPU acceleration for improved performance when running on NVIDIA GPUs (e.g., L4 on Cloud Run).
-
-### GPU Features
-
-1. **FAISS GPU** - Vector similarity search acceleration (10-50x speedup)
-2. **FFmpeg NVENC** - Video encoding acceleration (6-8x speedup, job container only)
-3. **Audio GPU** - Audio processing with torchaudio (3-5x speedup)
-
-### Requirements
-
-- NVIDIA GPU with CUDA support (e.g., L4, T4, A100)
-- CUDA 12.2 or later
-- GPU-enabled Docker image (see `Dockerfile.gpu`)
-- Cloud Run with GPU support (europe-west1 or europe-west4)
-
-### Configuration
-
-GPU acceleration is controlled via environment variables:
-
-```bash
-# Enable GPU globally
-USE_GPU=true
-
-# Per-service GPU flags (override USE_GPU)
-FAISS_USE_GPU=true          # Vector search GPU
-FFMPEG_USE_NVENC=true       # Video encoding GPU (job container)
-AUDIO_USE_GPU=true          # Audio processing GPU
-
-# GPU settings
-GPU_MEMORY_FRACTION=0.8     # GPU memory allocation (80%)
-GPU_FALLBACK_ENABLED=true   # Auto-fallback to CPU on errors
-GPU_TIMEOUT_SECONDS=30      # Operation timeout
-```
-
-### GPU Detection
-
-The backend automatically detects GPU availability at runtime:
-
-```python
-from services.gpu_utils import get_gpu_info
-
-# Get GPU information
-gpu_info = get_gpu_info()
-print(gpu_info)
-# {
-#   'cuda_available': True,
-#   'faiss_gpu_available': True,
-#   'nvenc_available': True,
-#   'device_name': 'NVIDIA L4',
-#   ...
-# }
-```
-
-### Graceful Fallback
-
-If GPU is unavailable or encounters errors, the backend automatically falls back to CPU:
-
-- FAISS GPU → FAISS CPU
-- FFmpeg NVENC → FFmpeg libx264
-- torchaudio GPU → librosa CPU
-
-This ensures the application works in all environments without code changes.
-
-### Local Development
-
-GPU features are disabled by default for local development. To test GPU features locally:
-
-1. Ensure you have an NVIDIA GPU with CUDA installed
-2. Install GPU-enabled packages: `uv add faiss-gpu torch torchaudio`
-3. Set `USE_GPU=true` in your `.env` file
-4. Restart the API server
-
-### Cloud Run Deployment
-
-To deploy with GPU support:
-
-```bash
-gcloud run deploy bachata-api \
-  --image gcr.io/PROJECT_ID/bachata-api:gpu \
-  --region europe-west1 \
-  --gpu 1 \
-  --gpu-type nvidia-l4 \
-  --memory 16Gi \
-  --cpu 4 \
-  --set-env-vars USE_GPU=true,FAISS_USE_GPU=true,AUDIO_USE_GPU=true
-```
-
-See the GPU acceleration spec for detailed implementation guide.
+See `.env.example` for all available variables.
 
 ## API Endpoints
 
-See the OpenAPI documentation at `/api/docs` when the server is running.
+### Authentication
 
-Key endpoints:
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - Login (returns JWT tokens)
-- `POST /api/auth/refresh` - Refresh access token
-- `GET /api/auth/me` - Get current user profile
-- `POST /api/choreography/generate` - Start choreography generation
-- `GET /api/choreography/tasks/{id}` - Get task status
-- `GET /api/collections` - List saved choreographies
+```
+POST /api/auth/register/     - Register user
+POST /api/auth/login/        - Login (get JWT)
+POST /api/auth/refresh/      - Refresh token
+GET  /api/auth/profile/      - Get profile
+```
 
-## Local Development with Sample Songs
+### Choreography Generation
 
-### Setting Up Sample Songs
+**Path 1: Song Selection**
+```
+GET  /api/choreography/songs/                    - List songs
+GET  /api/choreography/songs/{id}/               - Song details
+POST /api/choreography/generate-from-song/       - Generate
+```
 
-The song template workflow requires sample audio files for local development:
+**Path 2: AI Description**
+```
+POST /api/choreography/describe/                 - AI generation
+POST /api/choreography/parse-query/              - Parse NL query
+```
 
-**1. Sample Song Fixtures:**
+**Task Management**
+```
+GET  /api/choreography/tasks/                    - List tasks
+GET  /api/choreography/tasks/{id}/               - Task status
+POST /api/choreography/tasks/{id}/cancel/        - Cancel task
+```
+
+### Collections
+
+```
+GET    /api/collections/                - List collections
+POST   /api/collections/save/           - Save choreography
+GET    /api/collections/{id}/           - Get details
+DELETE /api/collections/{id}/           - Delete
+GET    /api/collections/stats/          - Statistics
+```
+
+### Interactive Docs
+
+- **Swagger UI:** http://localhost:8000/api/schema/swagger-ui/
+- **OpenAPI Schema:** http://localhost:8000/api/schema/
+
+## OpenAI Agent Orchestration
+
+### Overview
+
+The system uses OpenAI function calling for intelligent workflow orchestration:
+
+1. User describes choreography in natural language
+2. OpenAI extracts parameters (difficulty, style, energy)
+3. Agent orchestrates workflow autonomously
+4. Functions called: analyze_music → search_moves → generate_blueprint → assemble_video
+
+### Configuration
 
 ```bash
-# Load sample song metadata into database
-docker-compose exec api uv run python manage.py loaddata songs
-
-# Native development
-cd backend
-uv run python manage.py loaddata songs
+# .env
+OPENAI_API_KEY=sk-proj-your-key-here
+AGENT_ENABLED=True
+AGENT_TIMEOUT=300
 ```
 
-This loads sample songs from `backend/fixtures/songs.json` with metadata like:
-- Title, artist, duration, BPM, genre
-- Local file paths (e.g., `songs/bachata-rosa.mp3`)
-
-**2. Adding Audio Files:**
-
-Place MP3 files in `backend/data/songs/` directory:
+### Usage
 
 ```bash
-# Create directory if it doesn't exist
-mkdir -p backend/data/songs
-
-# Add your MP3 files
-cp ~/Music/bachata-rosa.mp3 backend/data/songs/
-cp ~/Music/obsesion.mp3 backend/data/songs/
-```
-
-**3. Verify Setup:**
-
-```bash
-# List songs via API
-curl http://localhost:8001/api/choreography/songs/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Check audio file exists
-ls -lh backend/data/songs/
-```
-
-See `backend/data/songs/README.md` for detailed instructions on adding sample audio files.
-
-### Local vs GCS Storage
-
-The API supports dual storage modes for flexibility:
-
-**Local Storage (Development):**
-- Audio files stored in: `backend/data/songs/`
-- Database paths: `songs/filename.mp3` (relative paths)
-- No cloud dependencies required
-- Fast iteration and testing
-
-**GCS Storage (Production):**
-- Audio files stored in: `gs://bachata-buddy-bucket/songs/`
-- Database paths: `gs://bucket/songs/filename.mp3` (GCS URIs)
-- Automatic detection based on environment
-- Scalable and reliable
-
-**Environment Detection:**
-
-The system automatically detects storage mode:
-
-```python
-# In Cloud Run (production)
-K_SERVICE=bachata-api  # Set by Cloud Run
-→ Uses GCS storage
-
-# In local development
-K_SERVICE not set
-→ Uses local file system
-```
-
-**Migration to Production:**
-
-When ready to deploy, upload songs to GCS:
-
-```bash
-# Upload all local songs to GCS
-gsutil -m cp -r backend/data/songs/* gs://bachata-buddy-bucket/songs/
-
-# Update database paths (if needed)
-# The API handles both local and GCS paths automatically
-```
-
-**Storage Configuration:**
-
-```bash
-# .env for local development
-USE_LOCAL_STORAGE=True
-SONGS_DIRECTORY=backend/data/songs
-
-# Cloud Run environment variables
-GCS_BUCKET=bachata-buddy-bucket
-GCS_SONGS_PREFIX=songs/
-```
-
-## Testing
-
-### Unit Tests
-
-```bash
-# Run tests (using UV)
-docker-compose exec api uv run pytest
-
-# Run with coverage (using UV)
-docker-compose exec api uv run pytest --cov=apps --cov-report=html
-
-# Native development
-cd backend
-uv run pytest
-```
-
-### Local Job Testing
-
-For testing the choreography generation flow locally without Cloud Run infrastructure:
-
-```bash
-# Run the mock job service test (using UV)
-docker-compose exec api uv run python test_mock_job_service.py
-
-# Native development
-cd backend
-uv run python test_mock_job_service.py
-```
-
-**Documentation:**
-- **[JOB_TESTING_DOCS_INDEX.md](./JOB_TESTING_DOCS_INDEX.md)** - Documentation index (START HERE)
-- **[LOCAL_JOB_TESTING_WORKFLOW.md](./LOCAL_JOB_TESTING_WORKFLOW.md)** - Step-by-step workflow guide
-- **[LOCAL_JOB_TESTING.md](./LOCAL_JOB_TESTING.md)** - Detailed technical documentation
-- **[MOCK_JOB_QUICK_REFERENCE.md](./MOCK_JOB_QUICK_REFERENCE.md)** - Quick command reference
-- **[TASK_STATUS_UPDATER_GUIDE.md](./TASK_STATUS_UPDATER_GUIDE.md)** - Task status updater API
-
-## Production Deployment
-
-For production deployment to Cloud Run, use the production Dockerfile (not Dockerfile.dev):
-
-```bash
-# Build production image
-docker build -t gcr.io/PROJECT_ID/bachata-api:latest .
-
-# Push to Container Registry
-docker push gcr.io/PROJECT_ID/bachata-api:latest
-
-# Deploy to Cloud Run
-gcloud run deploy bachata-api \
-  --image gcr.io/PROJECT_ID/bachata-api:latest \
-  --region us-central1 \
-  --platform managed
-```
-
-## Architecture
-
-This API service is part of a microservices architecture:
-
-```
-React Frontend (Cloud Run)
-    ↓
-Django REST API (Cloud Run) ← You are here
-    ↓
-Cloud Run Job (Video Processing)
-    ↓
-Shared Services (Cloud SQL, Elasticsearch, GCS)
-```
-
-See the main [design document](../.kiro/specs/microservices-migration/design.md) for more details.
-
-
----
-
-## API Documentation
-
-### Complete Endpoint Reference
-
-The API provides 35 endpoints organized into 4 main categories. All endpoints except registration and login require JWT authentication.
-
-#### Authentication Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/api/auth/register/` | Register new user | No |
-| POST | `/api/auth/login/` | Login and get JWT tokens | No |
-| POST | `/api/auth/refresh/` | Refresh access token | No |
-| GET | `/api/auth/profile/` | Get user profile | Yes |
-| PUT | `/api/auth/profile/` | Update user profile | Yes |
-| GET | `/api/auth/preferences/` | Get user preferences | Yes |
-| PUT | `/api/auth/preferences/` | Update user preferences | Yes |
-
-**User Preferences:**
-- `auto_save_choreographies` (boolean) - Auto-save completed choreographies
-- `default_difficulty` (string) - Default difficulty level (beginner/intermediate/advanced)
-- `email_notifications` (boolean) - Enable email notifications
-
-#### Choreography Generation Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/choreography/songs/` | List available song templates | Yes |
-| GET | `/api/choreography/songs/{id}/` | Get song details | Yes |
-| POST | `/api/choreography/generate-from-song/` | Generate from song template | Yes |
-| GET | `/api/choreography/tasks/` | List user's tasks | Yes |
-| GET | `/api/choreography/tasks/{id}/` | Get task status | Yes |
-| POST | `/api/choreography/tasks/{id}/cancel/` | Cancel running task | Yes |
-| POST | `/api/choreography/parse-query/` | Parse natural language query | Yes |
-| POST | `/api/choreography/generate-with-ai/` | Generate with AI explanations | Yes |
-
-**Song Template Workflow:**
-1. List songs with filtering (genre, BPM range, search)
-2. Select a song and view details
-3. Generate choreography with chosen difficulty
-
-**Natural Language AI Workflow:**
-- "Create a romantic beginner choreography with slow tempo"
-- "Generate an energetic advanced dance"
-- "Make a sensual intermediate routine"
-
-#### Collections Management Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/collections/` | List saved choreographies | Yes |
-| GET | `/api/collections/{id}/` | Get choreography detail | Yes |
-| PUT | `/api/collections/{id}/` | Update choreography | Yes |
-| DELETE | `/api/collections/{id}/` | Delete choreography | Yes |
-| POST | `/api/collections/save/` | Save from completed task | Yes |
-| GET | `/api/collections/stats/` | Get collection statistics | Yes |
-| POST | `/api/collections/delete-all/` | Bulk delete all | Yes |
-| POST | `/api/collections/cleanup/` | Remove orphaned records | Yes |
-
-**Filtering & Search:**
-- `?difficulty=beginner` - Filter by difficulty
-- `?search=romantic` - Search in title
-- `?ordering=-created_at` - Sort by date (descending)
-- `?page=1&page_size=20` - Pagination
-
-#### Instructor Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/instructors/class-plans/` | List class plans | Yes (Instructor) |
-| POST | `/api/instructors/class-plans/` | Create class plan | Yes (Instructor) |
-| GET | `/api/instructors/class-plans/{id}/` | Get class plan detail | Yes (Instructor) |
-| PUT | `/api/instructors/class-plans/{id}/` | Update class plan | Yes (Instructor) |
-| DELETE | `/api/instructors/class-plans/{id}/` | Delete class plan | Yes (Instructor) |
-| POST | `/api/instructors/class-plans/{id}/add-sequence/` | Add choreography sequence | Yes (Instructor) |
-| DELETE | `/api/instructors/class-plans/{id}/sequences/{seq_id}/` | Delete sequence | Yes (Instructor) |
-| PUT | `/api/instructors/class-plans/{id}/sequences/{seq_id}/` | Update sequence | Yes (Instructor) |
-| POST | `/api/instructors/class-plans/{id}/reorder-sequences/` | Reorder sequences | Yes (Instructor) |
-| POST | `/api/instructors/class-plans/{id}/duplicate/` | Duplicate class plan | Yes (Instructor) |
-| GET | `/api/instructors/class-plans/{id}/summary/` | Get class plan summary | Yes (Instructor) |
-| GET | `/api/instructors/class-plans/{id}/export/` | Export as HTML | Yes (Instructor) |
-| GET | `/api/instructors/stats/` | Get instructor statistics | Yes (Instructor) |
-
-### Interactive API Documentation
-
-**Swagger UI:** http://localhost:8001/api/docs/
-
-Features:
-- Try out endpoints directly from your browser
-- See request/response examples
-- View authentication requirements
-- Test with your JWT token
-
-**OpenAPI Schema:** http://localhost:8001/api/schema/
-
-Download the schema for:
-- Postman/Insomnia import
-- Code generation (TypeScript, Python, etc.)
-- API testing tools
-
-**Note:** The API runs on port **8001** in Docker Compose to avoid conflicts with the legacy monolithic app.
-
-### Usage Examples
-
-#### 1. Authentication Flow
-
-```bash
-# Register
-curl -X POST http://localhost:8001/api/auth/register/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "dancer123",
-    "email": "dancer@example.com",
-    "password": "SecurePass123!"
-  }'
-
-# Login
-curl -X POST http://localhost:8001/api/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "dancer123",
-    "password": "SecurePass123!"
-  }'
-
-# Response:
-# {
-#   "access": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-#   "refresh": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-#   "user": {
-#     "id": 1,
-#     "username": "dancer123",
-#     "email": "dancer@example.com"
-#   }
-# }
-
-# Use token in subsequent requests
-export TOKEN="eyJ0eXAiOiJKV1QiLCJhbGc..."
-```
-
-#### 2. Song Template Workflow (Recommended)
-
-The primary workflow for generating choreography uses pre-existing song templates.
-
-```bash
-# Step 1: List available songs
-curl -X GET "http://localhost:8001/api/choreography/songs/?genre=bachata&bpm_min=110&bpm_max=130" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Response:
-# {
-#   "count": 5,
-#   "next": null,
-#   "previous": null,
-#   "results": [
-#     {
-#       "id": 1,
-#       "title": "Bachata Rosa",
-#       "artist": "Juan Luis Guerra",
-#       "duration": 245.5,
-#       "bpm": 120,
-#       "genre": "bachata",
-#       "created_at": "2025-11-08T10:00:00Z"
-#     }
-#   ]
-# }
-
-# Step 2: Get song details
-curl -X GET http://localhost:8001/api/choreography/songs/1/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Response:
-# {
-#   "id": 1,
-#   "title": "Bachata Rosa",
-#   "artist": "Juan Luis Guerra",
-#   "duration": 245.5,
-#   "bpm": 120,
-#   "genre": "bachata",
-#   "audio_path": "songs/bachata-rosa.mp3",
-#   "created_at": "2025-11-08T10:00:00Z",
-#   "updated_at": "2025-11-08T10:00:00Z"
-# }
-
-# Step 3: Generate choreography from song
-curl -X POST http://localhost:8001/api/choreography/generate-from-song/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "song_id": 1,
-    "difficulty": "intermediate",
-    "energy_level": "medium",
-    "style": "romantic"
-  }'
-
-# Response:
-# {
-#   "task_id": "550e8400-e29b-41d4-a716-446655440000",
-#   "song": {
-#     "id": 1,
-#     "title": "Bachata Rosa",
-#     "artist": "Juan Luis Guerra"
-#   },
-#   "status": "pending",
-#   "message": "Choreography generation started",
-#   "poll_url": "/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000"
-# }
-
-# Step 4: Poll for status
-curl -X GET http://localhost:8001/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Step 5: When completed, save to collection
-curl -X POST http://localhost:8001/api/collections/save/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_id": "550e8400-e29b-41d4-a716-446655440000",
-    "title": "My Romantic Dance"
-  }'
-```
-
-#### 3. Song Endpoint Examples
-
-**List Songs with Filtering:**
-
-```bash
-# List all songs
-curl -X GET http://localhost:8001/api/choreography/songs/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Filter by genre
-curl -X GET "http://localhost:8001/api/choreography/songs/?genre=bachata" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Filter by BPM range
-curl -X GET "http://localhost:8001/api/choreography/songs/?bpm_min=110&bpm_max=130" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Search by title or artist
-curl -X GET "http://localhost:8001/api/choreography/songs/?search=rosa" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Combine filters with pagination
-curl -X GET "http://localhost:8001/api/choreography/songs/?genre=bachata&bpm_min=115&page=1&page_size=10" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**Get Song Details:**
-
-```bash
-# Get specific song by ID
-curl -X GET http://localhost:8001/api/choreography/songs/1/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Response includes audio_path for processing
-# {
-#   "id": 1,
-#   "title": "Bachata Rosa",
-#   "artist": "Juan Luis Guerra",
-#   "duration": 245.5,
-#   "bpm": 120,
-#   "genre": "bachata",
-#   "audio_path": "songs/bachata-rosa.mp3",
-#   "created_at": "2025-11-08T10:00:00Z",
-#   "updated_at": "2025-11-08T10:00:00Z"
-# }
-```
-
-**Generate from Song:**
-
-```bash
-# Basic generation with song ID and difficulty
-curl -X POST http://localhost:8001/api/choreography/generate-from-song/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "song_id": 1,
-    "difficulty": "beginner"
-  }'
-
-# Advanced generation with style and energy
-curl -X POST http://localhost:8001/api/choreography/generate-from-song/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "song_id": 1,
-    "difficulty": "intermediate",
-    "energy_level": "high",
-    "style": "modern"
-  }'
-
-# Response (202 Accepted):
-# {
-#   "task_id": "550e8400-e29b-41d4-a716-446655440000",
-#   "song": {
-#     "id": 1,
-#     "title": "Bachata Rosa",
-#     "artist": "Juan Luis Guerra"
-#   },
-#   "status": "pending",
-#   "message": "Choreography generation started",
-#   "poll_url": "/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000"
-# }
-```
-
-#### 4. Natural Language AI Workflow
-
-```bash
-# Parse natural language query
-curl -X POST http://localhost:8001/api/choreography/parse-query/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Create a romantic beginner choreography with slow tempo"
-  }'
-
-# Response:
-# {
-#   "parameters": {
-#     "difficulty": "beginner",
-#     "style": "romantic",
-#     "energy_level": "low",
-#     "tempo": "slow"
-#   },
-#   "confidence": 0.95,
-#   "query": "Create a romantic beginner choreography with slow tempo"
-# }
-
-# Generate with AI
-curl -X POST http://localhost:8001/api/choreography/generate-with-ai/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Create a romantic beginner choreography",
-    "parameters": {
-      "difficulty": "beginner",
-      "style": "romantic"
-    }
-  }'
-```
-
-#### 5. Collection Management
-
-```bash
-# List collections with filtering
-curl -X GET "http://localhost:8001/api/collections/?difficulty=intermediate&search=romantic&ordering=-created_at" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Get statistics
-curl -X GET http://localhost:8001/api/collections/stats/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Response:
-# {
-#   "total_count": 15,
-#   "total_duration": 675.5,
-#   "by_difficulty": {
-#     "beginner": 5,
-#     "intermediate": 7,
-#     "advanced": 3
-#   },
-#   "recent_count": 3
-# }
-
-# Bulk delete all
-curl -X POST http://localhost:8001/api/collections/delete-all/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"confirmation": true}'
-```
-
-#### 6. Instructor Workflow
-
-```bash
-# Create class plan
-curl -X POST http://localhost:8001/api/instructors/class-plans/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Beginner Workshop",
-    "description": "Introduction to bachata basics",
-    "difficulty_level": "beginner",
-    "estimated_duration": 60
-  }'
-
-# Add sequence to class plan
-curl -X POST http://localhost:8001/api/instructors/class-plans/{plan_id}/add-sequence/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "choreography_id": "choreo-uuid",
-    "notes": "Start with this",
-    "estimated_time": 10
-  }'
-
-# Get class plan summary
-curl -X GET http://localhost:8001/api/instructors/class-plans/{plan_id}/summary/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Export as HTML
-curl -X GET http://localhost:8001/api/instructors/class-plans/{plan_id}/export/ \
-  -H "Authorization: Bearer $TOKEN" \
-  > class_plan.html
-```
-
-### Feature Highlights
-
-#### ✅ Complete Feature Parity with Legacy App
-
-All features from the legacy Django monolith are available via REST API:
-
-- **User Management**
-  - Registration and authentication
-  - Profile management
-  - User preferences (auto-save, default difficulty, notifications)
-
-- **Choreography Generation (Two Workflows)**
-  
-  **Workflow 1: Song Template (Recommended)**
-  - Browse pre-existing songs with metadata (title, artist, BPM, genre)
-  - Filter by genre, BPM range, or search by title/artist
-  - Select a song and generate choreography with chosen difficulty
-  - Supports local storage (development) and GCS (production)
-  - Fast and reliable - no external dependencies
-  
-  **Workflow 2: AI Natural Language**
-  - Describe choreography in natural language ("create a romantic beginner dance")
-  - AI parses query and extracts parameters (difficulty, style, energy)
-  - AI-generated explanations for move selections
-  - Powered by Google Gemini
-  
-  **Both workflows:**
-  - Async task processing with real-time status updates
-  - Poll task status endpoint for progress
-  - Save completed choreographies to collections
-
-- **Collection Management**
-  - Save generated choreographies
-  - Filter by difficulty, search by title
-  - Pagination and sorting
-  - Collection statistics dashboard
-  - Bulk operations (delete all, cleanup orphaned)
-
-- **Instructor Features**
-  - Create and manage class plans
-  - Add choreographies in sequence
-  - Drag-and-drop reordering
-  - Duplicate class plans
-  - Generate structured summaries
-  - Export to HTML for printing
-  - Instructor dashboard with statistics
-
-#### 🔒 Security Features
-
-- JWT authentication with access/refresh tokens
-- Permission-based access control (IsAuthenticated, IsInstructor)
-- Resource ownership validation
-- CORS configuration
-- Input validation and sanitization
-- Rate limiting support
-
-#### 📊 Performance Features
-
-- Database query optimization (select_related, prefetch_related)
-- Indexed fields for fast filtering
-- Pagination for large datasets
-- Async task processing via Cloud Run Jobs
-- Caching support (ready to enable)
-
-#### 🧪 Testing
-
-- Comprehensive unit tests for all endpoints
-- Integration tests for complete workflows
-- 100% endpoint coverage
-- Automated test suite
-
-### OpenAI Agent Orchestration (Path 2)
-
-The API includes an intelligent agent orchestration system for conversational choreography generation:
-
-#### Architecture
-
-**OpenAI Function Calling:**
-- Uses OpenAI GPT-4o-mini for workflow orchestration
-- Python service functions exposed as tools to OpenAI
-- LLM autonomously decides function call sequence
-- Maintains stateful conversation across multiple calls
-
-**Key Components:**
-
-1. **Parameter Extractor Service** (`services/parameter_extractor.py`)
-   - Extracts difficulty, style, energy from natural language
-   - Uses OpenAI JSON mode for structured output
-   - Falls back to keyword extraction on errors
-   - Validates and applies defaults
-
-2. **Agent Service** (`services/agent_service.py`)
-   - Orchestrates workflow using OpenAI function calling
-   - Defines tool schemas for service functions
-   - Executes functions and returns results to OpenAI
-   - Updates task status after each step
-   - Handles errors and timeouts gracefully
-
-3. **Service Functions:**
-   - `analyze_music(song_path)` - Audio analysis
-   - `search_moves(features, filters)` - Move recommendations
-   - `generate_blueprint(moves, metadata)` - Blueprint creation
-   - `assemble_video(blueprint)` - Video assembly trigger
-
-#### API Endpoint
-
-**POST /api/choreography/describe**
-
-Accepts natural language choreography requests:
-
-```bash
-curl -X POST http://localhost:8001/api/choreography/describe/ \
+curl -X POST http://localhost:8000/api/choreography/describe/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "user_request": "Create a romantic beginner choreography"
   }'
-
-# Response (202 Accepted):
-{
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "pending",
-  "message": "Agent workflow started",
-  "poll_url": "/api/choreography/tasks/550e8400-e29b-41d4-a716-446655440000"
-}
 ```
 
-**Request Body:**
-- `user_request` (string, required) - Natural language choreography description
-  - Examples: "Create a romantic beginner dance", "Generate an energetic advanced routine"
-  - Min length: 10 characters
-  - Max length: 500 characters
-
-**Response:**
-- `task_id` (UUID) - Unique task identifier for polling
-- `status` (string) - Initial status ("pending")
-- `message` (string) - Human-readable status message
-- `poll_url` (string) - Endpoint for status polling
-
-**Status Updates:**
-
-Poll `/api/choreography/tasks/{task_id}` for real-time updates:
-
-```json
-{
-  "task_id": "550e8400-...",
-  "status": "processing",
-  "stage": "analyzing_music",
-  "message": "Analyzing music features...",
-  "progress": 25,
-  "created_at": "2025-11-29T10:00:00Z",
-  "updated_at": "2025-11-29T10:00:15Z"
-}
-```
-
-**Stages:**
-1. `extracting_parameters` - Parsing natural language request
-2. `analyzing_music` - Audio feature extraction
-3. `searching_moves` - Finding matching moves
-4. `generating_blueprint` - Creating assembly instructions
-5. `assembling_video` - Video generation in progress
-6. `completed` - Video ready
-
-#### Configuration
-
-**Environment Variables:**
-
-```bash
-# OpenAI API Configuration
-OPENAI_API_KEY=sk-proj-...your-key-here...
-
-# Agent Service Configuration
-AGENT_ENABLED=True          # Enable/disable agent orchestration
-AGENT_TIMEOUT=300           # Workflow timeout in seconds (5 minutes)
-```
-
-**Django Settings:**
-
-```python
-# api/settings.py
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-AGENT_ENABLED = os.getenv('AGENT_ENABLED', 'True').lower() == 'true'
-AGENT_TIMEOUT = int(os.getenv('AGENT_TIMEOUT', '300'))
-
-# Validate OpenAI API key at startup
-if AGENT_ENABLED and not OPENAI_API_KEY:
-    raise ImproperlyConfigured('OPENAI_API_KEY is required when AGENT_ENABLED=True')
-```
-
-#### Testing
-
-**Unit Tests:**
+### Testing
 
 ```bash
 # Test parameter extraction
-uv run pytest services/test_parameter_extractor_properties.py -v
+uv run pytest services/test_parameter_extractor_properties.py
 
 # Test agent service
-uv run pytest services/test_agent_service_properties.py -v
+uv run pytest services/test_agent_service_properties.py
 
-# Test Path 1 bypass (ensure Path 1 unchanged)
-uv run pytest apps/choreography/test_path1_agent_bypass_properties.py -v
+# Full integration test
+uv run pytest apps/choreography/test_e2e_integration.py
 ```
 
-**Property-Based Tests:**
+## Video Generation
 
-The agent orchestration includes comprehensive property-based tests:
+### Synchronous Processing
 
-1. **Parameter Extraction Completeness** - Verifies all required parameters extracted
-2. **Default Parameter Application** - Ensures defaults applied correctly
-3. **Workflow Data Flow** - Validates data continuity across function calls
-4. **Parameter Validation** - Checks validation catches invalid values
-5. **Task Status Updates** - Verifies task records updated correctly
-6. **Workflow State Persistence** - Ensures conversation state maintained
-7. **Path 1 Agent Bypass** - Confirms Path 1 unaffected by agent changes
+Video generation happens synchronously within HTTP requests:
 
-**Integration Tests:**
+1. **Blueprint Generation** - AI selects moves and creates plan
+2. **Video Assembly** - FFmpeg concatenates clips
+3. **Audio Sync** - Add audio track
+4. **Upload** - Save to storage
+5. **Cleanup** - Remove temp files
+
+### Progress Stages
+
+```
+pending (0%) → fetching (20%) → concatenating (50%) → 
+adding_audio (70%) → uploading (85%) → cleanup (95%) → 
+completed (100%)
+```
+
+### API Response
+
+```json
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "video_url": "https://storage.example.com/output/video.mp4",
+  "duration_seconds": 45.2,
+  "progress": 100
+}
+```
+
+## Database
+
+### PostgreSQL Configuration
+
+**Local Development:**
+```bash
+DB_HOST=db              # Docker Compose
+DB_HOST=localhost       # Native development
+DB_PORT=5432
+```
+
+**Production (AWS RDS):**
+```bash
+DB_HOST=your-rds-endpoint.rds.amazonaws.com
+DB_PORT=5432
+DB_SSLMODE=require
+```
+
+### Migrations
 
 ```bash
-# End-to-end agent workflow test
-uv run pytest apps/choreography/test_e2e_integration.py -v
+# Create migrations
+uv run python manage.py makemigrations
+
+# Apply migrations
+uv run python manage.py migrate
+
+# Show migration status
+uv run python manage.py showmigrations
 ```
 
-#### Dual Workflow Support
+## Testing
 
-**Path 1 (Traditional) - Unchanged:**
-- POST /api/choreography/generate-from-song
-- Manual parameter selection
-- Direct service orchestration
-- No agent involvement
+```bash
+# Run all tests
+uv run pytest
 
-**Path 2 (Conversational) - New:**
-- POST /api/choreography/describe
-- Natural language input
-- Agent orchestration
-- Autonomous workflow management
+# Run with coverage
+uv run pytest --cov=apps --cov=services --cov-report=html
 
-Both paths use identical underlying services and produce identical outputs.
+# Run specific tests
+uv run pytest apps/choreography/tests/
 
-#### Error Handling
-
-**OpenAI API Errors:**
-- Automatic retry with exponential backoff
-- Fallback to keyword extraction on parameter extraction failures
-- Graceful degradation to Path 1 workflow if agent fails
-
-**Timeout Handling:**
-- Configurable timeout via AGENT_TIMEOUT
-- Task status updated to "failed" on timeout
-- Detailed error messages in task.message field
-
-**Service Errors:**
-- Each function call wrapped in try/catch
-- Errors logged with full context
-- Task status updated with error details
-- User-friendly error messages returned
-
-#### Performance
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Parameter Extraction | 1-2s | OpenAI API call |
-| Agent Orchestration | 5-10s | Function calling loop |
-| Total Workflow | 45-60s | Including video assembly |
-| OpenAI API Cost | $0.01-0.02 | Per choreography generation |
-
-#### Monitoring
-
-**Logging:**
-
-```python
-# Agent service logs all function calls
-logger.info(f"Executing function: {function_name}")
-logger.info(f"Function arguments: {arguments}")
-logger.info(f"Function result: {result}")
-
-# Parameter extractor logs extraction attempts
-logger.info(f"Extracting parameters from: {user_request}")
-logger.info(f"Extracted parameters: {parameters}")
+# Run property-based tests
+uv run pytest services/test_*_properties.py
 ```
 
-**Metrics to Monitor:**
-- OpenAI API latency
-- Function execution times
-- Error rates by function
-- Timeout occurrences
-- Fallback usage frequency
+## Storage
 
-### Frontend Integration
+### Local Storage (Development)
 
-The API is designed for seamless React frontend integration:
+```bash
+# Audio files
+backend/data/songs/
 
-1. **TypeScript Client Generation**
-   ```bash
-   npx @openapitools/openapi-generator-cli generate \
-     -i http://localhost:8001/api/schema/ \
-     -g typescript-axios \
-     -o frontend/src/api
-   ```
+# Video clips
+backend/data/Bachata_steps/
 
-2. **Authentication State Management**
-   - Store JWT tokens in localStorage or secure cookies
-   - Implement token refresh logic
-   - Handle 401 responses with automatic re-authentication
+# Generated videos
+backend/data/output/
+```
 
-3. **Real-time Updates**
-   - Poll task status endpoints for choreography generation progress
-   - Update UI based on task status (queued, running, completed, failed)
+### S3 Storage (Production)
 
-4. **Error Handling**
-   - All endpoints return consistent error format
-   - HTTP status codes follow REST conventions
-   - Detailed error messages for debugging
+```bash
+# Environment variables
+STORAGE_BACKEND=s3
+AWS_STORAGE_BUCKET_NAME=your-bucket
+AWS_REGION=us-east-1
+```
 
-### Deployment
+## Deployment
 
-See `DEPLOYMENT.md` for production deployment instructions including:
-- Cloud Run configuration
-- Cloud SQL setup
-- Environment variables
-- Secrets management
-- CI/CD pipeline
+### Docker Build
 
----
+```bash
+# Build production image
+docker build -t bachata-backend .
 
-## Additional Documentation
+# Run container
+docker run -p 8000:8000 \
+  -e OPENAI_API_KEY=your-key \
+  -e DB_HOST=your-db-host \
+  bachata-backend
+```
 
-- **API Feature Parity:** `FEATURE_PARITY_CHECKLIST.md` - Complete endpoint inventory
-- **Endpoint Status:** `ENDPOINT_STATUS.md` - Implementation status
-- **Integration Tests:** `INTEGRATION_TESTS_SUMMARY.md` - Test coverage
-- **OpenAPI Documentation:** `API_DOCUMENTATION_UPDATE.md` - Documentation details
-- **OpenAPI Schema:** `schema.yml` - Machine-readable API specification
+### AWS App Runner
+
+```bash
+# Push to ECR
+docker tag bachata-backend:latest \
+  123456789.dkr.ecr.us-east-1.amazonaws.com/bachata-backend:latest
+
+docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/bachata-backend:latest
+
+# Deploy via AWS Console or CDK
+```
+
+See `DEPLOYMENT.md` for detailed instructions.
+
+## Common Issues
+
+### OpenAI API Errors
+
+```bash
+# Verify API key
+docker-compose exec backend env | grep OPENAI_API_KEY
+
+# Test connection
+docker-compose exec backend uv run python -c "
+import openai
+import os
+client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+response = client.chat.completions.create(
+    model='gpt-4o-mini',
+    messages=[{'role': 'user', 'content': 'Hello'}]
+)
+print(response.choices[0].message.content)
+"
+```
+
+### Database Connection
+
+```bash
+# Check database
+docker-compose exec postgres psql -U postgres -d bachata_buddy
+
+# Verify connection
+docker-compose exec backend uv run python manage.py dbshell
+```
+
+### FFmpeg Issues
+
+```bash
+# Verify FFmpeg
+docker-compose exec backend ffmpeg -version
+
+# Test video processing
+docker-compose exec backend uv run python -c "
+import subprocess
+result = subprocess.run(['ffmpeg', '-version'], capture_output=True)
+print(result.stdout.decode())
+"
+```
+
+## Development Tips
+
+### Adding Dependencies
+
+```bash
+# Add package
+uv add package-name
+
+# Add dev dependency
+uv add --dev pytest-django
+
+# Update all dependencies
+uv sync --upgrade
+```
+
+### Database Reset
+
+```bash
+# Drop and recreate database
+docker-compose down -v
+docker-compose up -d
+docker-compose exec backend uv run python manage.py migrate
+```
+
+### Load Sample Data
+
+```bash
+# Load songs
+docker-compose exec backend uv run python manage.py loaddata songs
+
+# Create test user
+docker-compose exec backend uv run python manage.py createsuperuser
+```
+
+## Architecture
+
+```
+User Request
+    ↓
+Django REST API
+    ↓
+OpenAI Agent (orchestrates)
+    ↓
+Services (music analysis, move selection, video assembly)
+    ↓
+PostgreSQL (store results)
+    ↓
+Response (video URL)
+```
+
+## Performance
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Parameter Extraction | 1-2s | OpenAI API |
+| Music Analysis | 2-3s | Librosa |
+| Move Selection | <1s | Database query |
+| Blueprint Generation | <1s | JSON creation |
+| Video Assembly | 30-60s | FFmpeg processing |
+| **Total** | **35-70s** | End-to-end |
+
+## Contributing
+
+1. Use UV for all Python operations
+2. Follow Django best practices
+3. Write tests for new features
+4. Update API documentation
+5. Keep services focused and small
+
+## License
+
+[Your License]

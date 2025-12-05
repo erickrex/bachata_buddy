@@ -1,23 +1,18 @@
 # Bachata Buddy Frontend
 
-React 18.3.1 frontend for the Bachata Buddy choreography generator.
+React 18.3 frontend for the Bachata Buddy AI choreography generator.
 
 ## Technology Stack
 
-- **React 18.3.1** - JavaScript only (NO TypeScript)
+- **React 18.3** - UI library
 - **React Router 6** - Client-side routing
 - **Vite** - Build tool and dev server
 - **Tailwind CSS** - Styling
-- **Fetch API** - HTTP requests (no Axios)
+- **Fetch API** - HTTP requests
 
-## Development
+## Quick Start
 
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Local Development (Standalone)
+### Local Development
 
 ```bash
 # Install dependencies
@@ -33,41 +28,27 @@ npm run build
 npm run preview
 ```
 
-The dev server will run at http://localhost:5173
+Dev server runs at http://localhost:5173
 
 ### Docker Development
 
 ```bash
-# Build the development image
-docker build -f Dockerfile.dev -t bachata-frontend-dev .
-
-# Run the container
-docker run -p 5173:5173 -v $(pwd):/app -v /app/node_modules bachata-frontend-dev
-```
-
-### Docker Compose Development
-
-From the root `bachata_buddy` directory:
-
-```bash
-# Start all services including frontend
+# From root directory
 docker-compose up -d
 
-# View frontend logs
+# View logs
 docker-compose logs -f frontend
 
 # Stop services
 docker-compose down
 ```
 
-The frontend will be available at http://localhost:5173
+Frontend available at http://localhost:5173
 
 ## Project Structure
 
 ```
 frontend/
-├── public/              # Static assets
-│   └── index.html
 ├── src/
 │   ├── components/      # Reusable UI components
 │   │   ├── Button.jsx
@@ -80,101 +61,239 @@ frontend/
 │   │   ├── Login.jsx
 │   │   ├── Register.jsx
 │   │   ├── Generate.jsx
+│   │   ├── Describe.jsx
 │   │   ├── Collections.jsx
-│   │   ├── CollectionDetail.jsx
 │   │   └── Profile.jsx
 │   ├── utils/          # Utility functions
-│   │   ├── api.js      # API calls with JWT
+│   │   ├── api.js      # API client with JWT
 │   │   └── auth.js     # Auth helpers
 │   ├── App.jsx         # Main app with routing
 │   └── main.jsx        # Entry point
-├── Dockerfile          # Production build
-├── Dockerfile.dev      # Development build
+├── public/             # Static assets
 ├── package.json
 ├── vite.config.js
 └── tailwind.config.js
 ```
 
+## Features
+
+### Two Choreography Generation Paths
+
+**Path 1: Song Selection (Traditional)**
+- Browse available songs
+- Filter by genre, BPM, artist
+- Select difficulty, style, energy
+- Generate choreography
+
+**Path 2: AI Description (Conversational)**
+- Describe choreography in natural language
+- AI extracts parameters automatically
+- Real-time reasoning panel
+- Auto-save to collections
+
+### Collection Management
+- Save and organize choreographies
+- Search and filter
+- View statistics
+- Bulk operations
+
+### User Profile
+- Update preferences
+- Set default difficulty
+- Configure auto-save
+- Email notifications
+
 ## API Integration
 
-The frontend communicates with the Django REST API using JWT authentication:
+### Authentication
 
-- Access tokens stored in localStorage
-- Automatic token refresh on 401 responses
-- All API calls use the Fetch API
-- CORS configured for local development
+JWT tokens stored in localStorage:
+- Access token (1 hour)
+- Refresh token (7 days)
+- Automatic refresh on 401
+
+### API Client
+
+```javascript
+// utils/api.js
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+async function apiCall(endpoint, options = {}) {
+  const token = localStorage.getItem('access_token');
+  
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
+      ...options.headers,
+    },
+  });
+  
+  if (response.status === 401) {
+    // Refresh token logic
+    await refreshToken();
+    return apiCall(endpoint, options);
+  }
+  
+  return response.json();
+}
+```
+
+### Key Endpoints
+
+```javascript
+// Authentication
+POST /api/auth/register/
+POST /api/auth/login/
+POST /api/auth/refresh/
+GET  /api/auth/profile/
+
+// Choreography
+GET  /api/choreography/songs/
+POST /api/choreography/generate-from-song/
+POST /api/choreography/describe/
+GET  /api/choreography/tasks/{id}/
+
+// Collections
+GET  /api/collections/
+POST /api/collections/save/
+GET  /api/collections/stats/
+```
 
 ## Environment Variables
 
-Create a `.env` file in the frontend directory:
+Create `.env` file:
 
 ```bash
+# Development
 VITE_API_URL=http://localhost:8000
+
+# Production
+VITE_API_URL=https://your-api-url.awsapprunner.com
 ```
-
-For production:
-
-```bash
-VITE_API_URL=https://your-app-runner-service-url.us-east-1.awsapprunner.com
-```
-
-See `.env.example` for all available environment variables.
-
-## Deployment
-
-### AWS Deployment (Production)
-
-The frontend is deployed to AWS using the following architecture:
-
-1. **Build**: Static files are built using Vite (`npm run build`)
-2. **Storage**: Built files are uploaded to an S3 bucket
-3. **CDN**: CloudFront distribution serves the files globally
-4. **Infrastructure**: Managed via AWS CDK (TypeScript)
-
-**Deployment Steps:**
-
-```bash
-# 1. Set the API URL for production
-export VITE_API_URL=https://your-app-runner-service-url.us-east-1.awsapprunner.com
-
-# 2. Build the frontend
-npm run build
-
-# 3. Deploy using AWS CDK (from infrastructure directory)
-cd ../../infrastructure
-cdk deploy FrontendStack
-```
-
-The CDK stack will:
-- Create an S3 bucket for static files
-- Create a CloudFront distribution
-- Upload the built files to S3
-- Configure caching and security headers
-
-See the `infrastructure/` directory for CDK configuration.
-
-### Docker Deployment (Alternative)
-
-The frontend can also be deployed as a containerized application using the production `Dockerfile`:
-
-```bash
-# Build the Docker image
-docker build -t bachata-frontend .
-
-# Run the container
-docker run -p 8080:8080 -e VITE_API_URL=https://your-api-url.com bachata-frontend
-```
-
-This serves the static files using nginx.
 
 ## Architecture Philosophy
 
-This is a "dumb" frontend - all business logic lives in Django. React is only responsible for:
+This is a "thin" frontend - all business logic lives in Django:
 
-- Rendering UI components
-- Handling user interactions
-- Making API calls
-- Displaying data from the API
+**Frontend Responsibilities:**
+- Render UI components
+- Handle user interactions
+- Make API calls
+- Display API data
 - Client-side routing
+- JWT token management
 
-No complex state management, no data processing, no business rules.
+**NOT Frontend Responsibilities:**
+- ❌ Data processing
+- ❌ Business rules
+- ❌ Complex state management
+- ❌ Data validation (beyond UX)
+
+## Deployment
+
+### AWS S3 + CloudFront
+
+```bash
+# Build for production
+npm run build
+
+# Deploy to S3
+aws s3 sync dist/ s3://your-bucket/
+
+# Invalidate CloudFront cache
+aws cloudfront create-invalidation \
+  --distribution-id YOUR_DIST_ID \
+  --paths "/*"
+```
+
+### Docker (Alternative)
+
+```bash
+# Build image
+docker build -t bachata-frontend .
+
+# Run container
+docker run -p 8080:8080 \
+  -e VITE_API_URL=https://your-api-url.com \
+  bachata-frontend
+```
+
+## Development Tips
+
+### Hot Reload
+
+Vite provides instant hot module replacement (HMR):
+- Save file → See changes immediately
+- No full page reload
+- State preserved
+
+### API Mocking
+
+For frontend-only development:
+
+```javascript
+// utils/api.js
+const MOCK_MODE = import.meta.env.VITE_MOCK_API === 'true';
+
+if (MOCK_MODE) {
+  return mockResponse(endpoint);
+}
+```
+
+### Debugging
+
+```javascript
+// Enable API logging
+localStorage.setItem('debug', 'api:*');
+
+// View all API calls in console
+```
+
+## Common Issues
+
+### CORS Errors
+
+Ensure backend CORS is configured:
+
+```python
+# Django settings.py
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+]
+```
+
+### Token Expiration
+
+Tokens expire after 1 hour. The app automatically refreshes them, but if you see 401 errors:
+
+```javascript
+// Clear tokens and re-login
+localStorage.removeItem('access_token');
+localStorage.removeItem('refresh_token');
+```
+
+### Build Errors
+
+```bash
+# Clear cache and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Clear Vite cache
+rm -rf .vite
+```
+
+## Contributing
+
+1. Follow React best practices
+2. Use functional components with hooks
+3. Keep components small and focused
+4. Use Tailwind for styling (no custom CSS)
+5. Test with real API, not mocks
+
+## License
+
+[Your License]

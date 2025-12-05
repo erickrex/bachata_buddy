@@ -67,9 +67,9 @@ Bachata Buddy generates personalized Bachata choreographies using AI and music a
 │                   Django Backend (Port 8000)             │
 │                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   Agent      │  │   Blueprint  │  │    Video     │  │
-│  │   Service    │  │   Generator  │  │   Assembly   │  │
-│  │  (OpenAI)    │  │  (Librosa)   │  │   (FFmpeg)   │  │
+│  │    Agent     │  │  Blueprint   │  │    Video     │  │
+│  │   Service    │  │  Generator   │  │   Assembly   │  │
+│  │   (OpenAI)   │  │  (Librosa)   │  │   (FFmpeg)   │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 │                                                          │
 └────────────────────────┬────────────────────────────────┘
@@ -90,6 +90,95 @@ Bachata Buddy generates personalized Bachata choreographies using AI and music a
 5. **Blueprint Generation** → Creates video assembly instructions
 6. **Video Assembly** → FFmpeg concatenates clips and adds audio
 7. **Result** → User receives choreography video
+
+### Trimodal Embedding Fusion
+
+The system uses a trimodal embedding approach to match dance moves with music and user intent. Each move is represented by three embedding types that are fused for similarity search:
+
+```mermaid
+flowchart TB
+    subgraph Input["📥 Input Sources"]
+        VIDEO["🎬 Dance Video<br/>(Lead + Follow poses)"]
+        AUDIO["🎵 Audio Track<br/>(Music features)"]
+        TEXT["📝 Move Description<br/>(Style, difficulty)"]
+    end
+
+    subgraph Encoders["🔧 Embedding Encoders"]
+        POSE_ENC["Pose Encoder<br/>(YOLOv8 Pose)"]
+        AUDIO_ENC["Audio Encoder<br/>(Librosa MFCCs)"]
+        TEXT_ENC["Text Encoder<br/>(Sentence Transformers)"]
+    end
+
+    subgraph Embeddings["📊 Raw Embeddings"]
+        POSE_EMB["Pose Embedding<br/>512 dimensions<br/>(256 lead + 256 follow)"]
+        AUDIO_EMB["Audio Embedding<br/>128 dimensions"]
+        TEXT_EMB["Text Embedding<br/>384 dimensions"]
+    end
+
+    subgraph Normalization["⚖️ Weighted Normalization"]
+        NORM["L2 Normalize<br/>+ Apply Weights"]
+        W1["Pose: 35%"]
+        W2["Audio: 35%"]
+        W3["Text: 30%"]
+    end
+
+    subgraph Fusion["🔗 Embedding Fusion"]
+        CONCAT["Concatenate<br/>Weighted Vectors"]
+        COMBINED["Combined Embedding<br/>1024 dimensions"]
+    end
+
+    subgraph Search["🔍 Vector Search"]
+        FAISS["FAISS Index<br/>(IndexFlatIP)"]
+        RESULTS["Top-K Similar Moves"]
+    end
+
+    VIDEO --> POSE_ENC
+    AUDIO --> AUDIO_ENC
+    TEXT --> TEXT_ENC
+
+    POSE_ENC --> POSE_EMB
+    AUDIO_ENC --> AUDIO_EMB
+    TEXT_ENC --> TEXT_EMB
+
+    POSE_EMB --> NORM
+    AUDIO_EMB --> NORM
+    TEXT_EMB --> NORM
+
+    W1 --> NORM
+    W2 --> NORM
+    W3 --> NORM
+
+    NORM --> CONCAT
+    CONCAT --> COMBINED
+    COMBINED --> FAISS
+    FAISS --> RESULTS
+
+    style Input fill:#e1f5fe
+    style Encoders fill:#fff3e0
+    style Embeddings fill:#f3e5f5
+    style Normalization fill:#e8f5e9
+    style Fusion fill:#fce4ec
+    style Search fill:#e0f2f1
+```
+
+**Embedding Details:**
+
+| Modality | Dimensions | Weight | Source |
+|----------|------------|--------|--------|
+| **Pose** | 512 | 35% | YOLOv8 pose keypoints (lead dancer 256D + follow dancer 256D) |
+| **Audio** | 128 | 35% | Librosa MFCCs, spectral features, rhythm patterns |
+| **Text** | 384 | 30% | Sentence-transformers (all-MiniLM-L6-v2) from move descriptions |
+
+**Fusion Process:**
+1. Each embedding is L2-normalized to unit length
+2. Weights are applied to balance modality importance
+3. Weighted embeddings are concatenated into a 1024D vector
+4. FAISS performs cosine similarity search (via inner product on normalized vectors)
+
+This trimodal approach enables:
+- **Pose matching**: Find moves with similar body positions and transitions
+- **Audio matching**: Match moves to music tempo, energy, and rhythm
+- **Semantic matching**: Align moves with user intent (style, difficulty, mood)
 
 ---
 
@@ -188,46 +277,6 @@ POST /api/choreography/describe/
 4. **Blueprint Generation** - Creates video assembly plan
 5. **Video Assembly** - FFmpeg processes and combines clips
 6. **Auto-Save** - Choreography saved to user's collection
-
----
-
-## 📦 Project Structure
-
-```
-bachata_buddy/
-├── backend/
-│   ├── api/                    # Django settings & URLs
-│   ├── apps/                   # Django apps
-│   │   ├── authentication/     # User auth
-│   │   ├── choreography/       # Choreography generation
-│   │   ├── collections/        # User collections
-│   │   └── instructors/        # Instructor features
-│   ├── services/               # Business logic
-│   │   ├── agent_service.py              # OpenAI orchestration
-│   │   ├── blueprint_generator.py        # Choreography planning
-│   │   ├── parameter_extractor.py        # NLP parameter extraction
-│   │   ├── vector_search_service.py      # Move search
-│   │   ├── video_assembly_service.py     # Video processing
-│   │   ├── ffmpeg_builder.py             # FFmpeg commands
-│   │   └── storage_service.py            # File storage
-│   ├── data/                   # Media files
-│   │   ├── Bachata_steps/      # Video clips
-│   │   └── songs/              # Audio files
-│   ├── pyproject.toml          # Python dependencies
-│   └── manage.py               # Django management
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/         # React components
-│   │   ├── pages/              # Page components
-│   │   ├── services/           # API clients
-│   │   └── App.tsx             # Main app
-│   ├── package.json            # Node dependencies
-│   └── vite.config.ts          # Vite configuration
-│
-├── docker-compose.yml          # Local development
-└── README.md                   # This file
-```
 
 ---
 
@@ -427,18 +476,7 @@ docker-compose exec backend ffmpeg -version
 
 ---
 
-## 🚀 Deployment
-
-### AWS Deployment
-
-The application is designed for AWS deployment:
-
-- **Backend:** AWS App Runner (containerized Django)
-- **Frontend:** S3 + CloudFront (static hosting)
-- **Database:** RDS Aurora PostgreSQL Serverless v2
-- **Storage:** S3 (media files)
-
-See `DEPLOYMENT.md` for detailed instructions.
+## 🚀 Deployment TBD
 
 ---
 
